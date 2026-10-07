@@ -763,7 +763,7 @@
       "summarize": "Summarize",
       "resummarize": "Summarize again",
       "summarizing": "Summarizing…",
-      "summaryNeedsProvider": "Set up an AI provider and model under Post Process first (enable it in Advanced → Experimental).",
+      "summaryNeedsProvider": "Choose an AI provider and model on the AI page first.",
       "transcript": "Transcript",
       "noSpeech": "No speech was found in this recording.",
       "copy": "Copy transcript",

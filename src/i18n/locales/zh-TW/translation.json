@@ -15,7 +15,7 @@
     "general": "聽寫",
     "models": "模型",
     "advanced": "進階",
-    "postProcessing": "後處理",
+    "postProcessing": "AI",
     "history": "歷史紀錄",
     "debug": "偵錯",
     "about": "關於",
@@ -542,8 +542,8 @@
         "description": "筆記型電腦闔蓋時使用的麥克風"
       },
       "postProcessingToggle": {
-        "label": "後處理",
-        "description": "啟用轉錄後的 AI 文字最佳化"
+        "label": "後製處理",
+        "description": "開啟第二組快捷鍵，將聽寫內容交給下方的 AI 供應商整理。會議摘要也使用同一個供應商。"
       },
       "muteWhileRecording": {
         "label": "錄製時靜音",
@@ -763,7 +763,7 @@
       "summarize": "產生摘要",
       "resummarize": "重新產生摘要",
       "summarizing": "正在產生摘要…",
-      "summaryNeedsProvider": "請先在「後製處理」設定 AI 供應商與模型（在「進階 → 實驗性功能」中啟用）。",
+      "summaryNeedsProvider": "請先在「AI」頁面選擇 AI 供應商與模型。",
       "transcript": "逐字稿",
       "noSpeech": "這段錄音中沒有偵測到說話內容。",
       "copy": "複製逐字稿",

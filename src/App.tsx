@@ -355,6 +355,8 @@ function App() {
         dir={direction}
         className="h-screen flex flex-col select-none cursor-default"
       >
+        {/* Owl: drag strip behind the macOS traffic lights (see App.css) */}
+        <div data-tauri-drag-region className="titlebar-spacer shrink-0" />
         <ErrorBoundary context="What's New">
           <WhatsNewGate />
         </ErrorBoundary>

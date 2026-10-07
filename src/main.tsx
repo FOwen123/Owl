@@ -3,11 +3,17 @@ import ReactDOM from "react-dom/client";
 import { platform } from "@tauri-apps/plugin-os";
 import App from "./App";
 import { installCompatShims } from "./lib/compat";
+import { installMockBackend } from "./dev/mockBackend";
 import {
   applyTheme,
   getStoredTheme,
   syncThemeFromSettings,
 } from "./lib/utils/theme";
+
+// Owl: `?mock` runs the UI in a browser without the Rust backend (dev only).
+if (import.meta.env.DEV && location.search.includes("mock")) {
+  installMockBackend();
+}
 
 installCompatShims();
 

@@ -63,6 +63,8 @@ struct MenuInputs {
     downloaded_models: Vec<(String, String)>,
     locale: String,
     update_checks_enabled: bool,
+    /// Owl quick switch: see `settings::dictation_language`.
+    language: &'static str,
 }
 
 /// Complete description of what the tray should look like.
@@ -327,6 +329,7 @@ fn compute_desired(app: &AppHandle, icon_state: TrayIconState) -> TrayDesired {
     TrayDesired {
         icon_path: get_icon_path(theme, icon_state, warning),
         menu: MenuInputs {
+            language: settings::dictation_language(&settings),
             busy: icon_state.is_busy(),
             warning,
             model_loaded,
@@ -546,6 +549,19 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
             model_submenu.append(&item)?;
         }
 
+        let language_submenu = Submenu::with_id(app, "language_submenu", &strings.language, true)?;
+        for (choice, label) in [
+            ("auto", strings.auto_detect.as_str()),
+            ("en", "English"),
+            ("zh-Hant", "中文（繁體）"),
+            ("zh-Hans", "中文（简体）"),
+        ] {
+            let item_id = format!("lang:{choice}");
+            let checked = inputs.language == choice;
+            let item = CheckMenuItem::with_id(app, &item_id, label, true, checked, None::<&str>)?;
+            language_submenu.append(&item)?;
+        }
+
         let unload_model_i = MenuItem::with_id(
             app,
             "unload_model",
@@ -561,6 +577,7 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
                 &separator()?,
                 &copy_last_transcript_i,
                 &separator()?,
+                &language_submenu,
                 &model_submenu,
                 &unload_model_i,
                 &separator()?,
@@ -694,6 +711,7 @@ mod tests {
             downloaded_models: vec![("small".to_string(), "Small".to_string())],
             locale: "en".to_string(),
             update_checks_enabled: true,
+            language: "auto",
         }
     }
 

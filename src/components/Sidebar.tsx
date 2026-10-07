@@ -84,19 +84,19 @@ export const SECTIONS_CONFIG = {
     component: ModelsSettings,
     enabled: () => true,
   },
+  postprocessing: {
+    bottom: true,
+    labelKey: "sidebar.postProcessing",
+    icon: Sparkles,
+    component: PostProcessingSettings,
+    enabled: () => true,
+  },
   advanced: {
     bottom: true,
     labelKey: "sidebar.advanced",
     icon: Cog,
     component: AdvancedSettings,
     enabled: () => true,
-  },
-  postprocessing: {
-    bottom: true,
-    labelKey: "sidebar.postProcessing",
-    icon: Sparkles,
-    component: PostProcessingSettings,
-    enabled: (settings) => settings?.post_process_enabled ?? false,
   },
   debug: {
     bottom: true,
@@ -169,9 +169,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         className="flex items-center gap-2 rounded-xl px-3 py-3 mb-2"
         style={{ background: "var(--gradient-signature)" }}
       >
-        <span className="flex items-center justify-center rounded-full bg-surface p-1">
-          <OwlMark width={24} />
-        </span>
+        <OwlMark size={40} />
         {/* eslint-disable-next-line i18next/no-literal-string */}
         <span className="text-base font-semibold text-accent-foreground">
           Owl

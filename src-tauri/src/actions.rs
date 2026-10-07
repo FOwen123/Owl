@@ -118,7 +118,10 @@ fn should_use_streaming_overlay(style: OverlayStyle, is_streaming: bool) -> bool
     style == OverlayStyle::Live && is_streaming
 }
 
-async fn post_process_transcription(settings: &AppSettings, transcription: &str) -> Option<String> {
+pub(crate) async fn post_process_transcription(
+    settings: &AppSettings,
+    transcription: &str,
+) -> Option<String> {
     if is_blank_transcription(transcription) {
         debug!("Post-processing skipped because the transcription is empty");
         return None;
@@ -356,6 +359,17 @@ pub(crate) async fn process_transcription_output(
     post_process: bool,
 ) -> ProcessedTranscription {
     let settings = get_settings(app);
+
+    // Owl: a snippet trigger pastes its saved text as-is, skipping AI cleanup.
+    // History keeps the spoken trigger and records the pasted text.
+    if let Some(text) = crate::snippets::match_snippet(transcription, &settings.snippets) {
+        return ProcessedTranscription {
+            final_text: text.to_string(),
+            post_processed_text: Some(text.to_string()),
+            post_process_prompt: None,
+        };
+    }
+
     let mut final_text = transcription.to_string();
     let mut post_processed_text: Option<String> = None;
     let mut post_process_prompt: Option<String> = None;

@@ -9,6 +9,7 @@ mod chinese_script;
 pub mod cli;
 mod clipboard;
 mod commands;
+mod dictionary;
 mod helpers;
 mod input;
 mod llm_client;
@@ -21,6 +22,7 @@ mod secure_input;
 mod settings;
 mod shortcut;
 mod signal_handle;
+mod snippets;
 mod transcription_coordinator;
 mod tray;
 mod tray_i18n;
@@ -205,6 +207,10 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     );
     let history_manager =
         Arc::new(HistoryManager::new(app_handle).expect("Failed to initialize history manager"));
+    let meeting_manager = Arc::new(
+        managers::meeting::MeetingManager::new(app_handle)
+            .expect("Failed to initialize meeting manager"),
+    );
 
     // Initialize the transcribe-cpp native backend (logging + backend module
     // registration) once, before any whisper model is loaded.
@@ -218,6 +224,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(model_manager.clone());
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
+    app_handle.manage(meeting_manager);
     app_handle.manage(tray::TrayState::new());
 
     // Note: Shortcuts are NOT initialized here.
@@ -322,6 +329,16 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             }
             "quit" => {
                 app.exit(0);
+            }
+            id if id.starts_with("lang:") => {
+                let mut settings = settings::get_settings(app);
+                settings::set_dictation_language(&mut settings, &id["lang:".len()..]);
+                settings::write_settings(app, settings);
+                let _ = app.emit(
+                    "settings-changed",
+                    serde_json::json!({ "setting": "selected_language" }),
+                );
+                tray::update_tray_menu(app);
             }
             id if id.starts_with("model_select:") => {
                 let model_id = id.strip_prefix("model_select:").unwrap().to_string();
@@ -688,6 +705,8 @@ pub fn run(cli_args: CliArgs) {
             shortcut::delete_post_process_prompt,
             shortcut::set_post_process_selected_prompt,
             shortcut::update_custom_words,
+            shortcut::update_snippets,
+            shortcut::update_replacements,
             shortcut::suspend_all_bindings,
             shortcut::resume_all_bindings,
             shortcut::change_mute_while_recording_setting,
@@ -765,6 +784,11 @@ pub fn run(cli_args: CliArgs) {
             commands::history::retry_history_entry_transcription,
             commands::history::update_history_limit,
             commands::history::update_recording_retention_period,
+            commands::meetings::start_meeting,
+            commands::meetings::stop_meeting,
+            commands::meetings::get_meetings,
+            commands::meetings::delete_meeting,
+            commands::meetings::summarize_meeting,
             helpers::clamshell::is_laptop,
         ])
         .events(collect_events![
@@ -945,7 +969,7 @@ pub fn run(cli_args: CliArgs) {
             // for portable mode (redirects WebView2 cache to portable Data dir)
             let mut win_builder =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/".into()))
-                    .title("Handy")
+                    .title("Owl")
                     .inner_size(680.0, 570.0)
                     .min_inner_size(680.0, 570.0)
                     .resizable(true)

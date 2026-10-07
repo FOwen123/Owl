@@ -1,4 +1,3 @@
-use crate::utils;
 use log::{debug, warn};
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -85,6 +84,20 @@ pub struct ShortcutBinding {
     pub description: String,
     pub default_binding: String,
     pub current_binding: String,
+}
+
+/// Owl: say `trigger`, paste `text` (see `snippets.rs`).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+pub struct Snippet {
+    pub trigger: String,
+    pub text: String,
+}
+
+/// Owl: dictionary replacement, "heard `from`, write `to`" (see `dictionary.rs`).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+pub struct Replacement {
+    pub from: String,
+    pub to: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
@@ -440,6 +453,10 @@ pub struct AppSettings {
     #[serde(default)]
     pub custom_words: Vec<String>,
     #[serde(default)]
+    pub snippets: Vec<Snippet>,
+    #[serde(default)]
+    pub replacements: Vec<Replacement>,
+    #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
     pub word_correction_threshold: f64,
@@ -647,8 +664,9 @@ fn default_sound_theme() -> SoundTheme {
     SoundTheme::Marimba
 }
 
+/// Owl: dark by default. A theme the user already saved is kept.
 fn default_theme() -> Theme {
-    Theme::System
+    Theme::Dark
 }
 
 fn default_post_process_enabled() -> bool {
@@ -955,6 +973,8 @@ pub fn get_default_settings() -> AppSettings {
         debug_mode: false,
         log_level: default_log_level(),
         custom_words: Vec::new(),
+        snippets: Vec::new(),
+        replacements: Vec::new(),
         model_unload_timeout: ModelUnloadTimeout::default(),
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),
@@ -1228,13 +1248,11 @@ fn apply_settings_migrations(
     updated
 }
 
-/// Update checks are forced off (without touching the persisted setting) when
-/// `HANDY_DISABLE_UPDATER` is set — e.g. by the Nix package, since self-update
-/// can't work against an immutable /nix/store install.
+/// Owl: update checks are always forced off. Owl has no release feed yet, and
+/// the updater must never fetch Handy's releases (they would replace Owl).
+/// Restore the `HANDY_DISABLE_UPDATER` check once Owl publishes its own feed.
 pub fn update_checks_forced_disabled() -> bool {
-    use std::sync::OnceLock;
-    static IS_UPDATER_DISABLED: OnceLock<bool> = OnceLock::new();
-    *IS_UPDATER_DISABLED.get_or_init(|| utils::env_flag_enabled("HANDY_DISABLE_UPDATER"))
+    true
 }
 
 /// Effective updater state: the user's stored preference, overridden to `false`
@@ -1243,6 +1261,32 @@ pub fn update_checks_forced_disabled() -> bool {
 /// directly, so the forced-off state never leaks into the persisted setting.
 pub fn update_checks_effectively_enabled(settings: &AppSettings) -> bool {
     settings.update_checks_enabled && !update_checks_forced_disabled()
+}
+
+/// Owl's quick language switch (tray menu): "auto", "en", "zh-Hant" or
+/// "zh-Hans". Anything set elsewhere (another language, Chinese without a
+/// script) reports "other".
+pub fn dictation_language(settings: &AppSettings) -> &'static str {
+    match (settings.selected_language.as_str(), settings.chinese_script) {
+        ("auto", _) => "auto",
+        ("en", _) => "en",
+        ("zh", ChineseScript::Traditional) => "zh-Hant",
+        ("zh", ChineseScript::Simplified) => "zh-Hans",
+        _ => "other",
+    }
+}
+
+pub fn set_dictation_language(settings: &mut AppSettings, choice: &str) {
+    let (language, script) = match choice {
+        "en" => ("en", None),
+        "zh-Hant" => ("zh", Some(ChineseScript::Traditional)),
+        "zh-Hans" => ("zh", Some(ChineseScript::Simplified)),
+        _ => ("auto", None),
+    };
+    settings.selected_language = language.to_string();
+    if let Some(script) = script {
+        settings.chinese_script = script;
+    }
 }
 
 pub fn write_settings(app: &AppHandle, settings: AppSettings) {
@@ -1280,6 +1324,40 @@ pub fn get_recording_retention_period(app: &AppHandle) -> RecordingRetentionPeri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owl_defaults_to_dark_theme() {
+        assert_eq!(get_default_settings().theme, Theme::Dark);
+        let missing: AppSettings = serde_json::from_str("{}").unwrap();
+        assert_eq!(missing.theme, Theme::Dark);
+    }
+
+    #[test]
+    fn dictation_language_round_trips_through_quick_switch() {
+        let mut settings = get_default_settings();
+        for choice in ["auto", "en", "zh-Hant", "zh-Hans"] {
+            set_dictation_language(&mut settings, choice);
+            assert_eq!(dictation_language(&settings), choice);
+        }
+    }
+
+    #[test]
+    fn quick_switch_to_traditional_sets_language_and_script() {
+        let mut settings = get_default_settings();
+        set_dictation_language(&mut settings, "zh-Hant");
+        assert_eq!(settings.selected_language, "zh");
+        assert_eq!(settings.chinese_script, ChineseScript::Traditional);
+    }
+
+    #[test]
+    fn languages_outside_the_quick_switch_report_other() {
+        let mut settings = get_default_settings();
+        settings.selected_language = "ja".to_string();
+        assert_eq!(dictation_language(&settings), "other");
+        settings.selected_language = "zh".to_string();
+        settings.chinese_script = ChineseScript::AsTranscribed;
+        assert_eq!(dictation_language(&settings), "other");
+    }
 
     #[test]
     fn stored_binding_returns_the_requested_binding() {

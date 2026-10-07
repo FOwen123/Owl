@@ -2,6 +2,21 @@
 
 This file provides guidance to AI coding assistants working with code in this repository.
 
+## Owl (this fork)
+
+This repo is **Owl**, a personal fork of [Handy](https://github.com/cjpais/Handy) (`upstream` remote). Everything below this section describes Handy's architecture, which Owl keeps.
+
+- **Target:** macOS on Apple Silicon only. Don't spend effort on Windows/Linux paths.
+- **Rename only what users see.** Keep internal names (`handy` crate, `handy_app_lib`, `handy_keys`, `HANDY_*` env vars) so `git merge upstream/main` stays small.
+- **App ID:** `com.hao.owl`. Data lives in `~/Library/Application Support/com.hao.owl/`.
+- **Updater:** forced off (`update_checks_forced_disabled()` in `settings.rs`), and the endpoint list in `tauri.conf.json` is empty. Never point it at Handy's releases. `src/components/update-checker/` is kept, unused, for when Owl has its own feed.
+- **Design:** follow `DESIGN.md` (tokens in `src/styles/theme.css`, no pink, one accent).
+- **Plan:** `TODO.md`. Owl features live in: `src-tauri/src/snippets.rs`, `src-tauri/src/dictionary.rs`, `src-tauri/src/managers/meeting.rs` (+ `commands/meetings.rs`, `audio_toolkit/audio/system_capture.rs`), and their pages in `src/components/owl/`.
+- **UI without the backend:** `bun run dev`, then open `http://localhost:1420/?mock` (`src/dev/mockBackend.ts`, dev builds only). Add fake responses there when a page needs them.
+- **Translations:** every new key goes into all locales (`bun run check:translations` fails otherwise). Write real `en`, `zh` and `zh-TW` strings; other locales get the English text.
+- **Icons:** sources in `scripts/owl-icons/` (`gen.py` writes the tray SVGs, `r.swift` renders SVG to PNG, `appicon.svg` → `bun run tauri icon`).
+- **Before calling a change done:** `bun run lint`, `bunx tsc --noEmit`, `bun run check:translations`, `cd src-tauri && cargo test && cargo clippy`.
+
 ## Development Commands
 
 **Prerequisites:**

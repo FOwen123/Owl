@@ -1,8 +1,21 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
-import HandyTextLogo from "./icons/HandyTextLogo";
-import HandyHand from "./icons/HandyHand";
+import {
+  Cog,
+  FlaskConical,
+  History,
+  BookOpen,
+  Info,
+  Mic,
+  NotebookPen,
+  Scissors,
+  Sparkles,
+  Cpu,
+} from "lucide-react";
+import { OwlMark } from "./icons/OwlLogo";
+import { DictionaryPage } from "./owl/DictionaryPage";
+import { NotetakerPage } from "./owl/NotetakerPage";
+import { SnippetsPage } from "./owl/SnippetsPage";
 import { useSettings } from "../hooks/useSettings";
 import {
   GeneralSettings,
@@ -29,13 +42,33 @@ interface SectionConfig {
   icon: React.ComponentType<IconProps>;
   component: React.ComponentType;
   enabled: (settings: any) => boolean;
+  /** Owl: settings pages sit at the bottom of the sidebar. */
+  bottom?: boolean;
 }
 
 export const SECTIONS_CONFIG = {
   general: {
     labelKey: "sidebar.general",
-    icon: HandyHand,
+    icon: Mic,
     component: GeneralSettings,
+    enabled: () => true,
+  },
+  notetaker: {
+    labelKey: "sidebar.notetaker",
+    icon: NotebookPen,
+    component: NotetakerPage,
+    enabled: () => true,
+  },
+  dictionary: {
+    labelKey: "sidebar.dictionary",
+    icon: BookOpen,
+    component: DictionaryPage,
+    enabled: () => true,
+  },
+  snippets: {
+    labelKey: "sidebar.snippets",
+    icon: Scissors,
+    component: SnippetsPage,
     enabled: () => true,
   },
   history: {
@@ -45,30 +78,35 @@ export const SECTIONS_CONFIG = {
     enabled: () => true,
   },
   models: {
+    bottom: true,
     labelKey: "sidebar.models",
     icon: Cpu,
     component: ModelsSettings,
     enabled: () => true,
   },
   advanced: {
+    bottom: true,
     labelKey: "sidebar.advanced",
     icon: Cog,
     component: AdvancedSettings,
     enabled: () => true,
   },
   postprocessing: {
+    bottom: true,
     labelKey: "sidebar.postProcessing",
     icon: Sparkles,
     component: PostProcessingSettings,
     enabled: (settings) => settings?.post_process_enabled ?? false,
   },
   debug: {
+    bottom: true,
     labelKey: "sidebar.debug",
     icon: FlaskConical,
     component: DebugSettings,
     enabled: (settings) => settings?.debug_mode ?? false,
   },
   about: {
+    bottom: true,
     labelKey: "sidebar.about",
     icon: Info,
     component: AboutSettings,
@@ -90,37 +128,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const availableSections = Object.entries(SECTIONS_CONFIG)
     .filter(([_, config]) => config.enabled(settings))
-    .map(([id, config]) => ({ id: id as SidebarSection, ...config }));
+    .map(([id, config]) => ({
+      id: id as SidebarSection,
+      ...(config as SectionConfig),
+    }));
+
+  const item = (section: (typeof availableSections)[number]) => {
+    const Icon = section.icon;
+    const isActive = activeSection === section.id;
+    return (
+      <button
+        key={section.id}
+        type="button"
+        className={`flex gap-2.5 items-center px-2.5 py-1.5 w-full rounded-lg cursor-pointer transition-colors text-start focus:outline-none focus-visible:ring-[3px] focus-visible:ring-focus-ring ${
+          isActive
+            ? "bg-accent-soft text-accent"
+            : "text-text hover:bg-surface-raised"
+        }`}
+        onClick={() => onSectionChange(section.id)}
+      >
+        <Icon
+          width={18}
+          height={18}
+          className={`shrink-0 ${isActive ? "" : "text-text-muted"}`}
+        />
+        <span
+          className="text-sm font-medium truncate"
+          title={t(section.labelKey)}
+        >
+          {t(section.labelKey)}
+        </span>
+      </button>
+    );
+  };
 
   return (
-    <div className="flex flex-col w-40 h-full border-e border-mid-gray/20 items-center px-2">
-      <HandyTextLogo width={120} className="m-4" />
-      <div className="flex flex-col w-full items-center gap-1 pt-2 border-t border-mid-gray/20">
-        {availableSections.map((section) => {
-          const Icon = section.icon;
-          const isActive = activeSection === section.id;
-
-          return (
-            <div
-              key={section.id}
-              className={`flex gap-2 items-center p-2 w-full rounded-lg cursor-pointer transition-colors ${
-                isActive
-                  ? "bg-logo-primary/80"
-                  : "hover:bg-mid-gray/20 hover:opacity-100 opacity-85"
-              }`}
-              onClick={() => onSectionChange(section.id)}
-            >
-              <Icon width={24} height={24} className="shrink-0" />
-              <p
-                className="text-sm font-medium truncate"
-                title={t(section.labelKey)}
-              >
-                {t(section.labelKey)}
-              </p>
-            </div>
-          );
-        })}
+    <nav className="flex flex-col w-48 h-full shrink-0 border-e border-border bg-background p-2 gap-1">
+      {/* DESIGN.md: the signature gradient's one appearance on this screen. */}
+      <div
+        className="flex items-center gap-2 rounded-xl px-3 py-3 mb-2"
+        style={{ background: "var(--gradient-signature)" }}
+      >
+        <span className="flex items-center justify-center rounded-full bg-surface p-1">
+          <OwlMark width={24} />
+        </span>
+        {/* eslint-disable-next-line i18next/no-literal-string */}
+        <span className="text-base font-semibold text-accent-foreground">
+          Owl
+        </span>
       </div>
-    </div>
+      {availableSections.filter((s) => !s.bottom).map(item)}
+      <div className="flex-1" />
+      <div className="pt-2 border-t border-border flex flex-col gap-1">
+        {availableSections.filter((s) => s.bottom).map(item)}
+      </div>
+    </nav>
   );
 };

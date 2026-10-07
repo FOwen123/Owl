@@ -7,16 +7,21 @@
     "model": "模型",
     "quit": "退出",
     "cancel": "取消",
-    "secureInputWarning": "⚠ 快捷键被 Secure Input 阻止"
+    "secureInputWarning": "⚠ 快捷键被 Secure Input 阻止",
+    "language": "听写语言",
+    "autoDetect": "自动检测"
   },
   "sidebar": {
-    "general": "通用",
+    "general": "听写",
     "models": "模型",
     "advanced": "高级",
     "postProcessing": "后处理",
     "history": "历史记录",
     "debug": "调试",
-    "about": "关于"
+    "about": "关于",
+    "dictionary": "词典",
+    "snippets": "片段",
+    "notetaker": "会议笔记"
   },
   "onboarding": {
     "subtitle": "请选择一个转录模型以开始使用",
@@ -101,7 +106,7 @@
     },
     "permissions": {
       "title": "需要权限",
-      "description": "Handy 需要一些权限才能正常工作。",
+      "description": "Owl 需要一些权限才能正常工作。",
       "microphone": {
         "title": "麦克风访问",
         "description": "需要听取您的语音进行转录。"
@@ -175,13 +180,13 @@
       "searchPlaceholder": "按名称搜索模型…",
       "rescan": {
         "label": "重新扫描",
-        "tooltip": "重新扫描在 Handy 之外添加到模型文件夹或 Hugging Face 缓存中的模型"
+        "tooltip": "重新扫描在 Owl 之外添加到模型文件夹或 Hugging Face 缓存中的模型"
       }
     },
     "general": {
       "title": "通用",
       "shortcut": {
-        "title": "Handy 快捷键",
+        "title": "Owl 快捷键",
         "description": "配置启动语音转文字录制的键盘快捷键",
         "loading": "加载快捷键中...",
         "none": "未配置快捷键",
@@ -293,11 +298,11 @@
       },
       "autostart": {
         "label": "开机启动",
-        "description": "登录计算机时自动启动 Handy。"
+        "description": "登录计算机时自动启动 Owl。"
       },
       "showTrayIcon": {
         "label": "显示托盘图标",
-        "description": "在系统托盘中显示 Handy 图标。"
+        "description": "在系统托盘中显示 Owl 图标。"
       },
       "overlay": {
         "style": {
@@ -502,7 +507,7 @@
       },
       "updateChecks": {
         "label": "检查更新",
-        "description": "自动检查 Handy 的新版本",
+        "description": "自动检查 Owl 的新版本",
         "lockedDescription": "已被系统配置禁用 (HANDY_DISABLE_UPDATER)"
       },
       "soundTheme": {
@@ -580,7 +585,7 @@
       },
       "keyboardDiagnostic": {
         "title": "键盘诊断",
-        "description": "检查键盘事件是否能到达 Handy。仅记录事件数量，绝不记录您按了哪些键。",
+        "description": "检查键盘事件是否能到达 Owl。仅记录事件数量，绝不记录您按了哪些键。",
         "run": "运行 10 秒诊断",
         "running": "正在监听… 请按几次您的快捷键（例如 Option+Space）",
         "secureInputLabel": "Secure Input",
@@ -594,7 +599,7 @@
         "mouse": "鼠标",
         "verdictBlocked": "Secure Input 正在阻止按键事件——在问题解决前，包含普通按键的快捷键无法工作。",
         "verdictSuspicious": "收到了修饰键事件，但没有按键事件——尽管 Secure Input 报告为已禁用，仍有程序在抑制按键。请在 GitHub 上反馈此问题。",
-        "verdictOk": "按键事件正常到达 Handy。",
+        "verdictOk": "按键事件正常到达 Owl。",
         "verdictNoEvents": "未捕获到任何事件——测试期间您按过键吗？",
         "failed": "诊断失败：{{error}}"
       },
@@ -617,33 +622,33 @@
       "title": "关于",
       "version": {
         "title": "版本",
-        "description": "Handy 的当前版本"
+        "description": "Owl 的当前版本"
       },
       "appDataDirectory": {
         "title": "应用数据目录",
-        "description": "Handy 存储数据的位置"
+        "description": "Owl 存储数据的位置"
       },
       "sourceCode": {
         "title": "源代码",
         "description": "查看源代码并贡献",
         "button": "在 GitHub 上查看"
       },
-      "supportDevelopment": {
-        "title": "支持开发",
-        "description": "帮助我们继续开发 Handy",
-        "button": "捐赠"
-      },
       "acknowledgments": {
         "title": "致谢",
         "ggml": {
           "title": "ggml",
           "description": "OpenAI Whisper 自动语音识别模型的高性能推理",
-          "details": "Handy 使用 ggml 进行快速的本地语音转文字处理。感谢 Georgi Gerganov 和贡献者们的出色工作。"
+          "details": "Owl 使用 ggml 进行快速的本地语音转文字处理。感谢 Georgi Gerganov 和贡献者们的出色工作。"
         }
       },
       "whatsNewUpdates": {
         "label": "显示新功能",
-        "description": "Handy 更新后显示发行说明"
+        "description": "Owl 更新后显示发行说明"
+      },
+      "builtOnHandy": {
+        "title": "基于 Handy 打造",
+        "description": "Owl 是 CJ Pais 与贡献者所开发的 Handy 的分支（MIT 许可），与 Handy 并无隶属关系。",
+        "button": "查看 Handy"
       }
     }
   },
@@ -672,7 +677,7 @@
     "noOptionsFound": "未找到选项"
   },
   "accessibility": {
-    "permissionsDescription": "Handy 需要辅助功能权限才能输入转录的文字。",
+    "permissionsDescription": "Owl 需要辅助功能权限才能输入转录的文字。",
     "openSettings": "打开系统设置"
   },
   "errors": {
@@ -695,11 +700,11 @@
   },
   "appLanguage": {
     "title": "应用语言",
-    "description": "更改 Handy 界面的语言"
+    "description": "更改 Owl 界面的语言"
   },
   "theme": {
     "title": "应用主题",
-    "description": "选择 Handy 跟随系统主题，还是保持浅色或深色",
+    "description": "选择 Owl 跟随系统主题，还是保持浅色或深色",
     "options": {
       "system": "跟随系统",
       "light": "浅色",
@@ -711,7 +716,7 @@
     "processing": "处理中..."
   },
   "whatsNew": {
-    "title": "Handy v{{version}} 新功能"
+    "title": "Owl v{{version}} 新功能"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} 可能正在阻止 1 个快捷键",
@@ -723,5 +728,57 @@
     "learnMore": "如何解决",
     "recorderBlocked": "当前无法录制快捷键——macOS 的 Secure Input 正在阻止按键事件。请先解决 Secure Input 警告。",
     "dismiss": "关闭"
+  },
+  "owl": {
+    "pairs": {
+      "add": "添加",
+      "remove": "移除 {{item}}"
+    },
+    "snippets": {
+      "title": "片段",
+      "description": "单独说出触发词，Owl 就会粘贴保存的文字。大小写与标点不影响匹配。",
+      "trigger": "触发词，例如：我的邮箱",
+      "text": "要粘贴的文字",
+      "empty": "还没有片段。"
+    },
+    "dictionary": {
+      "wordsTitle": "词汇",
+      "replacementsTitle": "替换",
+      "replacementsDescription": "Owl 听到左边的内容时，会改写成右边的内容。适用于英文与中文。",
+      "from": "听到的，例如：克劳德",
+      "to": "写成，例如：Claude",
+      "empty": "还没有替换规则。"
+    },
+    "notetaker": {
+      "title": "会议笔记",
+      "description": "录下你的麦克风与系统音频。戴上耳机，Owl 才能分辨你和其他人。",
+      "start": "开始会议",
+      "stop": "停止",
+      "recording": "录音中",
+      "meetings": "会议",
+      "empty": "还没有会议。",
+      "back": "会议",
+      "delete": "删除",
+      "summary": "摘要",
+      "summarize": "生成摘要",
+      "resummarize": "重新生成摘要",
+      "summarizing": "正在生成摘要…",
+      "summaryNeedsProvider": "请先在“后处理”设置 AI 提供商与模型（在“高级 → 实验性功能”中启用）。",
+      "transcript": "逐字稿",
+      "noSpeech": "这段录音中没有检测到说话内容。",
+      "copy": "复制逐字稿",
+      "copied": "已复制逐字稿",
+      "systemAudioMissing": "Owl 无法收到系统音频，所以这份逐字稿只有你的麦克风。请到“系统设置 → 隐私与安全性 → 屏幕与系统音频录制”允许 Owl。",
+      "speaker": {
+        "you": "你",
+        "others": "其他人"
+      },
+      "status": {
+        "recording": "录音中…",
+        "transcribing": "转录中…",
+        "ready": "完成",
+        "failed": "失败"
+      }
+    }
   }
 }

@@ -44,11 +44,13 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
           disabled={disabled || isUpdating}
           onChange={(e) => onChange(e.target.checked)}
         />
-        <div className="relative w-11 h-6 bg-mid-gray/20 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-logo-primary rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-background-ui peer-disabled:opacity-50"></div>
+        {/* DESIGN.md toggle: 40×22 pill; on = accent fill with a white knob,
+            off = raised surface with a border and a muted knob in dark mode. */}
+        <div className="relative w-10 h-[22px] rounded-full border border-border bg-surface-raised transition-colors peer-focus-visible:ring-[3px] peer-focus-visible:ring-focus-ring peer-checked:bg-accent-fill peer-checked:border-accent-fill peer-disabled:opacity-50 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:h-4 after:w-4 after:rounded-full after:bg-toggle-knob peer-checked:after:bg-white after:transition-transform peer-checked:after:translate-x-[18px] rtl:peer-checked:after:-translate-x-[18px]"></div>
       </label>
       {isUpdating && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-4 h-4 border-2 border-logo-primary border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
         </div>
       )}
     </SettingContainer>

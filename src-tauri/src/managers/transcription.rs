@@ -1809,6 +1809,8 @@ fn post_process_transcription_text(
             _ => raw,
         };
 
+        let raw = crate::dictionary::apply_replacements(&raw, &settings.replacements);
+
         let corrected = if !settings.custom_words.is_empty() && !custom_words_already_prompted {
             apply_custom_words(
                 &raw,
@@ -2325,6 +2327,28 @@ mod tests {
 
             assert_eq!(result, "学校に行きます", "{evidence:?}");
         }
+    }
+
+    #[test]
+    fn dictionary_replacements_run_after_script_conversion() {
+        let settings = AppSettings {
+            chinese_script: ChineseScript::Traditional,
+            filler_word_removal_enabled: false,
+            replacements: vec![crate::settings::Replacement {
+                from: "克勞德".to_string(),
+                to: "Claude".to_string(),
+            }],
+            ..Default::default()
+        };
+        let result = post_process_transcription_text(
+            "我用克劳德写代码".to_string(),
+            &settings,
+            false,
+            &OutputLanguageEvidence::Unknown,
+            &languages(&["zh", "en"]),
+        );
+
+        assert_eq!(result, "我用Claude寫代碼");
     }
 
     #[test]

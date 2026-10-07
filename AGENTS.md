@@ -14,7 +14,7 @@ This repo is **Owl**, a personal fork of [Handy](https://github.com/cjpais/Handy
 - **Plan:** `TODO.md`. Owl features live in: `src-tauri/src/snippets.rs`, `src-tauri/src/dictionary.rs`, `src-tauri/src/managers/meeting.rs` (+ `commands/meetings.rs`, `audio_toolkit/audio/system_capture.rs`), and their pages in `src/components/owl/`.
 - **UI without the backend:** `bun run dev`, then open `http://localhost:1420/?mock` (`src/dev/mockBackend.ts`, dev builds only). Add fake responses there when a page needs them.
 - **Translations:** every new key goes into all locales (`bun run check:translations` fails otherwise). Write real `en`, `zh` and `zh-TW` strings; other locales get the English text.
-- **Icons:** sources in `scripts/owl-icons/` (`gen.py` writes the tray SVGs, `r.swift` renders SVG to PNG, `appicon.svg` → `bun run tauri icon`).
+- **Logo and icons:** one hand-drawn source, `scripts/owl-icons/owl-source.png`. `swift scripts/owl-icons/build-icons.swift` writes the in-app mark (`src/assets/owl-mark.png`), the menu-bar icons (`src-tauri/resources/*.png`) and `/tmp/owl-app-icon.png`; then run `bun run tauri icon /tmp/owl-app-icon.png`.
 - **Before calling a change done:** `bun run lint`, `bunx tsc --noEmit`, `bun run check:translations`, `cd src-tauri && cargo test && cargo clippy`.
 
 ## Development Commands

@@ -38,6 +38,8 @@
 
   /* Tokens that do not change between light and dark */
   --color-accent-foreground: #ffffff;
+  /* The white sticker the black-ink owl logo always sits on. */
+  --color-logo-paper: #ffffff;
   --color-text-stroke: #f6f6f6;
   --gradient-signature: linear-gradient(
     135deg,

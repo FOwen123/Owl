@@ -185,6 +185,13 @@ fn windows_taskbar_theme() -> Option<AppTheme> {
     })
 }
 
+/// Owl: only the plain idle owl is a macOS template image (recolored by the
+/// system). Icons with a status badge keep their colors so the badge stays
+/// blue; `get_icon_path` already picks the light or dark variant.
+pub fn is_template_icon(path: &str) -> bool {
+    path.ends_with("/tray_idle.png") || path.ends_with("/tray_idle_dark.png")
+}
+
 /// Gets the appropriate icon path for the given theme and state.
 ///
 /// `warning` overlays a badge on the idle icon while keyboard shortcuts are
@@ -385,7 +392,9 @@ fn apply_on_main(app: &AppHandle) {
     let mut icon_ok = false;
     if icon_changed {
         match icon {
-            Some(image) => match tray.set_icon_with_as_template(Some(image), true) {
+            Some(image) => match tray
+                .set_icon_with_as_template(Some(image), is_template_icon(desired.icon_path))
+            {
                 Ok(()) => icon_ok = true,
                 Err(err) => error!("Failed to update tray icon '{}': {err}", desired.icon_path),
             },
@@ -448,9 +457,9 @@ pub fn tray_tooltip() -> String {
 
 fn version_label() -> String {
     if cfg!(debug_assertions) {
-        format!("Handy v{} (Dev)", env!("CARGO_PKG_VERSION"))
+        format!("Owl v{} (Dev)", env!("CARGO_PKG_VERSION"))
     } else {
-        format!("Handy v{}", env!("CARGO_PKG_VERSION"))
+        format!("Owl v{}", env!("CARGO_PKG_VERSION"))
     }
 }
 
@@ -686,6 +695,39 @@ pub fn copy_last_transcript(app: &AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::{last_transcript_text, load_tray_icon, MenuInputs, TrayDesired, TrayIconState};
+
+    #[test]
+    fn tray_version_line_names_owl_and_its_version() {
+        assert!(super::version_label().starts_with("Owl v0.1.0"));
+    }
+
+    #[test]
+    fn only_the_plain_idle_owl_is_a_template() {
+        use super::{get_icon_path, is_template_icon, AppTheme};
+        for theme in [AppTheme::Dark, AppTheme::Light] {
+            assert!(is_template_icon(get_icon_path(
+                theme.clone(),
+                TrayIconState::Idle,
+                false
+            )));
+            // Badged icons keep their blue badge, so macOS must not recolor them.
+            assert!(!is_template_icon(get_icon_path(
+                theme.clone(),
+                TrayIconState::Idle,
+                true
+            )));
+            assert!(!is_template_icon(get_icon_path(
+                theme.clone(),
+                TrayIconState::Recording,
+                false
+            )));
+            assert!(!is_template_icon(get_icon_path(
+                theme.clone(),
+                TrayIconState::Transcribing,
+                false
+            )));
+        }
+    }
     use crate::managers::history::HistoryEntry;
 
     fn build_entry(transcription: &str, post_processed: Option<&str>) -> HistoryEntry {

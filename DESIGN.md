@@ -2,9 +2,9 @@
 
 Visual direction for the Owl UI redesign (Owl is this fork of Handy). Read this before changing colors, surfaces, or component styling. Token values live in `src/styles/theme.css`; this file says which values to use and why.
 
-**Visual reference:** Paper file "Projects", Page 1. "Owl — Design System (proposed)" is the target and matches this file. "Owl — Design System (current)" shows the app as it is today. "Owl — Accent options (no pink)" records the accent choice. If this file and the proposed board disagree, fix whichever is wrong; they must not drift.
+**Visual reference:** Paper file "Projects", Page 1. "Owl — Design System (proposed)" is the target and matches this file. "Owl — Design System (current)" shows the app as it is today. "Owl — Accent options (no pink)" records the accent choice. "Owl — Logo" shows the logo, where it appears and the options it was picked from. If this file and the proposed board disagree, fix whichever is wrong; they must not drift.
 
-**Status:** agreed 2026-10-06, not yet implemented. See "Migration".
+**Status:** agreed 2026-10-06; migration steps 1–3 implemented 2026-10-07 (step 4, the rename, is skipped). See "Migration".
 
 ## References
 
@@ -68,7 +68,7 @@ Target values. Contrast ratios are WCAG, measured against the canvas unless note
 | `--color-error`              | `#dc2626`                  | `#f87171`                   | Errors and destructive text (unchanged)                                       |
 | `--gradient-signature`       | same in both themes        |                             | `linear-gradient(135deg, #182676 0%, #1f4195 35%, #3269bd 70%, #70b1ff 100%)` |
 
-The logo fill uses `--color-accent` and its outline uses `--color-text`.
+The logo is a hand-drawn black-ink owl (`src/assets/owl-mark.png`, built by `scripts/owl-icons/build-icons.swift`). It always sits on a white sticker (`--color-logo-paper`) so it stays visible in dark mode, and it is never recoloured with the accent.
 
 The old pink accent (`#da5893`) gave white text 3.62:1, below the 4.5:1 AA minimum. Every pair above passes AA, and the dark fill stays above the 3:1 non-text minimum, so buttons remain visible as shapes on near-black.
 
@@ -117,7 +117,7 @@ As drawn on the proposed board, in both themes.
 
 ## Migration
 
-Nothing is implemented yet. Each step is a separate, reviewable change. Steps 1 and 2 change values and add tokens without renaming the ~100 existing `*-logo-primary` classes, so this fork stays easy to merge with upstream Handy.
+Steps 1–3 are implemented. Each step is a separate, reviewable change. Steps 1 and 2 change values and add tokens without renaming the ~100 existing `*-logo-primary` classes, so this fork stays easy to merge with upstream Handy.
 
 **Step 1: tokens (`src/styles/theme.css`).**
 

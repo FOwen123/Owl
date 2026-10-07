@@ -7,7 +7,9 @@
     "model": "النموذج",
     "quit": "إنهاء",
     "cancel": "إلغاء",
-    "secureInputWarning": "⚠ الاختصارات محجوبة بواسطة Secure Input"
+    "secureInputWarning": "⚠ الاختصارات محجوبة بواسطة Secure Input",
+    "language": "Dictation Language",
+    "autoDetect": "Auto-detect"
   },
   "sidebar": {
     "general": "عام",
@@ -16,7 +18,10 @@
     "history": "السجل",
     "debug": "تصحيح الأخطاء",
     "about": "حول",
-    "models": "النماذج"
+    "models": "النماذج",
+    "dictionary": "Dictionary",
+    "snippets": "Snippets",
+    "notetaker": "Notetaker"
   },
   "onboarding": {
     "subtitle": "للبدء، اختر نموذج التفريغ الصوتي",
@@ -101,7 +106,7 @@
     },
     "permissions": {
       "title": "الأذونات المطلوبة",
-      "description": ".يحتاج Handy إلى بعض الأذونات ليعمل بشكل صحيح",
+      "description": ".يحتاج Owl إلى بعض الأذونات ليعمل بشكل صحيح",
       "microphone": {
         "title": "الوصول إلى الميكروفون",
         "description": ".مطلوب لسماع صوتك من أجل التفريغ الصوتي"
@@ -158,7 +163,7 @@
     "general": {
       "title": "عام",
       "shortcut": {
-        "title": "اختصارات Handy",
+        "title": "اختصارات Owl",
         "description": "إعداد اختصارات لوحة المفاتيح لبدء تسجيل التفريغ الصوتي",
         "loading": "...جاري تحميل الاختصارات",
         "none": "لا توجد اختصارات مجهزة",
@@ -270,11 +275,11 @@
       },
       "autostart": {
         "label": "التشغيل عند بدء التشغيل",
-        "description": ".بدء تشغيل Handy تلقائياً عند تسجيل الدخول إلى جهاز الكمبيوتر الخاص بك"
+        "description": ".بدء تشغيل Owl تلقائياً عند تسجيل الدخول إلى جهاز الكمبيوتر الخاص بك"
       },
       "showTrayIcon": {
         "label": "إظهار أيقونة شريط النظام",
-        "description": ".عرض أيقونة Handy في شريط النظام"
+        "description": ".عرض أيقونة Owl في شريط النظام"
       },
       "overlay": {
         "style": {
@@ -479,7 +484,7 @@
       },
       "updateChecks": {
         "label": "التحقق من وجود تحديثات",
-        "description": "التحقق تلقائياً من وجود إصدارات جديدة من Handy",
+        "description": "التحقق تلقائياً من وجود إصدارات جديدة من Owl",
         "lockedDescription": "معطّل بواسطة إعدادات النظام (HANDY_DISABLE_UPDATER)"
       },
       "soundTheme": {
@@ -557,7 +562,7 @@
       },
       "keyboardDiagnostic": {
         "title": "تشخيص لوحة المفاتيح",
-        "description": "يتحقق مما إذا كانت أحداث لوحة المفاتيح تصل إلى Handy. يُسجَّل عدد الأحداث فقط — ولا تُسجَّل أبدًا المفاتيح التي تضغط عليها.",
+        "description": "يتحقق مما إذا كانت أحداث لوحة المفاتيح تصل إلى Owl. يُسجَّل عدد الأحداث فقط — ولا تُسجَّل أبدًا المفاتيح التي تضغط عليها.",
         "run": "تشغيل تشخيص لمدة 10 ثوانٍ",
         "running": "جارٍ الاستماع… اضغط اختصارك عدة مرات (مثل Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -571,7 +576,7 @@
         "mouse": "الماوس",
         "verdictBlocked": "يحجب Secure Input أحداث المفاتيح — لا يمكن للاختصارات التي تتضمن مفتاحًا عاديًا أن تعمل حتى تُحلّ المشكلة.",
         "verdictSuspicious": "وصلت أحداث مفاتيح التعديل لكن لم يصل أي حدث مفتاح — هناك شيء يمنع المفاتيح رغم أن Secure Input يظهر معطلاً. يُرجى الإبلاغ عن ذلك على GitHub.",
-        "verdictOk": "أحداث المفاتيح تصل إلى Handy بشكل طبيعي.",
+        "verdictOk": "أحداث المفاتيح تصل إلى Owl بشكل طبيعي.",
         "verdictNoEvents": "لم يُسجَّل أي حدث — هل ضغطت أي مفاتيح أثناء الاختبار؟",
         "failed": "فشل التشخيص: {{error}}"
       },
@@ -594,33 +599,33 @@
       "title": "حول",
       "version": {
         "title": "الإصدار",
-        "description": "الإصدار الحالي من Handy"
+        "description": "الإصدار الحالي من Owl"
       },
       "appDataDirectory": {
         "title": "مجلد بيانات التطبيق",
-        "description": "الموقع الذي يخزن فيه Handy بياناته"
+        "description": "الموقع الذي يخزن فيه Owl بياناته"
       },
       "sourceCode": {
         "title": "كود المصدر",
         "description": "عرض كود المصدر والمساهمة",
         "button": "عرض على GitHub"
       },
-      "supportDevelopment": {
-        "title": "دعم التطوير",
-        "description": "ساعدنا في مواصلة بناء Handy",
-        "button": "تبرع"
-      },
       "acknowledgments": {
         "title": "شكر وتقدير",
         "ggml": {
           "title": "ggml",
           "description": "استنتاج عالي الأداء لنموذج التعرف التلقائي على الكلام Whisper من OpenAI",
-          "details": ".يستخدم Handy برنامج ggml لمعالجة سريعة ومحلية لتحويل الكلام إلى نص. شكراً للعمل الرائع الذي قام به Georgi Gerganov والمساهمون"
+          "details": ".يستخدم Owl برنامج ggml لمعالجة سريعة ومحلية لتحويل الكلام إلى نص. شكراً للعمل الرائع الذي قام به Georgi Gerganov والمساهمون"
         }
       },
       "whatsNewUpdates": {
         "label": "إظهار الجديد",
-        "description": "إظهار ملاحظات الإصدار بعد تحديثات Handy"
+        "description": "إظهار ملاحظات الإصدار بعد تحديثات Owl"
+      },
+      "builtOnHandy": {
+        "title": "Built on Handy",
+        "description": "Owl is a fork of Handy by CJ Pais and contributors (MIT). Not affiliated with Handy.",
+        "button": "View Handy"
       }
     },
     "modelSettings": {
@@ -643,7 +648,7 @@
       "searchPlaceholder": "ابحث عن النماذج بالاسم…",
       "rescan": {
         "label": "إعادة الفحص",
-        "tooltip": "إعادة الفحص بحثًا عن النماذج المضافة إلى مجلد النماذج أو ذاكرة Hugging Face التخزينية المؤقتة خارج Handy"
+        "tooltip": "إعادة الفحص بحثًا عن النماذج المضافة إلى مجلد النماذج أو ذاكرة Hugging Face التخزينية المؤقتة خارج Owl"
       }
     }
   },
@@ -672,7 +677,7 @@
     "noOptionsFound": "لم يتم العثور على خيارات"
   },
   "accessibility": {
-    "permissionsDescription": ".يحتاج Handy إلى أذونات إمكانية الوصول لكتابة النص المفرغ",
+    "permissionsDescription": ".يحتاج Owl إلى أذونات إمكانية الوصول لكتابة النص المفرغ",
     "openSettings": "فتح إعدادات النظام"
   },
   "errors": {
@@ -695,11 +700,11 @@
   },
   "appLanguage": {
     "title": "لغة التطبيق",
-    "description": "تغيير لغة واجهة Handy"
+    "description": "تغيير لغة واجهة Owl"
   },
   "theme": {
     "title": "سمة التطبيق",
-    "description": "اختر ما إذا كان Handy يتبع مظهر النظام أو يبقى فاتحًا أو داكنًا",
+    "description": "اختر ما إذا كان Owl يتبع مظهر النظام أو يبقى فاتحًا أو داكنًا",
     "options": {
       "system": "النظام",
       "light": "فاتح",
@@ -711,7 +716,7 @@
     "processing": "...جاري المعالجة"
   },
   "whatsNew": {
-    "title": "الجديد في Handy v{{version}}"
+    "title": "الجديد في Owl v{{version}}"
   },
   "secureInput": {
     "blockedWithCulprit_one": "قد يحظر {{name}} اختصارًا واحدًا",
@@ -723,5 +728,57 @@
     "learnMore": "كيفية الإصلاح",
     "recorderBlocked": "لا يمكن تسجيل الاختصارات الآن — يحجب Secure Input في macOS أحداث المفاتيح. عالج تحذير Secure Input أولاً.",
     "dismiss": "تجاهل"
+  },
+  "owl": {
+    "pairs": {
+      "add": "Add",
+      "remove": "Remove {{item}}"
+    },
+    "snippets": {
+      "title": "Snippets",
+      "description": "Say a trigger phrase on its own and Owl pastes the saved text instead. Case and punctuation don't matter.",
+      "trigger": "Trigger phrase, e.g. my email",
+      "text": "Text to paste",
+      "empty": "No snippets yet."
+    },
+    "dictionary": {
+      "wordsTitle": "Words",
+      "replacementsTitle": "Replacements",
+      "replacementsDescription": "When Owl hears the left side, it writes the right side. Works for English and Chinese.",
+      "from": "Heard, e.g. cloud code",
+      "to": "Write, e.g. Claude Code",
+      "empty": "No replacements yet."
+    },
+    "notetaker": {
+      "title": "Notetaker",
+      "description": "Records your microphone and the system audio. Wear headphones so Owl can tell you apart from everyone else.",
+      "start": "Start meeting",
+      "stop": "Stop",
+      "recording": "Recording",
+      "meetings": "Meetings",
+      "empty": "No meetings yet.",
+      "back": "Meetings",
+      "delete": "Delete",
+      "summary": "Summary",
+      "summarize": "Summarize",
+      "resummarize": "Summarize again",
+      "summarizing": "Summarizing…",
+      "summaryNeedsProvider": "Set up an AI provider and model under Post Process first (enable it in Advanced → Experimental).",
+      "transcript": "Transcript",
+      "noSpeech": "No speech was found in this recording.",
+      "copy": "Copy transcript",
+      "copied": "Transcript copied",
+      "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "speaker": {
+        "you": "You",
+        "others": "Others"
+      },
+      "status": {
+        "recording": "Recording…",
+        "transcribing": "Transcribing…",
+        "ready": "Ready",
+        "failed": "Failed"
+      }
+    }
   }
 }

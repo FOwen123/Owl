@@ -7,16 +7,21 @@
     "model": "模型",
     "quit": "結束",
     "cancel": "取消",
-    "secureInputWarning": "⚠ 快捷鍵被 Secure Input 阻擋"
+    "secureInputWarning": "⚠ 快捷鍵被 Secure Input 阻擋",
+    "language": "聽寫語言",
+    "autoDetect": "自動偵測"
   },
   "sidebar": {
-    "general": "一般",
+    "general": "聽寫",
     "models": "模型",
     "advanced": "進階",
     "postProcessing": "後處理",
     "history": "歷史紀錄",
     "debug": "偵錯",
-    "about": "關於"
+    "about": "關於",
+    "dictionary": "字典",
+    "snippets": "片語",
+    "notetaker": "會議筆記"
   },
   "onboarding": {
     "subtitle": "首先，請選擇一種模型",
@@ -101,7 +106,7 @@
     },
     "permissions": {
       "title": "需要權限",
-      "description": "Handy 需要一些權限才能正常運作",
+      "description": "Owl 需要一些權限才能正常運作",
       "microphone": {
         "title": "麥克風存取",
         "description": "需要聽取您的語音進行轉錄"
@@ -161,7 +166,7 @@
     "general": {
       "title": "一般",
       "shortcut": {
-        "title": "Handy 快捷鍵",
+        "title": "Owl 快捷鍵",
         "description": "設定啟動語音轉文字錄製的鍵盤快捷鍵",
         "loading": "載入快捷鍵中...",
         "none": "未設定快捷鍵",
@@ -226,7 +231,7 @@
       "searchPlaceholder": "依名稱搜尋模型…",
       "rescan": {
         "label": "重新掃描",
-        "tooltip": "重新掃描在 Handy 之外新增到模型資料夾或 Hugging Face 快取中的模型"
+        "tooltip": "重新掃描在 Owl 之外新增到模型資料夾或 Hugging Face 快取中的模型"
       }
     },
     "sound": {
@@ -293,11 +298,11 @@
       },
       "autostart": {
         "label": "開機啟動",
-        "description": "登入電腦時自動啟動 Handy"
+        "description": "登入電腦時自動啟動 Owl"
       },
       "showTrayIcon": {
         "label": "顯示系統匣圖示",
-        "description": "在系統匣中顯示 Handy 圖示"
+        "description": "在系統匣中顯示 Owl 圖示"
       },
       "overlay": {
         "style": {
@@ -502,7 +507,7 @@
       },
       "updateChecks": {
         "label": "檢查更新",
-        "description": "自動檢查 Handy 的新版本",
+        "description": "自動檢查 Owl 的新版本",
         "lockedDescription": "已被系統設定停用 (HANDY_DISABLE_UPDATER)"
       },
       "soundTheme": {
@@ -580,7 +585,7 @@
       },
       "keyboardDiagnostic": {
         "title": "鍵盤診斷",
-        "description": "檢查鍵盤事件是否能送達 Handy。只會記錄事件數量，絕不記錄您按了哪些按鍵。",
+        "description": "檢查鍵盤事件是否能送達 Owl。只會記錄事件數量，絕不記錄您按了哪些按鍵。",
         "run": "執行 10 秒診斷",
         "running": "正在監聽… 請按幾次您的快捷鍵（例如 Option+Space）",
         "secureInputLabel": "Secure Input",
@@ -594,7 +599,7 @@
         "mouse": "滑鼠",
         "verdictBlocked": "Secure Input 正在阻擋按鍵事件——在問題解決前，包含一般按鍵的快捷鍵無法運作。",
         "verdictSuspicious": "收到了修飾鍵事件，但沒有按鍵事件——即使 Secure Input 回報為已停用，仍有程式在抑制按鍵。請在 GitHub 上回報此問題。",
-        "verdictOk": "按鍵事件正常送達 Handy。",
+        "verdictOk": "按鍵事件正常送達 Owl。",
         "verdictNoEvents": "未擷取到任何事件——測試期間您有按鍵嗎？",
         "failed": "診斷失敗：{{error}}"
       },
@@ -617,33 +622,33 @@
       "title": "關於",
       "version": {
         "title": "版本",
-        "description": "Handy 的目前版本"
+        "description": "Owl 的目前版本"
       },
       "appDataDirectory": {
         "title": "應用程式資料目錄",
-        "description": "Handy 儲存資料的位置"
+        "description": "Owl 儲存資料的位置"
       },
       "sourceCode": {
         "title": "原始碼",
         "description": "檢視原始碼並參與貢獻",
         "button": "在 GitHub 上檢視"
       },
-      "supportDevelopment": {
-        "title": "支持開發",
-        "description": "幫助我們繼續開發 Handy",
-        "button": "捐贈"
-      },
       "acknowledgments": {
         "title": "致謝",
         "ggml": {
           "title": "ggml",
           "description": "針對 OpenAI Whisper 自動語音辨識模型的高效能推理引擎",
-          "details": "Handy 使用 ggml 進行快速的本機語音轉文字處理。感謝 Georgi Gerganov 和貢獻者們的傑出工作"
+          "details": "Owl 使用 ggml 進行快速的本機語音轉文字處理。感謝 Georgi Gerganov 和貢獻者們的傑出工作"
         }
       },
       "whatsNewUpdates": {
         "label": "顯示新功能",
-        "description": "Handy 更新後顯示版本資訊"
+        "description": "Owl 更新後顯示版本資訊"
+      },
+      "builtOnHandy": {
+        "title": "基於 Handy 打造",
+        "description": "Owl 是 CJ Pais 與貢獻者所開發的 Handy 的分支（MIT 授權），與 Handy 並無隸屬關係。",
+        "button": "查看 Handy"
       }
     }
   },
@@ -672,7 +677,7 @@
     "noOptionsFound": "未找到選項"
   },
   "accessibility": {
-    "permissionsDescription": "Handy 需要輔助使用權限才能輸入轉錄的文字",
+    "permissionsDescription": "Owl 需要輔助使用權限才能輸入轉錄的文字",
     "openSettings": "開啟系統設定"
   },
   "errors": {
@@ -695,11 +700,11 @@
   },
   "appLanguage": {
     "title": "應用程式語言",
-    "description": "變更 Handy 介面的語言"
+    "description": "變更 Owl 介面的語言"
   },
   "theme": {
     "title": "應用程式主題",
-    "description": "選擇 Handy 跟隨系統主題，或維持淺色或深色",
+    "description": "選擇 Owl 跟隨系統主題，或維持淺色或深色",
     "options": {
       "system": "跟隨系統",
       "light": "淺色",
@@ -711,7 +716,7 @@
     "processing": "處理中..."
   },
   "whatsNew": {
-    "title": "Handy v{{version}} 新功能"
+    "title": "Owl v{{version}} 新功能"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} 可能正在阻擋 1 個快捷鍵",
@@ -723,5 +728,57 @@
     "learnMore": "如何解決",
     "recorderBlocked": "目前無法錄製快捷鍵——macOS 的 Secure Input 正在阻擋按鍵事件。請先解決 Secure Input 警告。",
     "dismiss": "關閉"
+  },
+  "owl": {
+    "pairs": {
+      "add": "新增",
+      "remove": "移除 {{item}}"
+    },
+    "snippets": {
+      "title": "片語",
+      "description": "單獨說出觸發詞，Owl 就會貼上儲存的文字。大小寫與標點不影響比對。",
+      "trigger": "觸發詞，例如：我的信箱",
+      "text": "要貼上的文字",
+      "empty": "還沒有片語。"
+    },
+    "dictionary": {
+      "wordsTitle": "詞彙",
+      "replacementsTitle": "替換",
+      "replacementsDescription": "Owl 聽到左邊的內容時，會改寫成右邊的內容。適用於英文與中文。",
+      "from": "聽到的，例如：克勞德",
+      "to": "寫成，例如：Claude",
+      "empty": "還沒有替換規則。"
+    },
+    "notetaker": {
+      "title": "會議筆記",
+      "description": "錄下你的麥克風與系統音訊。戴上耳機，Owl 才能分辨你和其他人。",
+      "start": "開始會議",
+      "stop": "停止",
+      "recording": "錄音中",
+      "meetings": "會議",
+      "empty": "還沒有會議。",
+      "back": "會議",
+      "delete": "刪除",
+      "summary": "摘要",
+      "summarize": "產生摘要",
+      "resummarize": "重新產生摘要",
+      "summarizing": "正在產生摘要…",
+      "summaryNeedsProvider": "請先在「後製處理」設定 AI 供應商與模型（在「進階 → 實驗性功能」中啟用）。",
+      "transcript": "逐字稿",
+      "noSpeech": "這段錄音中沒有偵測到說話內容。",
+      "copy": "複製逐字稿",
+      "copied": "已複製逐字稿",
+      "systemAudioMissing": "Owl 無法收到系統音訊，所以這份逐字稿只有你的麥克風。請到「系統設定 → 隱私權與安全性 → 螢幕與系統音訊錄製」允許 Owl。",
+      "speaker": {
+        "you": "你",
+        "others": "其他人"
+      },
+      "status": {
+        "recording": "錄音中…",
+        "transcribing": "轉錄中…",
+        "ready": "完成",
+        "failed": "失敗"
+      }
+    }
   }
 }

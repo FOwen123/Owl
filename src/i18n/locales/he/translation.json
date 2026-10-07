@@ -7,7 +7,9 @@
     "model": "מודל",
     "quit": "יציאה",
     "cancel": "ביטול",
-    "secureInputWarning": "⚠ קיצורי המקשים חסומים על ידי Secure Input"
+    "secureInputWarning": "⚠ קיצורי המקשים חסומים על ידי Secure Input",
+    "language": "Dictation Language",
+    "autoDetect": "Auto-detect"
   },
   "sidebar": {
     "general": "כללי",
@@ -16,7 +18,10 @@
     "postProcessing": "עיבוד משלים",
     "history": "היסטוריה",
     "debug": "ניפוי שגיאות",
-    "about": "אודות"
+    "about": "אודות",
+    "dictionary": "Dictionary",
+    "snippets": "Snippets",
+    "notetaker": "Notetaker"
   },
   "onboarding": {
     "subtitle": "כדי להתחיל, בחר מודל תמלול",
@@ -101,7 +106,7 @@
     },
     "permissions": {
       "title": "נדרשות הרשאות",
-      "description": "Handy צריך כמה הרשאות כדי לעבוד כמו שצריך.",
+      "description": "Owl צריך כמה הרשאות כדי לעבוד כמו שצריך.",
       "microphone": {
         "title": "גישה למיקרופון",
         "description": "נדרש כדי לשמוע את הקול שלך לצורך תמלול."
@@ -161,7 +166,7 @@
     "general": {
       "title": "כללי",
       "shortcut": {
-        "title": "קיצורי מקשים של Handy",
+        "title": "קיצורי מקשים של Owl",
         "description": "הגדר קיצורי מקשים כדי להפעיל הקלטה ותמלול דיבור",
         "loading": "טוען קיצורי מקשים...",
         "none": "לא הוגדרו קיצורי מקשים",
@@ -226,7 +231,7 @@
       "searchPlaceholder": "חיפוש מודלים לפי שם…",
       "rescan": {
         "label": "סריקה מחדש",
-        "tooltip": "סריקה מחדש לאיתור מודלים שנוספו לתיקיית המודלים או למטמון של Hugging Face מחוץ ל-Handy"
+        "tooltip": "סריקה מחדש לאיתור מודלים שנוספו לתיקיית המודלים או למטמון של Hugging Face מחוץ ל-Owl"
       }
     },
     "sound": {
@@ -293,11 +298,11 @@
       },
       "autostart": {
         "label": "הפעל עם עליית המערכת",
-        "description": "הפעל את Handy אוטומטית כשאתה מתחבר למחשב."
+        "description": "הפעל את Owl אוטומטית כשאתה מתחבר למחשב."
       },
       "showTrayIcon": {
         "label": "הצג אייקון במגש",
-        "description": "הצג את האייקון של Handy במגש המערכת."
+        "description": "הצג את האייקון של Owl במגש המערכת."
       },
       "overlay": {
         "style": {
@@ -502,7 +507,7 @@
       },
       "updateChecks": {
         "label": "בדוק עדכונים",
-        "description": "בדוק אוטומטית אם קיימות גרסאות חדשות של Handy",
+        "description": "בדוק אוטומטית אם קיימות גרסאות חדשות של Owl",
         "lockedDescription": "מושבת על ידי תצורת המערכת (HANDY_DISABLE_UPDATER)"
       },
       "soundTheme": {
@@ -580,7 +585,7 @@
       },
       "keyboardDiagnostic": {
         "title": "אבחון מקלדת",
-        "description": "בודק אם אירועי מקלדת מגיעים ל-Handy. נרשם רק מספר האירועים — לעולם לא אילו מקשים הקשת.",
+        "description": "בודק אם אירועי מקלדת מגיעים ל-Owl. נרשם רק מספר האירועים — לעולם לא אילו מקשים הקשת.",
         "run": "הרצת אבחון של 10 שניות",
         "running": "מאזין… הקש על קיצור המקשים שלך כמה פעמים (למשל Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -594,7 +599,7 @@
         "mouse": "עכבר",
         "verdictBlocked": "Secure Input חוסם אירועי מקשים — קיצורים הכוללים מקש רגיל לא יוכלו לפעול עד שהבעיה תיפתר.",
         "verdictSuspicious": "הגיעו אירועים של מקשי החלפה אך לא אירועי מקשים — משהו מדכא מקשים למרות ש-Secure Input מדווח כמושבת. אנא דווח על כך ב-GitHub.",
-        "verdictOk": "אירועי מקשים מגיעים ל-Handy כרגיל.",
+        "verdictOk": "אירועי מקשים מגיעים ל-Owl כרגיל.",
         "verdictNoEvents": "לא נקלטו אירועים — האם הקשת על מקשים במהלך הבדיקה?",
         "failed": "האבחון נכשל: {{error}}"
       },
@@ -617,33 +622,33 @@
       "title": "אודות",
       "version": {
         "title": "גרסה",
-        "description": "הגרסה הנוכחית של Handy"
+        "description": "הגרסה הנוכחית של Owl"
       },
       "appDataDirectory": {
         "title": "תיקיית נתוני אפליקציה",
-        "description": "המיקום שבו Handy שומר את הנתונים שלו"
+        "description": "המיקום שבו Owl שומר את הנתונים שלו"
       },
       "sourceCode": {
         "title": "קוד מקור",
         "description": "צפה בקוד המקור ותרום",
         "button": "צפה ב-GitHub"
       },
-      "supportDevelopment": {
-        "title": "תמיכה בפיתוח",
-        "description": "עזור לנו להמשיך לבנות את Handy",
-        "button": "תרומה"
-      },
       "acknowledgments": {
         "title": "תודות",
         "ggml": {
           "title": "ggml",
           "description": "הסקה מהירה לביצועים גבוהים עבור מודל זיהוי הדיבור Whisper של OpenAI",
-          "details": "Handy משתמש ב-ggml לתמלול מהיר ומקומי. תודה לעבודה המדהימה של Georgi Gerganov וכל התורמים."
+          "details": "Owl משתמש ב-ggml לתמלול מהיר ומקומי. תודה לעבודה המדהימה של Georgi Gerganov וכל התורמים."
         }
       },
       "whatsNewUpdates": {
         "label": "הצג מה חדש",
-        "description": "הצג הערות גרסה לאחר עדכוני Handy"
+        "description": "הצג הערות גרסה לאחר עדכוני Owl"
+      },
+      "builtOnHandy": {
+        "title": "Built on Handy",
+        "description": "Owl is a fork of Handy by CJ Pais and contributors (MIT). Not affiliated with Handy.",
+        "button": "View Handy"
       }
     }
   },
@@ -672,7 +677,7 @@
     "noOptionsFound": "לא נמצאו אפשרויות"
   },
   "accessibility": {
-    "permissionsDescription": "Handy צריך הרשאות נגישות כדי להקליד את הטקסט המתומלל.",
+    "permissionsDescription": "Owl צריך הרשאות נגישות כדי להקליד את הטקסט המתומלל.",
     "openSettings": "פתח את הגדרות המערכת"
   },
   "errors": {
@@ -695,11 +700,11 @@
   },
   "appLanguage": {
     "title": "שפת האפליקציה",
-    "description": "שנה את שפת הממשק של Handy"
+    "description": "שנה את שפת הממשק של Owl"
   },
   "theme": {
     "title": "ערכת נושא של האפליקציה",
-    "description": "בחר אם Handy יעקוב אחר ערכת הנושא של המערכת או יישאר בהיר או כהה",
+    "description": "בחר אם Owl יעקוב אחר ערכת הנושא של המערכת או יישאר בהיר או כהה",
     "options": {
       "system": "מערכת",
       "light": "בהיר",
@@ -711,7 +716,7 @@
     "processing": "מעבד..."
   },
   "whatsNew": {
-    "title": "חדש ב-Handy v{{version}}"
+    "title": "חדש ב-Owl v{{version}}"
   },
   "secureInput": {
     "blockedWithCulprit_one": "ייתכן ש-{{name}} חוסם קיצור דרך אחד",
@@ -723,5 +728,57 @@
     "learnMore": "איך לתקן את זה",
     "recorderBlocked": "לא ניתן להקליט קיצורים כרגע — Secure Input של macOS חוסם אירועי מקשים. פתור תחילה את אזהרת Secure Input.",
     "dismiss": "התעלם"
+  },
+  "owl": {
+    "pairs": {
+      "add": "Add",
+      "remove": "Remove {{item}}"
+    },
+    "snippets": {
+      "title": "Snippets",
+      "description": "Say a trigger phrase on its own and Owl pastes the saved text instead. Case and punctuation don't matter.",
+      "trigger": "Trigger phrase, e.g. my email",
+      "text": "Text to paste",
+      "empty": "No snippets yet."
+    },
+    "dictionary": {
+      "wordsTitle": "Words",
+      "replacementsTitle": "Replacements",
+      "replacementsDescription": "When Owl hears the left side, it writes the right side. Works for English and Chinese.",
+      "from": "Heard, e.g. cloud code",
+      "to": "Write, e.g. Claude Code",
+      "empty": "No replacements yet."
+    },
+    "notetaker": {
+      "title": "Notetaker",
+      "description": "Records your microphone and the system audio. Wear headphones so Owl can tell you apart from everyone else.",
+      "start": "Start meeting",
+      "stop": "Stop",
+      "recording": "Recording",
+      "meetings": "Meetings",
+      "empty": "No meetings yet.",
+      "back": "Meetings",
+      "delete": "Delete",
+      "summary": "Summary",
+      "summarize": "Summarize",
+      "resummarize": "Summarize again",
+      "summarizing": "Summarizing…",
+      "summaryNeedsProvider": "Set up an AI provider and model under Post Process first (enable it in Advanced → Experimental).",
+      "transcript": "Transcript",
+      "noSpeech": "No speech was found in this recording.",
+      "copy": "Copy transcript",
+      "copied": "Transcript copied",
+      "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "speaker": {
+        "you": "You",
+        "others": "Others"
+      },
+      "status": {
+        "recording": "Recording…",
+        "transcribing": "Transcribing…",
+        "ready": "Ready",
+        "failed": "Failed"
+      }
+    }
   }
 }

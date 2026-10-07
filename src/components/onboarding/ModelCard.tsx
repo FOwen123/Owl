@@ -127,7 +127,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
   const getInteractiveClasses = () => {
     if (!isClickable) return "";
     if (disabled) return "opacity-50 cursor-not-allowed";
-    return "cursor-pointer hover:border-logo-primary/50 hover:bg-logo-primary/5 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] group";
+    return "cursor-pointer hover:border-text-muted/50/50 hover:bg-logo-primary/5 hover:shadow-lg hover:scale-[1.01] active:scale-[0.99] group";
   };
 
   const handleClick = () => {
@@ -280,7 +280,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
             size="sm"
             onClick={handleDelete}
             title={t("modelSelector.deleteModel", { modelName: displayName })}
-            className="flex items-center gap-1.5 text-logo-primary/85 hover:text-logo-primary hover:bg-logo-primary/10"
+            className="flex items-center gap-1.5 text-logo-primary/85 hover:text-logo-primary hover:bg-surface-raised"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>{t("common.delete")}</span>

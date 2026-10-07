@@ -2,6 +2,8 @@
 mod device;
 mod recorder;
 mod resampler;
+#[cfg(target_os = "macos")]
+pub mod system_capture;
 mod utils;
 mod visualizer;
 

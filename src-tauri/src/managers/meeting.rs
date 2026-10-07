@@ -1,0 +1,556 @@
+//! Owl notetaker: records a meeting as two 16 kHz tracks (your microphone and
+//! the system audio), transcribes each in speech chunks, and keeps the result
+//! in its own `meetings.db` (separate from Handy's history.db so upstream
+//! history migrations never collide with ours).
+
+use crate::audio_toolkit::audio::{read_wav_samples, FrameResampler};
+use crate::managers::transcription::TranscriptionManager;
+use crate::settings::get_settings;
+use anyhow::{anyhow, Result};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use rusqlite::{params, Connection};
+use rusqlite_migration::{Migrations, M};
+use serde::{Deserialize, Serialize};
+use specta::Type;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter, Manager};
+
+/// Audio rate of the saved tracks; what the speech models expect.
+pub const SAMPLE_RATE: usize = 16_000;
+
+static MIGRATIONS: &[M] = &[M::up(
+    "CREATE TABLE IF NOT EXISTS meetings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at INTEGER NOT NULL,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL,
+        transcript TEXT NOT NULL DEFAULT '[]',
+        summary TEXT,
+        error TEXT
+    );",
+)];
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum Speaker {
+    /// Your microphone.
+    You,
+    /// System audio: everyone else on the call.
+    Others,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Type)]
+pub struct TranscriptLine {
+    pub start_ms: i64,
+    pub speaker: Speaker,
+    pub text: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum MeetingStatus {
+    Recording,
+    Transcribing,
+    Ready,
+    Failed,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Type)]
+pub struct Meeting {
+    pub id: i64,
+    /// Unix milliseconds.
+    pub started_at: i64,
+    pub duration_ms: i64,
+    pub status: MeetingStatus,
+    pub transcript: Vec<TranscriptLine>,
+    pub summary: Option<String>,
+    /// Why it failed, or for a ready meeting a warning code the UI translates
+    /// (`system_audio_missing`).
+    pub error: Option<String>,
+}
+
+struct Active {
+    id: i64,
+    started: Instant,
+    stop: Arc<AtomicBool>,
+    recorder: JoinHandle<Result<()>>,
+}
+
+pub struct MeetingManager {
+    app: AppHandle,
+    dir: PathBuf,
+    db_path: PathBuf,
+    active: Mutex<Option<Active>>,
+}
+
+impl MeetingManager {
+    pub fn new(app: &AppHandle) -> Result<Self> {
+        let data = crate::portable::app_data_dir(app)?;
+        let dir = data.join("meetings");
+        std::fs::create_dir_all(&dir)?;
+        let db_path = data.join("meetings.db");
+        let mut conn = Connection::open(&db_path)?;
+        Migrations::from_slice(MIGRATIONS).to_latest(&mut conn)?;
+        // A crash mid-meeting leaves rows that can never finish.
+        conn.execute(
+            "UPDATE meetings SET status = 'failed', error = 'Owl quit before this meeting finished'
+             WHERE status IN ('recording', 'transcribing')",
+            [],
+        )?;
+        Ok(Self {
+            app: app.clone(),
+            dir,
+            db_path,
+            active: Mutex::new(None),
+        })
+    }
+
+    fn conn(&self) -> Result<Connection> {
+        Ok(Connection::open(&self.db_path)?)
+    }
+
+    fn changed(&self) {
+        let _ = self.app.emit("meetings-updated", ());
+    }
+
+    pub fn active_id(&self) -> Option<i64> {
+        self.active.lock().unwrap().as_ref().map(|a| a.id)
+    }
+
+    pub fn start(&self) -> Result<i64> {
+        let mut active = self.active.lock().unwrap();
+        if active.is_some() {
+            return Err(anyhow!("A meeting is already being recorded"));
+        }
+        let started_at = chrono::Utc::now().timestamp_millis();
+        let conn = self.conn()?;
+        conn.execute(
+            "INSERT INTO meetings (started_at, status) VALUES (?1, 'recording')",
+            params![started_at],
+        )?;
+        let id = conn.last_insert_rowid();
+        let folder = self.dir.join(id.to_string());
+        std::fs::create_dir_all(&folder)?;
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let mic_name = get_settings(&self.app).selected_microphone;
+        let recorder = {
+            let stop = stop.clone();
+            std::thread::spawn(move || record(&folder, mic_name, &stop))
+        };
+        *active = Some(Active {
+            id,
+            started: Instant::now(),
+            stop,
+            recorder,
+        });
+        drop(active);
+        self.changed();
+        Ok(id)
+    }
+
+    /// Stops recording and transcribes in the background.
+    pub fn stop(self: &Arc<Self>) -> Result<()> {
+        let active = self
+            .active
+            .lock()
+            .unwrap()
+            .take()
+            .ok_or_else(|| anyhow!("No meeting is being recorded"))?;
+        active.stop.store(true, Ordering::Relaxed);
+        let duration_ms = active.started.elapsed().as_millis() as i64;
+        self.conn()?.execute(
+            "UPDATE meetings SET status = 'transcribing', duration_ms = ?1 WHERE id = ?2",
+            params![duration_ms, active.id],
+        )?;
+        self.changed();
+
+        let this = self.clone();
+        std::thread::spawn(move || {
+            let result = active
+                .recorder
+                .join()
+                .map_err(|_| anyhow!("The recorder crashed"))
+                .and_then(|r| r)
+                .and_then(|_| this.transcribe(active.id));
+            let conn = this.conn();
+            match (result, conn) {
+                (Ok((lines, warning)), Ok(conn)) => {
+                    let json = serde_json::to_string(&lines).unwrap_or_else(|_| "[]".into());
+                    let _ = conn.execute(
+                        "UPDATE meetings SET status = 'ready', transcript = ?1, error = ?2
+                         WHERE id = ?3",
+                        params![json, warning, active.id],
+                    );
+                }
+                (Err(e), Ok(conn)) => {
+                    log::error!("Meeting {} failed: {e:#}", active.id);
+                    let _ = conn.execute(
+                        "UPDATE meetings SET status = 'failed', error = ?1 WHERE id = ?2",
+                        params![e.to_string(), active.id],
+                    );
+                }
+                (_, Err(e)) => log::error!("Meeting {}: database unavailable: {e}", active.id),
+            }
+            this.changed();
+        });
+        Ok(())
+    }
+
+    /// The transcript, plus a warning when the system audio came through empty.
+    fn transcribe(&self, id: i64) -> Result<(Vec<TranscriptLine>, Option<String>)> {
+        let tm = self.app.state::<Arc<TranscriptionManager>>();
+        if !tm.is_model_loaded() {
+            let model = get_settings(&self.app).selected_model;
+            if model.is_empty() {
+                return Err(anyhow!("Choose a speech model on the Models page first"));
+            }
+            tm.load_model(&model)?;
+        }
+        let folder = self.dir.join(id.to_string());
+        let mut lines = Vec::new();
+        let mut warning = None;
+        for (file, speaker) in [("mic.wav", Speaker::You), ("system.wav", Speaker::Others)] {
+            let path = folder.join(file);
+            if !path.exists() {
+                continue;
+            }
+            let samples = read_wav_samples(&path)?;
+            if speaker == Speaker::Others && samples.len() < SAMPLE_RATE {
+                warning = Some("system_audio_missing".to_string());
+            }
+            for (start, end) in speech_chunks(&samples) {
+                let text = tm.transcribe(samples[start..end].to_vec())?;
+                let text = text.trim();
+                if !text.is_empty() {
+                    lines.push(TranscriptLine {
+                        start_ms: (start * 1000 / SAMPLE_RATE) as i64,
+                        speaker,
+                        text: text.to_string(),
+                    });
+                }
+            }
+        }
+        lines.sort_by_key(|l| l.start_ms);
+        Ok((lines, warning))
+    }
+
+    pub fn list(&self) -> Result<Vec<Meeting>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, started_at, duration_ms, status, transcript, summary, error
+             FROM meetings ORDER BY started_at DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let status: String = row.get(3)?;
+            let transcript: String = row.get(4)?;
+            Ok(Meeting {
+                id: row.get(0)?,
+                started_at: row.get(1)?,
+                duration_ms: row.get(2)?,
+                status: serde_json::from_value(serde_json::Value::String(status))
+                    .unwrap_or(MeetingStatus::Failed),
+                transcript: serde_json::from_str(&transcript).unwrap_or_default(),
+                summary: row.get(5)?,
+                error: row.get(6)?,
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub fn delete(&self, id: i64) -> Result<()> {
+        if self.active_id() == Some(id) {
+            return Err(anyhow!("Stop the meeting before deleting it"));
+        }
+        self.conn()?
+            .execute("DELETE FROM meetings WHERE id = ?1", params![id])?;
+        let _ = std::fs::remove_dir_all(self.dir.join(id.to_string()));
+        self.changed();
+        Ok(())
+    }
+
+    pub fn save_summary(&self, id: i64, summary: &str) -> Result<()> {
+        self.conn()?.execute(
+            "UPDATE meetings SET summary = ?1 WHERE id = ?2",
+            params![summary, id],
+        )?;
+        self.changed();
+        Ok(())
+    }
+
+    pub fn transcript_text(&self, id: i64) -> Result<String> {
+        let meeting = self
+            .list()?
+            .into_iter()
+            .find(|m| m.id == id)
+            .ok_or_else(|| anyhow!("Meeting not found"))?;
+        Ok(meeting
+            .transcript
+            .iter()
+            .map(|l| {
+                let who = match l.speaker {
+                    Speaker::You => "Me",
+                    Speaker::Others => "Others",
+                };
+                format!("{who}: {}", l.text)
+            })
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
+}
+
+/// One recorded source: raw samples arrive in `consumer` at the device rate
+/// and are written to a 16 kHz WAV.
+struct Track {
+    consumer: rtrb::Consumer<f32>,
+    resampler: FrameResampler,
+    writer: hound::WavWriter<std::io::BufWriter<std::fs::File>>,
+}
+
+impl Track {
+    fn new(rate: u32, consumer: rtrb::Consumer<f32>, path: &Path) -> Result<Self> {
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: SAMPLE_RATE as u32,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        Ok(Self {
+            consumer,
+            resampler: FrameResampler::new(rate as usize, SAMPLE_RATE, Duration::from_millis(30)),
+            writer: hound::WavWriter::create(path, spec)?,
+        })
+    }
+
+    fn drain(&mut self) {
+        let available = self.consumer.slots();
+        let Ok(chunk) = self.consumer.read_chunk(available) else {
+            return;
+        };
+        let samples: Vec<f32> = chunk.into_iter().collect();
+        let writer = &mut self.writer;
+        self.resampler.push(&samples, |frame| {
+            for s in frame {
+                let _ = writer.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16);
+            }
+        });
+    }
+
+    fn finish(mut self) -> Result<()> {
+        self.drain();
+        let writer = &mut self.writer;
+        self.resampler.finish(|frame| {
+            for s in frame {
+                let _ = writer.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16);
+            }
+        });
+        self.writer.finalize()?;
+        Ok(())
+    }
+}
+
+/// Records until `stop`: the microphone to `mic.wav` and, on macOS, the
+/// system audio to `system.wav`. Streams live on this thread because cpal
+/// streams can't move between threads.
+fn record(folder: &Path, mic_name: Option<String>, stop: &AtomicBool) -> Result<()> {
+    let (mic_stream, mic_rate, mic_consumer) = open_mic(mic_name)?;
+    mic_stream.play()?;
+    let mut tracks = vec![Track::new(mic_rate, mic_consumer, &folder.join("mic.wav"))?];
+
+    #[cfg(target_os = "macos")]
+    let _tap = match crate::audio_toolkit::audio::system_capture::start() {
+        Ok((source, tap)) => {
+            tracks.push(Track::new(
+                source.rate,
+                source.consumer,
+                &folder.join("system.wav"),
+            )?);
+            Some(tap)
+        }
+        Err(e) => {
+            log::warn!("Meeting: recording the microphone only; system audio failed: {e}");
+            None
+        }
+    };
+
+    while !stop.load(Ordering::Relaxed) {
+        std::thread::sleep(Duration::from_millis(50));
+        tracks.iter_mut().for_each(Track::drain);
+    }
+    drop(mic_stream);
+    for track in tracks {
+        track.finish()?;
+    }
+    Ok(())
+}
+
+fn open_mic(name: Option<String>) -> Result<(cpal::Stream, u32, rtrb::Consumer<f32>)> {
+    let host = crate::audio_toolkit::get_cpal_host();
+    let device = name
+        .and_then(|name| {
+            host.input_devices()
+                .ok()?
+                .find(|d| d.name().ok().as_deref() == Some(name.as_str()))
+        })
+        .or_else(|| host.default_input_device())
+        .ok_or_else(|| anyhow!("No microphone found"))?;
+    let config = device.default_input_config()?;
+    let rate = config.sample_rate().0;
+    let channels = config.channels() as usize;
+    let (mut producer, consumer) = rtrb::RingBuffer::new(rate as usize * 10);
+    let err = |e| log::error!("Meeting microphone error: {e}");
+    let stream = match config.sample_format() {
+        cpal::SampleFormat::F32 => device.build_input_stream(
+            &config.into(),
+            move |data: &[f32], _| {
+                for frame in data.chunks_exact(channels) {
+                    let _ = producer.push(frame.iter().sum::<f32>() / channels as f32);
+                }
+            },
+            err,
+            None,
+        )?,
+        cpal::SampleFormat::I16 => device.build_input_stream(
+            &config.into(),
+            move |data: &[i16], _| {
+                for frame in data.chunks_exact(channels) {
+                    let sum: f32 = frame.iter().map(|s| *s as f32 / i16::MAX as f32).sum();
+                    let _ = producer.push(sum / channels as f32);
+                }
+            },
+            err,
+            None,
+        )?,
+        other => return Err(anyhow!("Unsupported microphone format {other:?}")),
+    };
+    Ok((stream, rate, consumer))
+}
+
+/// Splits 16 kHz audio into `(start, end)` sample ranges that contain speech,
+/// each short enough for one model pass. Silent stretches are skipped, so the
+/// model never sees long silence (where Whisper invents "Thank you.").
+// ponytail: plain RMS threshold, not a VAD model; good enough for meeting
+// audio, swap in Silero if quiet speakers get dropped.
+pub fn speech_chunks(samples: &[f32]) -> Vec<(usize, usize)> {
+    const FRAME: usize = SAMPLE_RATE * 30 / 1000;
+    const VOICE_RMS: f32 = 0.01; // about -40 dBFS
+    const PAD: usize = 7; // ~0.2 s kept around speech
+    const CUT_AFTER_QUIET: usize = 27; // ~0.8 s of quiet ends a chunk
+    const MAX_FRAMES: usize = 833; // ~25 s, under Whisper's 30 s window
+
+    let voiced: Vec<bool> = samples
+        .chunks(FRAME)
+        .map(|f| (f.iter().map(|s| s * s).sum::<f32>() / f.len() as f32).sqrt() > VOICE_RMS)
+        .collect();
+    let n = voiced.len();
+    let to_sample = |frame: usize| (frame * FRAME).min(samples.len());
+
+    let mut chunks = Vec::new();
+    let mut start: Option<usize> = None;
+    let mut last_voice = 0;
+    let mut floor = 0; // frames before this already belong to a chunk
+    for (i, &is_voice) in voiced.iter().enumerate() {
+        if is_voice {
+            if start.is_none() {
+                start = Some(i.saturating_sub(PAD).max(floor));
+            }
+            last_voice = i;
+        }
+        let Some(s) = start else { continue };
+        let end = if i + 1 - s >= MAX_FRAMES {
+            i + 1
+        } else if i - last_voice >= CUT_AFTER_QUIET {
+            (last_voice + 1 + PAD).min(n)
+        } else {
+            continue;
+        };
+        chunks.push((to_sample(s), to_sample(end)));
+        floor = end;
+        start = None;
+    }
+    if let Some(s) = start {
+        chunks.push((to_sample(s), to_sample((last_voice + 1 + PAD).min(n))));
+    }
+    chunks
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tone(seconds: f32) -> Vec<f32> {
+        let n = (seconds * SAMPLE_RATE as f32) as usize;
+        (0..n).map(|i| 0.2 * (i as f32 * 0.05).sin()).collect()
+    }
+    fn silence(seconds: f32) -> Vec<f32> {
+        vec![0.0; (seconds * SAMPLE_RATE as f32) as usize]
+    }
+    fn secs(samples: usize) -> f32 {
+        samples as f32 / SAMPLE_RATE as f32
+    }
+
+    /// Real devices: `cargo test --lib records_both_tracks -- --ignored`.
+    #[test]
+    #[ignore]
+    fn records_both_tracks() {
+        let folder = std::env::temp_dir().join("owl-meeting-test");
+        std::fs::create_dir_all(&folder).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let handle = {
+            let (folder, stop) = (folder.clone(), stop.clone());
+            std::thread::spawn(move || record(&folder, None, &stop))
+        };
+        std::thread::sleep(Duration::from_secs(3));
+        stop.store(true, Ordering::Relaxed);
+        handle.join().unwrap().unwrap();
+        for file in ["mic.wav", "system.wav"] {
+            let samples = read_wav_samples(folder.join(file)).unwrap();
+            let seconds = samples.len() as f32 / SAMPLE_RATE as f32;
+            println!("{file}: {seconds:.2}s");
+            assert!((2.5..3.5).contains(&seconds), "{file} is {seconds}s");
+        }
+    }
+
+    #[test]
+    fn silence_has_no_chunks() {
+        assert!(speech_chunks(&silence(10.0)).is_empty());
+    }
+
+    #[test]
+    fn one_utterance_is_one_padded_chunk() {
+        let audio = [silence(3.0), tone(2.0), silence(3.0)].concat();
+        let chunks = speech_chunks(&audio);
+        assert_eq!(chunks.len(), 1);
+        let (start, end) = chunks[0];
+        assert!((2.7..3.0).contains(&secs(start)), "start {}", secs(start));
+        assert!((5.0..5.3).contains(&secs(end)), "end {}", secs(end));
+    }
+
+    #[test]
+    fn a_long_pause_splits_utterances() {
+        let audio = [tone(2.0), silence(2.0), tone(2.0)].concat();
+        assert_eq!(speech_chunks(&audio).len(), 2);
+    }
+
+    #[test]
+    fn a_short_pause_stays_in_one_chunk() {
+        let audio = [tone(2.0), silence(0.3), tone(2.0)].concat();
+        assert_eq!(speech_chunks(&audio).len(), 1);
+    }
+
+    #[test]
+    fn long_speech_is_cut_into_contiguous_chunks_under_30s() {
+        let audio = tone(70.0);
+        let chunks = speech_chunks(&audio);
+        assert!(chunks.len() >= 3);
+        for pair in chunks.windows(2) {
+            assert_eq!(pair[0].1, pair[1].0, "chunks must not overlap or gap");
+        }
+        assert!(chunks.iter().all(|(s, e)| secs(e - s) <= 30.0));
+        assert_eq!(chunks.last().unwrap().1, audio.len());
+    }
+}

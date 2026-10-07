@@ -20,6 +20,7 @@
   --color-accent: var(--color-accent);
   --color-accent-fill: var(--color-accent-fill);
   --color-accent-foreground: var(--color-accent-foreground);
+  --color-logo-paper: var(--color-logo-paper);
   --color-accent-soft: var(--color-accent-soft);
   --color-focus-ring: var(--color-focus-ring);
   --color-success: var(--color-success);
@@ -73,6 +74,15 @@
   flex-direction: column;
   justify-content: center;
   text-align: center;
+}
+
+/* Owl: macOS draws the traffic lights over the top of the window (overlay
+   title bar, lib.rs), so the app reserves a draggable strip for them. */
+.titlebar-spacer {
+  height: 0;
+}
+:root[data-platform="macos"] .titlebar-spacer {
+  height: 44px;
 }
 
 /* Keep onboarding centered when classic scrollbars consume layout space.

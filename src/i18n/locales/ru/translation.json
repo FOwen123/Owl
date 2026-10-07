@@ -7,7 +7,9 @@
     "model": "Модель",
     "quit": "Выход",
     "cancel": "Отмена",
-    "secureInputWarning": "⚠ Сочетания клавиш заблокированы Secure Input"
+    "secureInputWarning": "⚠ Сочетания клавиш заблокированы Secure Input",
+    "language": "Dictation Language",
+    "autoDetect": "Auto-detect"
   },
   "sidebar": {
     "general": "Общие",
@@ -16,7 +18,10 @@
     "postProcessing": "Постобработка",
     "history": "История",
     "debug": "Отладка",
-    "about": "О программе"
+    "about": "О программе",
+    "dictionary": "Dictionary",
+    "snippets": "Snippets",
+    "notetaker": "Notetaker"
   },
   "onboarding": {
     "subtitle": "Для начала выберите модель транскрипции",
@@ -101,7 +106,7 @@
     },
     "permissions": {
       "title": "Требуются разрешения",
-      "description": "Handy требуются некоторые разрешения для корректной работы.",
+      "description": "Owl требуются некоторые разрешения для корректной работы.",
       "microphone": {
         "title": "Доступ к микрофону",
         "description": "Необходим для прослушивания вашего голоса для транскрипции."
@@ -175,13 +180,13 @@
       "searchPlaceholder": "Поиск моделей по имени…",
       "rescan": {
         "label": "Пересканировать",
-        "tooltip": "Пересканировать модели, добавленные в папку моделей или кэш Hugging Face вне Handy"
+        "tooltip": "Пересканировать модели, добавленные в папку моделей или кэш Hugging Face вне Owl"
       }
     },
     "general": {
       "title": "Общие",
       "shortcut": {
-        "title": "Ярлыки Handy",
+        "title": "Ярлыки Owl",
         "description": "Настройте сочетания клавиш для запуска записи речи в текст",
         "loading": "Загрузка ярлыков...",
         "none": "Ярлыки не настроены",
@@ -293,11 +298,11 @@
       },
       "autostart": {
         "label": "Запускать при старте",
-        "description": "Автоматически запускать Handy при входе в систему."
+        "description": "Автоматически запускать Owl при входе в систему."
       },
       "showTrayIcon": {
         "label": "Показать значок в трее",
-        "description": "Отображать значок Handy в системном трее."
+        "description": "Отображать значок Owl в системном трее."
       },
       "overlay": {
         "style": {
@@ -502,7 +507,7 @@
       },
       "updateChecks": {
         "label": "Проверять наличие обновлений",
-        "description": "Автоматически проверять наличие новых версий Handy",
+        "description": "Автоматически проверять наличие новых версий Owl",
         "lockedDescription": "Отключено системной конфигурацией (HANDY_DISABLE_UPDATER)"
       },
       "soundTheme": {
@@ -580,7 +585,7 @@
       },
       "keyboardDiagnostic": {
         "title": "Диагностика клавиатуры",
-        "description": "Проверяет, доходят ли события клавиатуры до Handy. Записывается только количество событий — никогда то, какие клавиши вы нажимаете.",
+        "description": "Проверяет, доходят ли события клавиатуры до Owl. Записывается только количество событий — никогда то, какие клавиши вы нажимаете.",
         "run": "Запустить 10-секундную диагностику",
         "running": "Прослушивание… нажмите своё сочетание клавиш несколько раз (например, Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -594,7 +599,7 @@
         "mouse": "Мышь",
         "verdictBlocked": "Secure Input блокирует события клавиш — сочетания с обычной клавишей не смогут работать, пока это не будет устранено.",
         "verdictSuspicious": "События модификаторов приходят, а события клавиш — нет: что-то подавляет клавиши, хотя Secure Input отмечен как выключенный. Пожалуйста, сообщите об этом на GitHub.",
-        "verdictOk": "События клавиш доходят до Handy нормально.",
+        "verdictOk": "События клавиш доходят до Owl нормально.",
         "verdictNoEvents": "События не зафиксированы — вы нажимали клавиши во время теста?",
         "failed": "Диагностика не удалась: {{error}}"
       },
@@ -617,33 +622,33 @@
       "title": "О программе",
       "version": {
         "title": "Версия",
-        "description": "Текущая версия Handy"
+        "description": "Текущая версия Owl"
       },
       "appDataDirectory": {
         "title": "Каталог данных приложения",
-        "description": "Место, где Handy хранит свои данные"
+        "description": "Место, где Owl хранит свои данные"
       },
       "sourceCode": {
         "title": "Исходный код",
         "description": "Просмотреть исходный код и внести свой вклад",
         "button": "Посмотреть на GitHub"
       },
-      "supportDevelopment": {
-        "title": "Поддержка развития",
-        "description": "Помогите нам продолжать развитие Handy",
-        "button": "Поддержать"
-      },
       "acknowledgments": {
         "title": "Благодарности",
         "ggml": {
           "title": "ggml",
           "description": "Высокопроизводительная модель автоматического распознавания речи OpenAI Whisper",
-          "details": "Handy использует ggml для быстрого локального преобразования речи в текст. Спасибо великолепной работе Георгия Герганова и участников."
+          "details": "Owl использует ggml для быстрого локального преобразования речи в текст. Спасибо великолепной работе Георгия Герганова и участников."
         }
       },
       "whatsNewUpdates": {
         "label": "Показывать новинки",
-        "description": "Показывать примечания к выпуску после обновлений Handy"
+        "description": "Показывать примечания к выпуску после обновлений Owl"
+      },
+      "builtOnHandy": {
+        "title": "Built on Handy",
+        "description": "Owl is a fork of Handy by CJ Pais and contributors (MIT). Not affiliated with Handy.",
+        "button": "View Handy"
       }
     }
   },
@@ -672,7 +677,7 @@
     "noOptionsFound": "Вариантов не найдено"
   },
   "accessibility": {
-    "permissionsDescription": "Handy необходимы разрешения на доступ для ввода расшифрованного текста.",
+    "permissionsDescription": "Owl необходимы разрешения на доступ для ввода расшифрованного текста.",
     "openSettings": "Открыть настройки системы"
   },
   "errors": {
@@ -695,11 +700,11 @@
   },
   "appLanguage": {
     "title": "Язык приложения",
-    "description": "Изменить язык интерфейса Handy"
+    "description": "Изменить язык интерфейса Owl"
   },
   "theme": {
     "title": "Тема приложения",
-    "description": "Выберите, следует ли Handy системной теме или остаётся светлым либо тёмным",
+    "description": "Выберите, следует ли Owl системной теме или остаётся светлым либо тёмным",
     "options": {
       "system": "Системная",
       "light": "Светлая",
@@ -711,7 +716,7 @@
     "processing": "Обработка..."
   },
   "whatsNew": {
-    "title": "Новое в Handy v{{version}}"
+    "title": "Новое в Owl v{{version}}"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} может блокировать 1 сочетание клавиш",
@@ -723,5 +728,57 @@
     "learnMore": "Как это исправить",
     "recorderBlocked": "Сейчас нельзя записать сочетание клавиш — Secure Input в macOS блокирует события клавиш. Сначала устраните предупреждение о Secure Input.",
     "dismiss": "Скрыть"
+  },
+  "owl": {
+    "pairs": {
+      "add": "Add",
+      "remove": "Remove {{item}}"
+    },
+    "snippets": {
+      "title": "Snippets",
+      "description": "Say a trigger phrase on its own and Owl pastes the saved text instead. Case and punctuation don't matter.",
+      "trigger": "Trigger phrase, e.g. my email",
+      "text": "Text to paste",
+      "empty": "No snippets yet."
+    },
+    "dictionary": {
+      "wordsTitle": "Words",
+      "replacementsTitle": "Replacements",
+      "replacementsDescription": "When Owl hears the left side, it writes the right side. Works for English and Chinese.",
+      "from": "Heard, e.g. cloud code",
+      "to": "Write, e.g. Claude Code",
+      "empty": "No replacements yet."
+    },
+    "notetaker": {
+      "title": "Notetaker",
+      "description": "Records your microphone and the system audio. Wear headphones so Owl can tell you apart from everyone else.",
+      "start": "Start meeting",
+      "stop": "Stop",
+      "recording": "Recording",
+      "meetings": "Meetings",
+      "empty": "No meetings yet.",
+      "back": "Meetings",
+      "delete": "Delete",
+      "summary": "Summary",
+      "summarize": "Summarize",
+      "resummarize": "Summarize again",
+      "summarizing": "Summarizing…",
+      "summaryNeedsProvider": "Set up an AI provider and model under Post Process first (enable it in Advanced → Experimental).",
+      "transcript": "Transcript",
+      "noSpeech": "No speech was found in this recording.",
+      "copy": "Copy transcript",
+      "copied": "Transcript copied",
+      "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "speaker": {
+        "you": "You",
+        "others": "Others"
+      },
+      "status": {
+        "recording": "Recording…",
+        "transcribing": "Transcribing…",
+        "ready": "Ready",
+        "failed": "Failed"
+      }
+    }
   }
 }

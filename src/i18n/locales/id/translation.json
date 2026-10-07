@@ -7,7 +7,9 @@
     "model": "Model",
     "quit": "Keluar",
     "cancel": "Batal",
-    "secureInputWarning": "⚠ Pintasan diblokir oleh Secure Input"
+    "secureInputWarning": "⚠ Pintasan diblokir oleh Secure Input",
+    "language": "Dictation Language",
+    "autoDetect": "Auto-detect"
   },
   "sidebar": {
     "general": "Umum",
@@ -16,7 +18,10 @@
     "postProcessing": "Pascaproses",
     "history": "Riwayat",
     "debug": "Debug",
-    "about": "Tentang"
+    "about": "Tentang",
+    "dictionary": "Dictionary",
+    "snippets": "Snippets",
+    "notetaker": "Notetaker"
   },
   "onboarding": {
     "subtitle": "Untuk memulai, pilih model transkripsi",
@@ -101,7 +106,7 @@
     },
     "permissions": {
       "title": "Izin Diperlukan",
-      "description": "Handy memerlukan beberapa izin agar dapat berfungsi dengan baik.",
+      "description": "Owl memerlukan beberapa izin agar dapat berfungsi dengan baik.",
       "microphone": {
         "title": "Akses Mikrofon",
         "description": "Diperlukan untuk menangkap suara Anda agar dapat ditranskripsikan."
@@ -161,7 +166,7 @@
     "general": {
       "title": "Umum",
       "shortcut": {
-        "title": "Pintasan Handy",
+        "title": "Pintasan Owl",
         "description": "Atur pintasan keyboard untuk memulai perekaman ucapan-ke-teks",
         "loading": "Memuat pintasan...",
         "none": "Belum ada pintasan yang diatur",
@@ -225,7 +230,7 @@
       },
       "rescan": {
         "label": "Pindai Ulang",
-        "tooltip": "Pindai ulang model yang ditambahkan ke folder model atau cache Hugging Face dari luar Handy"
+        "tooltip": "Pindai ulang model yang ditambahkan ke folder model atau cache Hugging Face dari luar Owl"
       },
       "noModelsMatch": "Tidak ada model yang cocok dengan kriteria ini."
     },
@@ -293,11 +298,11 @@
       },
       "autostart": {
         "label": "Jalankan saat Komputer Dinyalakan",
-        "description": "Mulai Handy secara otomatis saat Anda masuk ke komputer."
+        "description": "Mulai Owl secara otomatis saat Anda masuk ke komputer."
       },
       "showTrayIcon": {
         "label": "Tampilkan Ikon Baki Sistem",
-        "description": "Tampilkan ikon Handy di baki sistem."
+        "description": "Tampilkan ikon Owl di baki sistem."
       },
       "overlay": {
         "style": {
@@ -502,7 +507,7 @@
       },
       "updateChecks": {
         "label": "Periksa Pembaruan",
-        "description": "Periksa versi baru Handy secara otomatis",
+        "description": "Periksa versi baru Owl secara otomatis",
         "lockedDescription": "Dinonaktifkan oleh konfigurasi sistem (HANDY_DISABLE_UPDATER)"
       },
       "whatsNewPreview": {
@@ -594,7 +599,7 @@
       },
       "keyboardDiagnostic": {
         "title": "Diagnostik Keyboard",
-        "description": "Memeriksa apakah peristiwa keyboard mencapai Handy. Hanya jumlah peristiwa yang dicatat — bukan tombol yang Anda tekan.",
+        "description": "Memeriksa apakah peristiwa keyboard mencapai Owl. Hanya jumlah peristiwa yang dicatat — bukan tombol yang Anda tekan.",
         "run": "Jalankan diagnostik 10 dtk",
         "running": "Mendengarkan… tekan pintasan Anda beberapa kali (mis. Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -608,7 +613,7 @@
         "mouse": "Mouse",
         "verdictBlocked": "Secure Input memblokir peristiwa tombol — pintasan keyboard tidak dapat berfungsi sampai masalah ini diselesaikan.",
         "verdictSuspicious": "Peristiwa tombol pengubah diterima, tetapi tidak ada peristiwa tombol — sesuatu memblokir input tombol meskipun Secure Input dilaporkan nonaktif. Harap laporkan ini di GitHub.",
-        "verdictOk": "Peristiwa tombol mencapai Handy secara normal.",
+        "verdictOk": "Peristiwa tombol mencapai Owl secara normal.",
         "verdictNoEvents": "Tidak ada peristiwa yang tertangkap — apakah Anda menekan tombol selama pengujian?",
         "failed": "Diagnostik gagal: {{error}}"
       }
@@ -617,33 +622,33 @@
       "title": "Tentang",
       "version": {
         "title": "Versi",
-        "description": "Versi Handy saat ini"
+        "description": "Versi Owl saat ini"
       },
       "whatsNewUpdates": {
         "label": "Tampilkan Yang Baru",
-        "description": "Tampilkan catatan rilis setelah Handy diperbarui"
+        "description": "Tampilkan catatan rilis setelah Owl diperbarui"
       },
       "appDataDirectory": {
         "title": "Direktori Data Aplikasi",
-        "description": "Lokasi Handy menyimpan datanya"
+        "description": "Lokasi Owl menyimpan datanya"
       },
       "sourceCode": {
         "title": "Kode Sumber",
         "description": "Lihat kode sumber dan berkontribusi",
         "button": "Lihat di GitHub"
       },
-      "supportDevelopment": {
-        "title": "Dukung Pengembangan",
-        "description": "Bantu kami terus mengembangkan Handy",
-        "button": "Donasi"
-      },
       "acknowledgments": {
         "title": "Ucapan Terima Kasih",
         "ggml": {
           "title": "ggml",
           "description": "Pustaka tensor berkinerja tinggi untuk inferensi pembelajaran mesin di perangkat",
-          "details": "Fitur ucapan-ke-teks lokal Handy dibangun menggunakan transcribe.cpp dan ggml. Terima kasih kepada Georgi Gerganov dan para kontributor atas karya luar biasa mereka."
+          "details": "Fitur ucapan-ke-teks lokal Owl dibangun menggunakan transcribe.cpp dan ggml. Terima kasih kepada Georgi Gerganov dan para kontributor atas karya luar biasa mereka."
         }
+      },
+      "builtOnHandy": {
+        "title": "Built on Handy",
+        "description": "Owl is a fork of Handy by CJ Pais and contributors (MIT). Not affiliated with Handy.",
+        "button": "View Handy"
       }
     }
   },
@@ -663,7 +668,7 @@
     "portableUpdateBrowseButton": "Buka GitHub Releases"
   },
   "whatsNew": {
-    "title": "Baru di Handy v{{version}}"
+    "title": "Baru di Owl v{{version}}"
   },
   "common": {
     "loading": "Memuat...",
@@ -675,7 +680,7 @@
     "noOptionsFound": "Tidak ada opsi yang ditemukan"
   },
   "accessibility": {
-    "permissionsDescription": "Handy memerlukan izin aksesibilitas untuk mengetik teks hasil transkripsi.",
+    "permissionsDescription": "Owl memerlukan izin aksesibilitas untuk mengetik teks hasil transkripsi.",
     "openSettings": "Buka Pengaturan Sistem"
   },
   "errors": {
@@ -698,11 +703,11 @@
   },
   "appLanguage": {
     "title": "Bahasa Aplikasi",
-    "description": "Ubah bahasa antarmuka Handy"
+    "description": "Ubah bahasa antarmuka Owl"
   },
   "theme": {
     "title": "Tema Aplikasi",
-    "description": "Pilih apakah Handy mengikuti tema sistem atau selalu menggunakan tema terang atau gelap",
+    "description": "Pilih apakah Owl mengikuti tema sistem atau selalu menggunakan tema terang atau gelap",
     "options": {
       "system": "Sistem",
       "light": "Terang",
@@ -723,5 +728,57 @@
     "learnMore": "Cara memperbaiki",
     "recorderBlocked": "Pintasan tidak dapat direkam saat ini — macOS Secure Input memblokir peristiwa tombol. Selesaikan peringatan Secure Input terlebih dahulu.",
     "dismiss": "Tutup"
+  },
+  "owl": {
+    "pairs": {
+      "add": "Add",
+      "remove": "Remove {{item}}"
+    },
+    "snippets": {
+      "title": "Snippets",
+      "description": "Say a trigger phrase on its own and Owl pastes the saved text instead. Case and punctuation don't matter.",
+      "trigger": "Trigger phrase, e.g. my email",
+      "text": "Text to paste",
+      "empty": "No snippets yet."
+    },
+    "dictionary": {
+      "wordsTitle": "Words",
+      "replacementsTitle": "Replacements",
+      "replacementsDescription": "When Owl hears the left side, it writes the right side. Works for English and Chinese.",
+      "from": "Heard, e.g. cloud code",
+      "to": "Write, e.g. Claude Code",
+      "empty": "No replacements yet."
+    },
+    "notetaker": {
+      "title": "Notetaker",
+      "description": "Records your microphone and the system audio. Wear headphones so Owl can tell you apart from everyone else.",
+      "start": "Start meeting",
+      "stop": "Stop",
+      "recording": "Recording",
+      "meetings": "Meetings",
+      "empty": "No meetings yet.",
+      "back": "Meetings",
+      "delete": "Delete",
+      "summary": "Summary",
+      "summarize": "Summarize",
+      "resummarize": "Summarize again",
+      "summarizing": "Summarizing…",
+      "summaryNeedsProvider": "Set up an AI provider and model under Post Process first (enable it in Advanced → Experimental).",
+      "transcript": "Transcript",
+      "noSpeech": "No speech was found in this recording.",
+      "copy": "Copy transcript",
+      "copied": "Transcript copied",
+      "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "speaker": {
+        "you": "You",
+        "others": "Others"
+      },
+      "status": {
+        "recording": "Recording…",
+        "transcribing": "Transcribing…",
+        "ready": "Ready",
+        "failed": "Failed"
+      }
+    }
   }
 }

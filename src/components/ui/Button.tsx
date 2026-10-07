@@ -20,31 +20,28 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseClasses =
-    "font-medium rounded-lg border focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer";
+    "font-medium rounded-lg border transition-colors focus:outline-none focus-visible:ring-[3px] focus-visible:ring-focus-ring disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer";
 
   const variantClasses = {
+    // DESIGN.md: one primary per view; deep fill with an inset top highlight.
     primary:
-      "text-white bg-background-ui border-background-ui hover:bg-background-ui/80 hover:border-background-ui/80 focus:ring-1 focus:ring-background-ui",
+      "text-accent-foreground bg-accent-fill border-accent-fill shadow-[inset_0_1px_0_rgb(255_255_255/16%)] hover:brightness-110",
     "primary-soft":
-      "text-text bg-logo-primary/20 border-transparent hover:bg-logo-primary/30 focus:ring-1 focus:ring-logo-primary",
+      "text-accent bg-accent-soft border-transparent hover:brightness-110",
     secondary:
-      "bg-mid-gray/10 border-mid-gray/20 hover:bg-background-ui/30 hover:border-logo-primary focus:outline-none",
-    // Secondary's neutral resting look, but hover/focus use the semantic
-    // --color-warning token (theme.css) instead of the pink accent — for
-    // buttons sitting on warning surfaces like SecureInputWarning
+      "text-text bg-surface-raised border-border hover:bg-surface-raised/70",
+    // For buttons sitting on warning surfaces like SecureInputWarning.
     warning:
-      "text-text bg-mid-gray/10 border-mid-gray/20 hover:bg-warning/15 hover:border-warning focus:ring-1 focus:ring-warning",
-    danger:
-      "text-white bg-red-600 border-mid-gray/20 hover:bg-red-700 hover:border-red-700 focus:ring-1 focus:ring-red-500",
-    "danger-ghost":
-      "text-red-400 border-transparent hover:text-red-300 hover:bg-red-500/10 focus:bg-red-500/20",
-    ghost:
-      "text-current border-transparent hover:bg-mid-gray/10 hover:border-logo-primary focus:bg-mid-gray/20",
+      "text-text bg-surface-raised border-border hover:bg-warning/15 hover:border-warning",
+    // Destructive actions are ghost buttons with error text; no red fills.
+    danger: "text-error border-transparent hover:bg-surface-raised",
+    "danger-ghost": "text-error border-transparent hover:bg-surface-raised",
+    ghost: "text-current border-transparent hover:bg-surface-raised",
   };
 
   const sizeClasses = {
-    sm: "px-2 py-1 text-xs",
-    md: "px-4 py-[5px] text-sm",
+    sm: "px-2.5 py-1 text-xs",
+    md: "px-3.5 py-1.5 text-sm",
     lg: "px-4 py-2 text-base",
   };
 

@@ -7,7 +7,9 @@
     "model": "मोडेल",
     "quit": "बाहिर निस्कनुहोस्",
     "cancel": "रद्द गर्नुहोस्",
-    "secureInputWarning": "⚠ Secure Input ले सर्टकटहरू रोकेको छ"
+    "secureInputWarning": "⚠ Secure Input ले सर्टकटहरू रोकेको छ",
+    "language": "Dictation Language",
+    "autoDetect": "Auto-detect"
   },
   "sidebar": {
     "general": "सामान्य",
@@ -16,7 +18,10 @@
     "postProcessing": "पोस्ट प्रोसेस",
     "history": "हिस्ट्री",
     "debug": "डिबग",
-    "about": "बारेमा"
+    "about": "बारेमा",
+    "dictionary": "Dictionary",
+    "snippets": "Snippets",
+    "notetaker": "Notetaker"
   },
   "onboarding": {
     "subtitle": "सुरु गर्न, एउटा ट्रान्सक्रिप्सन मोडेल छान्नुहोस्",
@@ -101,7 +106,7 @@
     },
     "permissions": {
       "title": "अनुमतिहरू आवश्यक छन्",
-      "description": "Handy लाई राम्रोसँग काम गर्न केही अनुमतिहरू चाहिन्छ।",
+      "description": "Owl लाई राम्रोसँग काम गर्न केही अनुमतिहरू चाहिन्छ।",
       "microphone": {
         "title": "माइक्रोफोन पहुँच",
         "description": "ट्रान्सक्रिप्सनका लागि तपाईंको आवाज सुन्न आवश्यक छ।"
@@ -161,7 +166,7 @@
     "general": {
       "title": "सामान्य",
       "shortcut": {
-        "title": "Handy सर्टकटहरू",
+        "title": "Owl सर्टकटहरू",
         "description": "स्पिच-टु-टेक्स्ट रेकर्डिङ सुरु गर्न किबोर्ड सर्टकटहरू सेट अप गर्नुहोस्",
         "loading": "सर्टकटहरू लोड गरिँदैछन्...",
         "none": "कुनै सर्टकट सेट गरिएको छैन",
@@ -225,7 +230,7 @@
       },
       "rescan": {
         "label": "फेरि स्क्यान गर्नुहोस्",
-        "tooltip": "Handy बाहिरबाट मोडेल फोल्डर वा Hugging Face क्यासमा थपिएका मोडेलहरू फेरि स्क्यान गर्नुहोस्"
+        "tooltip": "Owl बाहिरबाट मोडेल फोल्डर वा Hugging Face क्यासमा थपिएका मोडेलहरू फेरि स्क्यान गर्नुहोस्"
       },
       "noModelsMatch": "यो फिल्टरसँग कुनै मोडेल मिल्दैन।"
     },
@@ -293,11 +298,11 @@
       },
       "autostart": {
         "label": "स्टार्टअपमा सुरु गर्नुहोस्",
-        "description": "कम्प्युटरमा लगइन गर्दा Handy स्वतः सुरु गर्नुहोस्।"
+        "description": "कम्प्युटरमा लगइन गर्दा Owl स्वतः सुरु गर्नुहोस्।"
       },
       "showTrayIcon": {
         "label": "ट्रे आइकन देखाउनुहोस्",
-        "description": "सिस्टम ट्रेमा Handy आइकन देखाउनुहोस्।"
+        "description": "सिस्टम ट्रेमा Owl आइकन देखाउनुहोस्।"
       },
       "overlay": {
         "style": {
@@ -502,7 +507,7 @@
       },
       "updateChecks": {
         "label": "अपडेटहरू जाँच गर्नुहोस्",
-        "description": "Handy को नयाँ संस्करण स्वतः जाँच गर्नुहोस्",
+        "description": "Owl को नयाँ संस्करण स्वतः जाँच गर्नुहोस्",
         "lockedDescription": "प्रणाली कन्फिगरेसनद्वारा असक्षम पारिएको (HANDY_DISABLE_UPDATER)"
       },
       "whatsNewPreview": {
@@ -594,7 +599,7 @@
       },
       "keyboardDiagnostic": {
         "title": "किबोर्ड डायग्नोस्टिक",
-        "description": "किबोर्ड इभेन्टहरू Handy सम्म पुग्छन् कि पुग्दैनन् भनी जाँच्छ। इभेन्टको संख्या मात्र रेकर्ड हुन्छ — तपाईंले कुन कुञ्जी थिच्नुभयो भन्ने कहिल्यै होइन।",
+        "description": "किबोर्ड इभेन्टहरू Owl सम्म पुग्छन् कि पुग्दैनन् भनी जाँच्छ। इभेन्टको संख्या मात्र रेकर्ड हुन्छ — तपाईंले कुन कुञ्जी थिच्नुभयो भन्ने कहिल्यै होइन।",
         "run": "१० सेकेन्डको डायग्नोस्टिक चलाउनुहोस्",
         "running": "सुनिरहेको छ… आफ्नो सर्टकट केही पटक थिच्नुहोस् (जस्तै Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -608,7 +613,7 @@
         "mouse": "माउस",
         "verdictBlocked": "Secure Input ले कुञ्जी इभेन्टहरू रोकिरहेको छ — यो समाधान नभएसम्म सामान्य कुञ्जी भएका सर्टकटहरूले काम गर्न सक्दैनन्।",
         "verdictSuspicious": "मोडिफायर इभेन्टहरू आए तर कुञ्जी इभेन्ट आएनन् — Secure Input अक्षम देखिए पनि केहीले कुञ्जीहरू दबाइरहेको छ। कृपया यसको रिपोर्ट GitHub मा गर्नुहोस्।",
-        "verdictOk": "कुञ्जी इभेन्टहरू Handy सम्म सामान्य रूपमा पुगिरहेका छन्।",
+        "verdictOk": "कुञ्जी इभेन्टहरू Owl सम्म सामान्य रूपमा पुगिरहेका छन्।",
         "verdictNoEvents": "कुनै इभेन्ट कैद भएन — के तपाईंले परीक्षणको क्रममा कुनै कुञ्जी थिच्नुभयो?",
         "failed": "डायग्नोस्टिक असफल: {{error}}"
       }
@@ -617,33 +622,33 @@
       "title": "बारेमा",
       "version": {
         "title": "संस्करण",
-        "description": "Handy को हालको संस्करण"
+        "description": "Owl को हालको संस्करण"
       },
       "whatsNewUpdates": {
         "label": "नयाँ के छ देखाउनुहोस्",
-        "description": "Handy अपडेट भएपछि रिलिज नोटहरू देखाउनुहोस्"
+        "description": "Owl अपडेट भएपछि रिलिज नोटहरू देखाउनुहोस्"
       },
       "appDataDirectory": {
         "title": "एप डेटा डाइरेक्टरी",
-        "description": "Handy ले आफ्नो डेटा भण्डारण गर्ने स्थान"
+        "description": "Owl ले आफ्नो डेटा भण्डारण गर्ने स्थान"
       },
       "sourceCode": {
         "title": "स्रोत कोड",
         "description": "स्रोत कोड हेर्नुहोस् र योगदान गर्नुहोस्",
         "button": "GitHub मा हेर्नुहोस्"
       },
-      "supportDevelopment": {
-        "title": "विकासलाई सहयोग गर्नुहोस्",
-        "description": "Handy निर्माण जारी राख्न हामीलाई सहयोग गर्नुहोस्",
-        "button": "दान गर्नुहोस्"
-      },
       "acknowledgments": {
         "title": "आभार",
         "ggml": {
           "title": "ggml",
           "description": "अन-डिभाइस मेसिन लर्निङ अनुमानका लागि उच्च-प्रदर्शन टेन्सर लाइब्रेरी",
-          "details": "Handy को स्थानीय स्पिच-टु-टेक्स्ट transcribe.cpp र ggml मा आधारित छ। Georgi Gerganov र योगदानकर्ताहरूको उत्कृष्ट कामका लागि धन्यवाद।"
+          "details": "Owl को स्थानीय स्पिच-टु-टेक्स्ट transcribe.cpp र ggml मा आधारित छ। Georgi Gerganov र योगदानकर्ताहरूको उत्कृष्ट कामका लागि धन्यवाद।"
         }
+      },
+      "builtOnHandy": {
+        "title": "Built on Handy",
+        "description": "Owl is a fork of Handy by CJ Pais and contributors (MIT). Not affiliated with Handy.",
+        "button": "View Handy"
       }
     }
   },
@@ -663,7 +668,7 @@
     "portableUpdateBrowseButton": "GitHub Releases खोल्नुहोस्"
   },
   "whatsNew": {
-    "title": "Handy v{{version}} मा नयाँ"
+    "title": "Owl v{{version}} मा नयाँ"
   },
   "common": {
     "loading": "लोड गरिँदैछ...",
@@ -675,7 +680,7 @@
     "noOptionsFound": "कुनै विकल्प भेटिएन"
   },
   "accessibility": {
-    "permissionsDescription": "ट्रान्सक्राइब गरिएको टेक्स्ट टाइप गर्न Handy लाई एक्सेसिबिलिटी अनुमति चाहिन्छ।",
+    "permissionsDescription": "ट्रान्सक्राइब गरिएको टेक्स्ट टाइप गर्न Owl लाई एक्सेसिबिलिटी अनुमति चाहिन्छ।",
     "openSettings": "सिस्टम सेटिङहरू खोल्नुहोस्"
   },
   "errors": {
@@ -698,11 +703,11 @@
   },
   "appLanguage": {
     "title": "एपको भाषा",
-    "description": "Handy इन्टरफेसको भाषा परिवर्तन गर्नुहोस्"
+    "description": "Owl इन्टरफेसको भाषा परिवर्तन गर्नुहोस्"
   },
   "theme": {
     "title": "अनुप्रयोगको थिम",
-    "description": "Handy ले तपाईंको सिस्टम थिम अनुसरण गर्ने वा उज्यालो वा अँध्यारो रहने छान्नुहोस्",
+    "description": "Owl ले तपाईंको सिस्टम थिम अनुसरण गर्ने वा उज्यालो वा अँध्यारो रहने छान्नुहोस्",
     "options": {
       "system": "सिस्टम",
       "light": "उज्यालो",
@@ -723,5 +728,57 @@
     "learnMore": "यसलाई कसरी ठिक गर्ने",
     "recorderBlocked": "अहिले सर्टकट रेकर्ड गर्न सकिँदैन — macOS Secure Input ले कुञ्जी इभेन्टहरू रोकिरहेको छ। पहिले Secure Input चेतावनी समाधान गर्नुहोस्।",
     "dismiss": "हटाउनुहोस्"
+  },
+  "owl": {
+    "pairs": {
+      "add": "Add",
+      "remove": "Remove {{item}}"
+    },
+    "snippets": {
+      "title": "Snippets",
+      "description": "Say a trigger phrase on its own and Owl pastes the saved text instead. Case and punctuation don't matter.",
+      "trigger": "Trigger phrase, e.g. my email",
+      "text": "Text to paste",
+      "empty": "No snippets yet."
+    },
+    "dictionary": {
+      "wordsTitle": "Words",
+      "replacementsTitle": "Replacements",
+      "replacementsDescription": "When Owl hears the left side, it writes the right side. Works for English and Chinese.",
+      "from": "Heard, e.g. cloud code",
+      "to": "Write, e.g. Claude Code",
+      "empty": "No replacements yet."
+    },
+    "notetaker": {
+      "title": "Notetaker",
+      "description": "Records your microphone and the system audio. Wear headphones so Owl can tell you apart from everyone else.",
+      "start": "Start meeting",
+      "stop": "Stop",
+      "recording": "Recording",
+      "meetings": "Meetings",
+      "empty": "No meetings yet.",
+      "back": "Meetings",
+      "delete": "Delete",
+      "summary": "Summary",
+      "summarize": "Summarize",
+      "resummarize": "Summarize again",
+      "summarizing": "Summarizing…",
+      "summaryNeedsProvider": "Set up an AI provider and model under Post Process first (enable it in Advanced → Experimental).",
+      "transcript": "Transcript",
+      "noSpeech": "No speech was found in this recording.",
+      "copy": "Copy transcript",
+      "copied": "Transcript copied",
+      "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "speaker": {
+        "you": "You",
+        "others": "Others"
+      },
+      "status": {
+        "recording": "Recording…",
+        "transcribing": "Transcribing…",
+        "ready": "Ready",
+        "failed": "Failed"
+      }
+    }
   }
 }

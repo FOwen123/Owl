@@ -1,50 +1,111 @@
-/* Handy Colors */
+/* Owl colors. Values and usage rules: DESIGN.md. */
 
 :root {
   /* Palette source of truth. Each themed color is defined once as a
      light/dark pair; the active tokens below and the `data-theme` overrides
-     in App.css reference these, so a hex value lives in exactly one place. */
-  --light-color-text: #0f0f0f;
-  --light-color-background: #fbfbfb;
-  --light-color-logo-primary: #faa2ca;
-  --light-color-logo-stroke: #382731;
-
-  --dark-color-text: #fbfbfb;
-  --dark-color-background: #2c2b29;
-  --dark-color-logo-primary: #f28cbb;
-  --dark-color-logo-stroke: #fad1ed;
-
-  /* Semantic status colors. First used by SecureInputWarning; intended to
-     replace the ad-hoc yellow-500/red-500 usages (e.g. ui/Alert.tsx) over
-     time so status styling is themeable from one place. */
+     reference these, so a hex value lives in exactly one place. */
+  --light-color-background: #fafafa;
+  --light-color-surface: #ffffff;
+  --light-color-surface-raised: #f4f4f5;
+  --light-color-border: #e4e4e7;
+  --light-color-text: #27272a;
+  --light-color-text-muted: #71717a;
+  --light-color-accent: #2563eb;
+  --light-color-accent-fill: #1d4ed8;
+  --light-color-success: #059669;
+  --light-color-success-foreground: #047857;
   --light-color-warning: #d97706;
+  --light-color-warning-foreground: #b45309;
   --light-color-error: #dc2626;
+  --light-color-toggle-knob: #ffffff;
+  --light-color-segment-selected: var(--light-color-surface);
+
+  --dark-color-background: #0a0a0a;
+  --dark-color-surface: #0f0f10;
+  --dark-color-surface-raised: #1c1d1f;
+  --dark-color-border: rgb(255 255 255 / 8%);
+  --dark-color-text: #f1f3f7;
+  --dark-color-text-muted: #888b91;
+  --dark-color-accent: #4c8dff;
+  --dark-color-accent-fill: #2257d6;
+  --dark-color-success: #34d399;
+  --dark-color-success-foreground: #34d399;
   --dark-color-warning: #fbbf24;
+  --dark-color-warning-foreground: #fbbf24;
   --dark-color-error: #f87171;
+  --dark-color-toggle-knob: #888b91;
+  --dark-color-segment-selected: var(--dark-color-surface-raised);
 
   /* Tokens that do not change between light and dark */
-  --color-background-ui: #da5893;
+  --color-accent-foreground: #ffffff;
   --color-text-stroke: #f6f6f6;
-  --color-mid-gray: #808080;
+  --gradient-signature: linear-gradient(
+    135deg,
+    #182676 0%,
+    #1f4195 35%,
+    #3269bd 70%,
+    #70b1ff 100%
+  );
+  --accent-soft-strength: 10%;
+  --focus-ring-strength: 18%;
+
+  /* Derived tokens: follow whichever theme is active */
+  --color-accent-soft: color-mix(
+    in srgb,
+    var(--color-accent) var(--accent-soft-strength),
+    transparent
+  );
+  --color-focus-ring: color-mix(
+    in srgb,
+    var(--color-accent) var(--focus-ring-strength),
+    transparent
+  );
+  /* Handy's token names, kept so upstream merges stay small (DESIGN.md,
+     Migration step 4): logo-primary is the accent, background-ui the accent
+     fill, logo-stroke the text color, mid-gray the muted text. */
+  --color-logo-primary: var(--color-accent);
+  --color-background-ui: var(--color-accent-fill);
+  --color-logo-stroke: var(--color-text);
+  --color-mid-gray: var(--color-text-muted);
 
   /* Active palette — defaults to light, follows the OS via the media query
      below, or is forced by `data-theme` (see the overrides below). */
-  --color-text: var(--light-color-text);
   --color-background: var(--light-color-background);
-  --color-logo-primary: var(--light-color-logo-primary);
-  --color-logo-stroke: var(--light-color-logo-stroke);
+  --color-surface: var(--light-color-surface);
+  --color-surface-raised: var(--light-color-surface-raised);
+  --color-border: var(--light-color-border);
+  --color-text: var(--light-color-text);
+  --color-text-muted: var(--light-color-text-muted);
+  --color-accent: var(--light-color-accent);
+  --color-accent-fill: var(--light-color-accent-fill);
+  --color-success: var(--light-color-success);
+  --color-success-foreground: var(--light-color-success-foreground);
   --color-warning: var(--light-color-warning);
+  --color-warning-foreground: var(--light-color-warning-foreground);
   --color-error: var(--light-color-error);
+  --color-toggle-knob: var(--light-color-toggle-knob);
+  --color-segment-selected: var(--light-color-segment-selected);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-text: var(--dark-color-text);
     --color-background: var(--dark-color-background);
-    --color-logo-primary: var(--dark-color-logo-primary);
-    --color-logo-stroke: var(--dark-color-logo-stroke);
+    --color-surface: var(--dark-color-surface);
+    --color-surface-raised: var(--dark-color-surface-raised);
+    --color-border: var(--dark-color-border);
+    --color-text: var(--dark-color-text);
+    --color-text-muted: var(--dark-color-text-muted);
+    --color-accent: var(--dark-color-accent);
+    --color-accent-fill: var(--dark-color-accent-fill);
+    --color-success: var(--dark-color-success);
+    --color-success-foreground: var(--dark-color-success-foreground);
     --color-warning: var(--dark-color-warning);
+    --color-warning-foreground: var(--dark-color-warning-foreground);
     --color-error: var(--dark-color-error);
+    --color-toggle-knob: var(--dark-color-toggle-knob);
+    --color-segment-selected: var(--dark-color-segment-selected);
+    --accent-soft-strength: 16%;
+    --focus-ring-strength: 25%;
   }
 }
 
@@ -52,26 +113,48 @@
  * Explicit theme override, driven by the `theme` setting via
  * `document.documentElement.dataset.theme`. When set, the higher-specificity
  * attribute selectors win over the `prefers-color-scheme` media query above,
- * so a user can keep Handy light or dark regardless of the OS setting.
+ * so a user can keep Owl light or dark regardless of the OS setting.
  * `system` (or no attribute) leaves the OS in charge.
  *
  * Lives here (not in App.css) so every window that imports the shared palette —
  * the settings window and the recording overlay alike — honours the override.
  */
 :root[data-theme="light"] {
-  --color-text: var(--light-color-text);
   --color-background: var(--light-color-background);
-  --color-logo-primary: var(--light-color-logo-primary);
-  --color-logo-stroke: var(--light-color-logo-stroke);
+  --color-surface: var(--light-color-surface);
+  --color-surface-raised: var(--light-color-surface-raised);
+  --color-border: var(--light-color-border);
+  --color-text: var(--light-color-text);
+  --color-text-muted: var(--light-color-text-muted);
+  --color-accent: var(--light-color-accent);
+  --color-accent-fill: var(--light-color-accent-fill);
+  --color-success: var(--light-color-success);
+  --color-success-foreground: var(--light-color-success-foreground);
   --color-warning: var(--light-color-warning);
+  --color-warning-foreground: var(--light-color-warning-foreground);
   --color-error: var(--light-color-error);
+  --color-toggle-knob: var(--light-color-toggle-knob);
+  --color-segment-selected: var(--light-color-segment-selected);
+  --accent-soft-strength: 10%;
+  --focus-ring-strength: 18%;
 }
 
 :root[data-theme="dark"] {
-  --color-text: var(--dark-color-text);
   --color-background: var(--dark-color-background);
-  --color-logo-primary: var(--dark-color-logo-primary);
-  --color-logo-stroke: var(--dark-color-logo-stroke);
+  --color-surface: var(--dark-color-surface);
+  --color-surface-raised: var(--dark-color-surface-raised);
+  --color-border: var(--dark-color-border);
+  --color-text: var(--dark-color-text);
+  --color-text-muted: var(--dark-color-text-muted);
+  --color-accent: var(--dark-color-accent);
+  --color-accent-fill: var(--dark-color-accent-fill);
+  --color-success: var(--dark-color-success);
+  --color-success-foreground: var(--dark-color-success-foreground);
   --color-warning: var(--dark-color-warning);
+  --color-warning-foreground: var(--dark-color-warning-foreground);
   --color-error: var(--dark-color-error);
+  --color-toggle-knob: var(--dark-color-toggle-knob);
+  --color-segment-selected: var(--dark-color-segment-selected);
+  --accent-soft-strength: 16%;
+  --focus-ring-strength: 25%;
 }

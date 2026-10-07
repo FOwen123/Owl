@@ -256,7 +256,7 @@ export const ModelsSettings: React.FC = () => {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={t("settings.models.searchPlaceholder")}
-          className="w-full pl-9 pr-3 py-2 text-sm bg-mid-gray/10 border border-mid-gray/40 rounded-lg focus:outline-none focus:ring-1 focus:ring-logo-primary placeholder:text-text/40"
+          className="w-full pl-9 pr-3 py-2 text-sm bg-surface-raised border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-logo-primary placeholder:text-text/40"
         />
       </div>
 
@@ -335,8 +335,8 @@ export const ModelsSettings: React.FC = () => {
                 </button>
 
                 {languageDropdownOpen && (
-                  <div className="absolute top-full right-0 mt-1 w-56 bg-background border border-mid-gray/80 rounded-lg shadow-lg z-50 overflow-hidden">
-                    <div className="p-2 border-b border-mid-gray/40">
+                  <div className="absolute top-full right-0 mt-1 w-56 bg-background border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+                    <div className="p-2 border-b border-border">
                       <input
                         ref={languageSearchInputRef}
                         type="text"
@@ -358,7 +358,7 @@ export const ModelsSettings: React.FC = () => {
                         placeholder={t(
                           "settings.general.language.searchPlaceholder",
                         )}
-                        className="w-full px-2 py-1 text-sm bg-mid-gray/10 border border-mid-gray/40 rounded-md focus:outline-none focus:ring-1 focus:ring-logo-primary"
+                        className="w-full px-2 py-1 text-sm bg-surface-raised border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-logo-primary"
                       />
                     </div>
                     <div className="max-h-48 overflow-y-auto">

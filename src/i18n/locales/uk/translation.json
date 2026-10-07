@@ -7,7 +7,9 @@
     "model": "Модель",
     "quit": "Вийти",
     "cancel": "Скасувати",
-    "secureInputWarning": "⚠ Комбінації клавіш заблоковано Secure Input"
+    "secureInputWarning": "⚠ Комбінації клавіш заблоковано Secure Input",
+    "language": "Dictation Language",
+    "autoDetect": "Auto-detect"
   },
   "sidebar": {
     "general": "Загальні",
@@ -16,7 +18,10 @@
     "postProcessing": "Постобробка",
     "history": "Історія",
     "debug": "Дебаг",
-    "about": "Інфо"
+    "about": "Інфо",
+    "dictionary": "Dictionary",
+    "snippets": "Snippets",
+    "notetaker": "Notetaker"
   },
   "onboarding": {
     "subtitle": "Для початку оберіть модель транскрипції",
@@ -101,7 +106,7 @@
     },
     "permissions": {
       "title": "Потрібні дозволи",
-      "description": "Handy потребує деяких дозволів для коректної роботи.",
+      "description": "Owl потребує деяких дозволів для коректної роботи.",
       "microphone": {
         "title": "Доступ до мікрофона",
         "description": "Потрібен для прослуховування вашого голосу для транскрипції."
@@ -226,7 +231,7 @@
       "searchPlaceholder": "Пошук моделей за назвою…",
       "rescan": {
         "label": "Пересканувати",
-        "tooltip": "Пересканувати моделі, додані до папки моделей або кешу Hugging Face поза межами Handy"
+        "tooltip": "Пересканувати моделі, додані до папки моделей або кешу Hugging Face поза межами Owl"
       }
     },
     "sound": {
@@ -293,11 +298,11 @@
       },
       "autostart": {
         "label": "Запуск при старті системи",
-        "description": "Автоматично запускати Handy при вході в систему"
+        "description": "Автоматично запускати Owl при вході в систему"
       },
       "showTrayIcon": {
         "label": "Показати значок у треї",
-        "description": "Відображати значок Handy у системному треї."
+        "description": "Відображати значок Owl у системному треї."
       },
       "overlay": {
         "style": {
@@ -502,7 +507,7 @@
       },
       "updateChecks": {
         "label": "Перевірка оновлень",
-        "description": "Автоматично перевіряти наявність нових версій Handy",
+        "description": "Автоматично перевіряти наявність нових версій Owl",
         "lockedDescription": "Вимкнено системною конфігурацією (HANDY_DISABLE_UPDATER)"
       },
       "soundTheme": {
@@ -580,7 +585,7 @@
       },
       "keyboardDiagnostic": {
         "title": "Діагностика клавіатури",
-        "description": "Перевіряє, чи доходять події клавіатури до Handy. Записується лише кількість подій — ніколи те, які клавіші ви натискаєте.",
+        "description": "Перевіряє, чи доходять події клавіатури до Owl. Записується лише кількість подій — ніколи те, які клавіші ви натискаєте.",
         "run": "Запустити 10-секундну діагностику",
         "running": "Прослуховування… натисніть свою комбінацію кілька разів (наприклад, Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -594,7 +599,7 @@
         "mouse": "Миша",
         "verdictBlocked": "Secure Input блокує події клавіш — комбінації зі звичайною клавішею не працюватимуть, доки це не буде усунуто.",
         "verdictSuspicious": "Події модифікаторів надходять, а події клавіш — ні: щось пригнічує клавіші, хоча Secure Input позначено як вимкнений. Будь ласка, повідомте про це на GitHub.",
-        "verdictOk": "Події клавіш надходять до Handy нормально.",
+        "verdictOk": "Події клавіш надходять до Owl нормально.",
         "verdictNoEvents": "Подій не зафіксовано — ви натискали клавіші під час тесту?",
         "failed": "Не вдалося виконати діагностику: {{error}}"
       },
@@ -617,33 +622,33 @@
       "title": "Інфо",
       "version": {
         "title": "Версія",
-        "description": "Поточна версія Handy"
+        "description": "Поточна версія Owl"
       },
       "appDataDirectory": {
         "title": "Папка даних програми",
-        "description": "Розташування даних Handy"
+        "description": "Розташування даних Owl"
       },
       "sourceCode": {
         "title": "Вихідний код",
         "description": "Переглянути вихідний код та зробити внесок",
         "button": "Переглянути на GitHub"
       },
-      "supportDevelopment": {
-        "title": "Підтримати розробку",
-        "description": "Допоможіть нам продовжувати розвивати Handy",
-        "button": "Підтримати"
-      },
       "acknowledgments": {
         "title": "Подяки",
         "ggml": {
           "title": "ggml",
           "description": "Високопродуктивний інференс моделі автоматичного розпізнавання мовлення Whisper від OpenAI",
-          "details": "Handy використовує ggml для швидкої локальної обробки мовлення в текст. Дякуємо за чудову роботу Георгію Герганову та контриб'юторам."
+          "details": "Owl використовує ggml для швидкої локальної обробки мовлення в текст. Дякуємо за чудову роботу Георгію Герганову та контриб'юторам."
         }
       },
       "whatsNewUpdates": {
         "label": "Показувати новини",
-        "description": "Показувати примітки до випуску після оновлень Handy"
+        "description": "Показувати примітки до випуску після оновлень Owl"
+      },
+      "builtOnHandy": {
+        "title": "Built on Handy",
+        "description": "Owl is a fork of Handy by CJ Pais and contributors (MIT). Not affiliated with Handy.",
+        "button": "View Handy"
       }
     }
   },
@@ -672,7 +677,7 @@
     "noOptionsFound": "Опцій не знайдено"
   },
   "accessibility": {
-    "permissionsDescription": "Handy потребує дозволи доступності для введення транскрибованого тексту.",
+    "permissionsDescription": "Owl потребує дозволи доступності для введення транскрибованого тексту.",
     "openSettings": "Відкрити Системні налаштування"
   },
   "errors": {
@@ -695,11 +700,11 @@
   },
   "appLanguage": {
     "title": "Мова інтерфейсу",
-    "description": "Змінити мову інтерфейсу Handy"
+    "description": "Змінити мову інтерфейсу Owl"
   },
   "theme": {
     "title": "Тема застосунку",
-    "description": "Виберіть, чи має Handy слідувати темі системи, чи залишатися світлою або темною",
+    "description": "Виберіть, чи має Owl слідувати темі системи, чи залишатися світлою або темною",
     "options": {
       "system": "Системна",
       "light": "Світла",
@@ -711,7 +716,7 @@
     "processing": "Постобробка..."
   },
   "whatsNew": {
-    "title": "Нове в Handy v{{version}}"
+    "title": "Нове в Owl v{{version}}"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} може блокувати 1 комбінацію клавіш",
@@ -723,5 +728,57 @@
     "learnMore": "Як це виправити",
     "recorderBlocked": "Зараз неможливо записати комбінацію — Secure Input у macOS блокує події клавіш. Спершу усуньте попередження про Secure Input.",
     "dismiss": "Приховати"
+  },
+  "owl": {
+    "pairs": {
+      "add": "Add",
+      "remove": "Remove {{item}}"
+    },
+    "snippets": {
+      "title": "Snippets",
+      "description": "Say a trigger phrase on its own and Owl pastes the saved text instead. Case and punctuation don't matter.",
+      "trigger": "Trigger phrase, e.g. my email",
+      "text": "Text to paste",
+      "empty": "No snippets yet."
+    },
+    "dictionary": {
+      "wordsTitle": "Words",
+      "replacementsTitle": "Replacements",
+      "replacementsDescription": "When Owl hears the left side, it writes the right side. Works for English and Chinese.",
+      "from": "Heard, e.g. cloud code",
+      "to": "Write, e.g. Claude Code",
+      "empty": "No replacements yet."
+    },
+    "notetaker": {
+      "title": "Notetaker",
+      "description": "Records your microphone and the system audio. Wear headphones so Owl can tell you apart from everyone else.",
+      "start": "Start meeting",
+      "stop": "Stop",
+      "recording": "Recording",
+      "meetings": "Meetings",
+      "empty": "No meetings yet.",
+      "back": "Meetings",
+      "delete": "Delete",
+      "summary": "Summary",
+      "summarize": "Summarize",
+      "resummarize": "Summarize again",
+      "summarizing": "Summarizing…",
+      "summaryNeedsProvider": "Set up an AI provider and model under Post Process first (enable it in Advanced → Experimental).",
+      "transcript": "Transcript",
+      "noSpeech": "No speech was found in this recording.",
+      "copy": "Copy transcript",
+      "copied": "Transcript copied",
+      "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "speaker": {
+        "you": "You",
+        "others": "Others"
+      },
+      "status": {
+        "recording": "Recording…",
+        "transcribing": "Transcribing…",
+        "ready": "Ready",
+        "failed": "Failed"
+      }
+    }
   }
 }

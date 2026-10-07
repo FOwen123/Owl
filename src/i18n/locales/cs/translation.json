@@ -7,7 +7,9 @@
     "model": "Model",
     "quit": "Ukončit",
     "cancel": "Zrušit",
-    "secureInputWarning": "⚠ Zkratky blokuje Secure Input"
+    "secureInputWarning": "⚠ Zkratky blokuje Secure Input",
+    "language": "Dictation Language",
+    "autoDetect": "Auto-detect"
   },
   "sidebar": {
     "general": "Obecné",
@@ -16,7 +18,10 @@
     "postProcessing": "Následné zpracování",
     "history": "Historie",
     "debug": "Ladění",
-    "about": "O aplikaci"
+    "about": "O aplikaci",
+    "dictionary": "Dictionary",
+    "snippets": "Snippets",
+    "notetaker": "Notetaker"
   },
   "onboarding": {
     "subtitle": "Pro začátek vyberte model pro přepis",
@@ -101,7 +106,7 @@
     },
     "permissions": {
       "title": "Vyžadována oprávnění",
-      "description": "Handy potřebuje několik oprávnění pro správné fungování.",
+      "description": "Owl potřebuje několik oprávnění pro správné fungování.",
       "microphone": {
         "title": "Přístup k mikrofonu",
         "description": "Potřebný pro zachycení vašeho hlasu k přepisu."
@@ -175,13 +180,13 @@
       "searchPlaceholder": "Hledat modely podle názvu…",
       "rescan": {
         "label": "Znovu prohledat",
-        "tooltip": "Znovu prohledat modely přidané do složky modelů nebo mezipaměti Hugging Face mimo Handy"
+        "tooltip": "Znovu prohledat modely přidané do složky modelů nebo mezipaměti Hugging Face mimo Owl"
       }
     },
     "general": {
       "title": "Obecné",
       "shortcut": {
-        "title": "Zkratky Handy",
+        "title": "Zkratky Owl",
         "description": "Nastavte klávesové zkratky pro spuštění nahrávání řeči na text",
         "loading": "Načítám zkratky...",
         "none": "Žádné zkratky nejsou nastavené",
@@ -293,11 +298,11 @@
       },
       "autostart": {
         "label": "Spouštět při startu",
-        "description": "Automaticky spustit Handy po přihlášení do počítače."
+        "description": "Automaticky spustit Owl po přihlášení do počítače."
       },
       "showTrayIcon": {
         "label": "Zobrazit ikonu v systémové liště",
-        "description": "Zobrazit ikonu Handy v systémové liště."
+        "description": "Zobrazit ikonu Owl v systémové liště."
       },
       "overlay": {
         "style": {
@@ -502,7 +507,7 @@
       },
       "updateChecks": {
         "label": "Kontrolovat aktualizace",
-        "description": "Automaticky kontrolovat nové verze Handy",
+        "description": "Automaticky kontrolovat nové verze Owl",
         "lockedDescription": "Zakázáno systémovou konfigurací (HANDY_DISABLE_UPDATER)"
       },
       "soundTheme": {
@@ -580,7 +585,7 @@
       },
       "keyboardDiagnostic": {
         "title": "Diagnostika klávesnice",
-        "description": "Ověří, zda události klávesnice dorazí do Handy. Zaznamenává se pouze počet událostí — nikdy to, které klávesy stisknete.",
+        "description": "Ověří, zda události klávesnice dorazí do Owl. Zaznamenává se pouze počet událostí — nikdy to, které klávesy stisknete.",
         "run": "Spustit 10s diagnostiku",
         "running": "Naslouchání… několikrát stiskněte svou zkratku (např. Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -594,7 +599,7 @@
         "mouse": "Myš",
         "verdictBlocked": "Secure Input blokuje události kláves — zkratky obsahující běžnou klávesu nemohou fungovat, dokud se to nevyřeší.",
         "verdictSuspicious": "Dorazily události modifikátorů, ale žádné události kláves — něco klávesy potlačuje, přestože Secure Input hlásí, že je vypnutý. Nahlaste to prosím na GitHubu.",
-        "verdictOk": "Události kláves dorazí do Handy normálně.",
+        "verdictOk": "Události kláves dorazí do Owl normálně.",
         "verdictNoEvents": "Nebyly zachyceny žádné události — stiskli jste během testu nějaké klávesy?",
         "failed": "Diagnostika selhala: {{error}}"
       },
@@ -617,33 +622,33 @@
       "title": "O aplikaci",
       "version": {
         "title": "Verze",
-        "description": "Aktuální verze Handy"
+        "description": "Aktuální verze Owl"
       },
       "appDataDirectory": {
         "title": "Adresář dat aplikace",
-        "description": "Umístění, kde Handy ukládá data"
+        "description": "Umístění, kde Owl ukládá data"
       },
       "sourceCode": {
         "title": "Zdrojový kód",
         "description": "Zobrazit zdrojový kód a přispět",
         "button": "Zobrazit na GitHubu"
       },
-      "supportDevelopment": {
-        "title": "Podpořte vývoj",
-        "description": "Pomozte nám pokračovat ve vývoji Handy",
-        "button": "Přispět"
-      },
       "acknowledgments": {
         "title": "Poděkování",
         "ggml": {
           "title": "ggml",
           "description": "Vysoce výkonné inferenční zpracování modelu automatického rozpoznávání řeči Whisper od OpenAI",
-          "details": "Handy používá ggml pro rychlé lokální zpracování řeči na text. Díky skvělé práci Georgiho Gerganova a přispěvatelů."
+          "details": "Owl používá ggml pro rychlé lokální zpracování řeči na text. Díky skvělé práci Georgiho Gerganova a přispěvatelů."
         }
       },
       "whatsNewUpdates": {
         "label": "Zobrazovat novinky",
-        "description": "Zobrazovat poznámky k vydání po aktualizacích Handy"
+        "description": "Zobrazovat poznámky k vydání po aktualizacích Owl"
+      },
+      "builtOnHandy": {
+        "title": "Built on Handy",
+        "description": "Owl is a fork of Handy by CJ Pais and contributors (MIT). Not affiliated with Handy.",
+        "button": "View Handy"
       }
     }
   },
@@ -672,7 +677,7 @@
     "noOptionsFound": "Nenalezeny žádné možnosti"
   },
   "accessibility": {
-    "permissionsDescription": "Handy potřebuje oprávnění usnadnění přístupu, aby mohlo psát přepsaný text.",
+    "permissionsDescription": "Owl potřebuje oprávnění usnadnění přístupu, aby mohlo psát přepsaný text.",
     "openSettings": "Otevřít Nastavení systému"
   },
   "errors": {
@@ -695,11 +700,11 @@
   },
   "appLanguage": {
     "title": "Jazyk aplikace",
-    "description": "Změňte jazyk rozhraní Handy"
+    "description": "Změňte jazyk rozhraní Owl"
   },
   "theme": {
     "title": "Motiv aplikace",
-    "description": "Zvolte, zda má Handy sledovat motiv systému, nebo zůstat světlý či tmavý",
+    "description": "Zvolte, zda má Owl sledovat motiv systému, nebo zůstat světlý či tmavý",
     "options": {
       "system": "Systém",
       "light": "Světlý",
@@ -711,7 +716,7 @@
     "processing": "Zpracovávám..."
   },
   "whatsNew": {
-    "title": "Novinky v Handy v{{version}}"
+    "title": "Novinky v Owl v{{version}}"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} může blokovat 1 zkratku",
@@ -723,5 +728,57 @@
     "learnMore": "Jak to vyřešit",
     "recorderBlocked": "Zkratky teď nelze nahrát — Secure Input v macOS blokuje události kláves. Nejprve vyřešte upozornění na Secure Input.",
     "dismiss": "Zavřít"
+  },
+  "owl": {
+    "pairs": {
+      "add": "Add",
+      "remove": "Remove {{item}}"
+    },
+    "snippets": {
+      "title": "Snippets",
+      "description": "Say a trigger phrase on its own and Owl pastes the saved text instead. Case and punctuation don't matter.",
+      "trigger": "Trigger phrase, e.g. my email",
+      "text": "Text to paste",
+      "empty": "No snippets yet."
+    },
+    "dictionary": {
+      "wordsTitle": "Words",
+      "replacementsTitle": "Replacements",
+      "replacementsDescription": "When Owl hears the left side, it writes the right side. Works for English and Chinese.",
+      "from": "Heard, e.g. cloud code",
+      "to": "Write, e.g. Claude Code",
+      "empty": "No replacements yet."
+    },
+    "notetaker": {
+      "title": "Notetaker",
+      "description": "Records your microphone and the system audio. Wear headphones so Owl can tell you apart from everyone else.",
+      "start": "Start meeting",
+      "stop": "Stop",
+      "recording": "Recording",
+      "meetings": "Meetings",
+      "empty": "No meetings yet.",
+      "back": "Meetings",
+      "delete": "Delete",
+      "summary": "Summary",
+      "summarize": "Summarize",
+      "resummarize": "Summarize again",
+      "summarizing": "Summarizing…",
+      "summaryNeedsProvider": "Set up an AI provider and model under Post Process first (enable it in Advanced → Experimental).",
+      "transcript": "Transcript",
+      "noSpeech": "No speech was found in this recording.",
+      "copy": "Copy transcript",
+      "copied": "Transcript copied",
+      "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "speaker": {
+        "you": "You",
+        "others": "Others"
+      },
+      "status": {
+        "recording": "Recording…",
+        "transcribing": "Transcribing…",
+        "ready": "Ready",
+        "failed": "Failed"
+      }
+    }
   }
 }

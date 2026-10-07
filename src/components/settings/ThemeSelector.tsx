@@ -1,6 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Dropdown } from "../ui/Dropdown";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { SettingContainer } from "../ui/SettingContainer";
 import { useSettings } from "@/hooks/useSettings";
 import { applyTheme, THEME_OPTIONS } from "@/lib/utils/theme";
@@ -16,15 +16,14 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = React.memo(
     const { t } = useTranslation();
     const { settings, updateSetting } = useSettings();
 
-    const currentTheme: Theme = settings?.theme ?? "system";
+    const currentTheme: Theme = settings?.theme ?? "dark";
 
     const themeOptions = THEME_OPTIONS.map((value) => ({
       value,
       label: t(`theme.options.${value}`),
     }));
 
-    const handleThemeChange = (value: string) => {
-      const theme = value as Theme;
+    const handleThemeChange = (theme: Theme) => {
       applyTheme(theme);
       updateSetting("theme", theme);
     };
@@ -36,10 +35,10 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = React.memo(
         descriptionMode={descriptionMode}
         grouped={grouped}
       >
-        <Dropdown
+        <SegmentedControl
           options={themeOptions}
-          selectedValue={currentTheme}
-          onSelect={handleThemeChange}
+          value={currentTheme}
+          onChange={handleThemeChange}
         />
       </SettingContainer>
     );

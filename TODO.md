@@ -109,19 +109,19 @@ After Owl pastes, it watches the text box for a short time. When I fix a mishear
 
 Audit done 2026-10-08. One commit, on its own, separate from the edit-learning work. Merge cost: if Handy later edits a file we deleted, `git merge upstream/main` stops on it; resolve with `git rm <file>`.
 
-- [ ] **Delete:** Handy's, not used by Owl
+- [x] **Delete:** Handy's, not used by Owl
   - `sponsor-images/` (Handy's sponsors) and the "Sponsors" section of `README.handy.md` that shows them
   - `.github/FUNDING.yml`: it puts a "Sponsor" button for cjpais on my repo
   - `CRUSH.md`: Handy's notes for the Crush AI tool; `AGENTS.md` covers this
   - Nix/Linux packaging: `flake.nix`, `flake.lock`, `.nix/`, `nix/`, `scripts/check-nix-deps.ts`, `.github/workflows/nix-check.yml`. Also remove `"postinstall": "bun scripts/check-nix-deps.ts"` from `package.json`, which runs on every `bun install`.
   - `docs/troubleshooting/ubuntu-26-04-gnome-wayland` (Linux)
   - Handy's 9 workflows in `.github/workflows/` (already disabled; they use Handy's signing secrets). Phase 0 has the to-do for one small Owl workflow.
-- [ ] **Replace:** Handy content that Owl shows or links to
+- [x] **Replace:** Handy content that Owl shows or links to
   - What's New: Handy's 0.9.0 and 0.9.7 notes (`src/content/release-notes/`, `public/release-notes/`). Delete the notes, keep the mechanism (`src/components/whats-new/`) for Owl's own notes later.
   - `src/components/SecureInputWarning.tsx` links to `handy.computer/docs/troubleshooting`. Point it at a troubleshooting section in Owl's `README.md`.
   - `tests/app.spec.ts`: rename "Handy App" to "Owl"
   - Handy's contribution process: `.github/ISSUE_TEMPLATE/`, `.github/PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, `CONTRIBUTING_TRANSLATIONS.md`, and the "GitHub workflow" section of `AGENTS.md`. They describe Handy's feature freeze and Discussions. Delete now; write short Owl versions in Phase 4 if needed.
-- [ ] **Keep:** Handy-related but needed
+- [x] **Keep:** Handy-related but needed
   - `README.handy.md`, `LICENSE`: the MIT licence requires keeping Handy's copyright and credit
   - Internal file names (`handy.png`, `handy_warning.png`, the `handy` crate): they already hold Owl art, and renaming makes upstream merges harder (renaming rule)
   - Model downloads from `blob.handy.computer` (`src-tauri/src/catalog/catalog.json`, `managers/model.rs`): still needed until Phase 4 re-hosts them
@@ -130,7 +130,7 @@ Audit done 2026-10-08. One commit, on its own, separate from the edit-learning w
   - Windows/Linux code and config (`src-tauri/nsis/`, `tauri.windows.conf.json`, platform branches in `src/`): `build.rs` refers to them, and deleting them causes merge conflicts for no gain on macOS
   - `BUILD.md`: real build steps; trim it to macOS later
   - `src-tauri/icons/` Android, iOS and Windows Store sizes: these are Owl icons, written again by every `tauri icon` run
-- [ ] **Check after cleanup:** `bun install` (no postinstall error), `bun run lint`, `bunx tsc --noEmit`, `bun run check:translations`, `cargo test`, and `git grep -i handy.computer` shows only the model download URLs
+- [x] **Check after cleanup:** `bun install` (no postinstall error), `bun run lint`, `bunx tsc --noEmit`, `bun run check:translations`, `cargo test`, and `git grep -i handy.computer` shows only the model download URLs
 
 ## Phase 4: Before open-sourcing (later)
 

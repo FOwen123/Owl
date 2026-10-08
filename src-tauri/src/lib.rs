@@ -9,6 +9,8 @@ mod chinese_script;
 pub mod cli;
 mod clipboard;
 mod commands;
+mod correction;
+mod correction_watch;
 mod dictionary;
 mod helpers;
 mod input;
@@ -789,6 +791,9 @@ pub fn run(cli_args: CliArgs) {
             commands::meetings::get_meetings,
             commands::meetings::delete_meeting,
             commands::meetings::summarize_meeting,
+            commands::edits::accept_edit_suggestion,
+            commands::edits::dismiss_edit_suggestion,
+            commands::edits::change_learn_from_edits_setting,
             helpers::clamshell::is_laptop,
         ])
         .events(collect_events![

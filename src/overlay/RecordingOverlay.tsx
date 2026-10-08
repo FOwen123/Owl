@@ -1,4 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
+import { BookPlus, Check } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "./RecordingOverlay.css";
@@ -12,7 +13,23 @@ import type {
 import i18n, { syncLanguageFromSettings } from "@/i18n";
 import { getLanguageDirection } from "@/lib/utils/rtl";
 
-type OverlayState = "recording" | "streaming" | "transcribing" | "processing";
+type OverlayState =
+  | "recording"
+  | "streaming"
+  | "transcribing"
+  | "processing"
+  | "suggestion";
+
+// The suggestion card's edge (300x52 pill, 1px in so a 2px stroke stays
+// inside), starting at the top center and running clockwise.
+const RING = "M150 1H274A25 25 0 0 1 274 51H26A25 25 0 0 1 26 1Z";
+
+// Owl learn-from-edits: a fix offered with a countdown (correction_watch.rs).
+interface EditSuggestion {
+  from: string;
+  to: string;
+  seconds: number;
+}
 
 // Number of reactive bars in the waveform (the simple, smoothed style shared by
 // every overlay form). Mic levels arrive as 16 FFT buckets; we take the first N.
@@ -43,6 +60,8 @@ const RecordingOverlay: React.FC = () => {
   // True once live text overflows the cap. A top overlay fades its top edge only
   // while overflowing, so the resting first line stays crisp flush under the pill.
   const [overflowing, setOverflowing] = useState(false);
+  const [suggestion, setSuggestion] = useState<EditSuggestion | null>(null);
+  const [suggestionAdded, setSuggestionAdded] = useState(false);
 
   const smoothedLevelsRef = useRef<number[]>(Array(16).fill(0));
   // Live-text scroll-back: the text region "sticks" to the newest line while the
@@ -94,6 +113,19 @@ const RecordingOverlay: React.FC = () => {
         setCaptureReady(false);
       });
 
+      const unlistenSuggestion = await listen<EditSuggestion>(
+        "edit-suggestion",
+        (event) => {
+          setSuggestion(event.payload);
+          setSuggestionAdded(false);
+        },
+      );
+
+      const unlistenSuggestionAdded = await listen(
+        "edit-suggestion-added",
+        () => setSuggestionAdded(true),
+      );
+
       const unlistenReady = await listen("recording-ready", () => {
         setElapsed(0);
         setCaptureReady(true);
@@ -124,6 +156,8 @@ const RecordingOverlay: React.FC = () => {
       return () => {
         unlistenShow();
         unlistenHide();
+        unlistenSuggestion();
+        unlistenSuggestionAdded();
         unlistenReady();
         unlistenLevel();
         unlistenStream();
@@ -226,6 +260,71 @@ const RecordingOverlay: React.FC = () => {
       <div className="sbase-r">{showCancel && cancelBtn}</div>
     </div>
   );
+
+  // ---- Owl: "Adding to dictionary" with a countdown line; X skips it ----
+  if (state === "suggestion" && suggestion) {
+    const dismiss = () => {
+      setIsVisible(false);
+      commands.dismissEditSuggestion({
+        from: suggestion.from,
+        to: suggestion.to,
+      });
+    };
+    return (
+      <div
+        dir={direction}
+        className={`ov-stage ${position} ov-fade ${isVisible ? "show" : ""}`}
+      >
+        <div
+          key={`${suggestion.from}→${suggestion.to}`}
+          className={`scard ssug ${suggestionAdded ? "added" : ""}`}
+        >
+          <span className="ssug-book" aria-hidden="true">
+            {suggestionAdded ? <Check /> : <BookPlus />}
+          </span>
+          <div className="ssug-text">
+            <span className="ssug-label">
+              {suggestionAdded
+                ? t("overlay.addedToDictionary")
+                : t("overlay.addingToDictionary")}
+            </span>
+            <span className="ssug-pair">
+              <span className="ssug-from">{suggestion.from}</span>
+              <span className="ssug-arrow">→</span>
+              <span className="ssug-to">{suggestion.to}</span>
+            </span>
+          </div>
+          {!suggestionAdded && (
+            <button
+              className="sx"
+              aria-label={t("overlay.dontAdd")}
+              onClick={dismiss}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M4 4 L12 12 M12 4 L4 12"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )}
+          <svg className="ssug-ring" viewBox="0 0 300 52" aria-hidden="true">
+            <path className="ssug-track" d={RING} pathLength={100} />
+            {!suggestionAdded && (
+              <path
+                className="ssug-countdown"
+                d={RING}
+                pathLength={100}
+                style={{ animationDuration: `${suggestion.seconds}s` }}
+              />
+            )}
+          </svg>
+        </div>
+      </div>
+    );
+  }
 
   // ---- Live overlay: a pill that sculpts open into a panel ----
   if (state === "streaming") {

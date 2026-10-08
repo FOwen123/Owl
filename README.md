@@ -22,7 +22,8 @@ and Linux code from Handy is still here but untested with Owl's changes.
   Simplified output.
 - **Snippets**: say a trigger phrase, Owl pastes the saved text.
 - **Dictionary**: your words, plus "heard → write" replacements that also work
-  for Chinese.
+  for Chinese. When you fix a misheard word after dictating, Owl suggests a
+  replacement.
 - **Notetaker**: record a meeting (microphone and system audio), get a
   transcript and an optional AI summary.
 - **A redesign**: see [DESIGN.md](DESIGN.md).

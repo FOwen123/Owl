@@ -456,6 +456,14 @@ pub struct AppSettings {
     pub snippets: Vec<Snippet>,
     #[serde(default)]
     pub replacements: Vec<Replacement>,
+    /// Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
+    #[serde(default = "default_learn_from_edits")]
+    pub learn_from_edits: bool,
+    /// Owl: suggested replacements waiting for Add or Dismiss on the Dictionary page.
+    #[serde(default)]
+    pub edit_suggestions: Vec<Replacement>,
+    #[serde(default)]
+    pub dismissed_suggestions: Vec<Replacement>,
     #[serde(default)]
     pub model_unload_timeout: ModelUnloadTimeout,
     #[serde(default = "default_word_correction_threshold")]
@@ -665,6 +673,10 @@ fn default_sound_theme() -> SoundTheme {
 }
 
 /// Owl: dark by default. A theme the user already saved is kept.
+fn default_learn_from_edits() -> bool {
+    true
+}
+
 fn default_theme() -> Theme {
     Theme::Dark
 }
@@ -975,6 +987,9 @@ pub fn get_default_settings() -> AppSettings {
         custom_words: Vec::new(),
         snippets: Vec::new(),
         replacements: Vec::new(),
+        learn_from_edits: default_learn_from_edits(),
+        edit_suggestions: Vec::new(),
+        dismissed_suggestions: Vec::new(),
         model_unload_timeout: ModelUnloadTimeout::default(),
         word_correction_threshold: default_word_correction_threshold(),
         history_limit: default_history_limit(),
@@ -1289,6 +1304,44 @@ pub fn set_dictation_language(settings: &mut AppSettings, choice: &str) {
     }
 }
 
+/// Queues new edit suggestions, skipping ones already in the Dictionary,
+/// already waiting, or dismissed before. Returns the ones added.
+pub fn add_edit_suggestions(
+    settings: &mut AppSettings,
+    found: Vec<Replacement>,
+) -> Vec<Replacement> {
+    let mut added = Vec::new();
+    for r in found {
+        let known = settings.replacements.iter().any(|x| x.from == r.from)
+            || settings.edit_suggestions.contains(&r)
+            || settings.dismissed_suggestions.contains(&r)
+            || added.contains(&r);
+        if !known {
+            added.push(r);
+        }
+    }
+    settings.edit_suggestions.extend(added.iter().cloned());
+    added
+}
+
+pub fn accept_edit_suggestion(settings: &mut AppSettings, suggestion: &Replacement) {
+    settings.edit_suggestions.retain(|r| r != suggestion);
+    if !settings
+        .replacements
+        .iter()
+        .any(|r| r.from == suggestion.from)
+    {
+        settings.replacements.push(suggestion.clone());
+    }
+}
+
+pub fn dismiss_edit_suggestion(settings: &mut AppSettings, suggestion: &Replacement) {
+    settings.edit_suggestions.retain(|r| r != suggestion);
+    if !settings.dismissed_suggestions.contains(suggestion) {
+        settings.dismissed_suggestions.push(suggestion.clone());
+    }
+}
+
 pub fn write_settings(app: &AppHandle, settings: AppSettings) {
     let store = app
         .store(crate::portable::store_path(SETTINGS_STORE_PATH))
@@ -1330,6 +1383,63 @@ mod tests {
         assert_eq!(get_default_settings().theme, Theme::Dark);
         let missing: AppSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(missing.theme, Theme::Dark);
+    }
+
+    fn rep(from: &str, to: &str) -> Replacement {
+        Replacement {
+            from: from.to_string(),
+            to: to.to_string(),
+        }
+    }
+
+    #[test]
+    fn learn_from_edits_is_on_by_default() {
+        assert!(get_default_settings().learn_from_edits);
+        let missing: AppSettings = serde_json::from_str("{}").unwrap();
+        assert!(missing.learn_from_edits);
+    }
+
+    #[test]
+    fn new_edit_suggestions_skip_known_and_dismissed_fixes() {
+        let mut settings = get_default_settings();
+        settings.replacements = vec![rep("cloud", "Claude")];
+        settings.dismissed_suggestions = vec![rep("the", "a")];
+        settings.edit_suggestions = vec![rep("Owel", "Owen")];
+
+        let added = add_edit_suggestions(
+            &mut settings,
+            vec![
+                rep("cloud", "Claude"),
+                rep("the", "a"),
+                rep("Owel", "Owen"),
+                rep("公事", "公式"),
+            ],
+        );
+
+        assert_eq!(added, vec![rep("公事", "公式")]);
+        assert_eq!(
+            settings.edit_suggestions,
+            vec![rep("Owel", "Owen"), rep("公事", "公式")]
+        );
+    }
+
+    #[test]
+    fn accepting_a_suggestion_moves_it_to_replacements() {
+        let mut settings = get_default_settings();
+        settings.edit_suggestions = vec![rep("Owel", "Owen"), rep("公事", "公式")];
+        accept_edit_suggestion(&mut settings, &rep("Owel", "Owen"));
+        assert_eq!(settings.edit_suggestions, vec![rep("公事", "公式")]);
+        assert_eq!(settings.replacements, vec![rep("Owel", "Owen")]);
+    }
+
+    #[test]
+    fn dismissing_a_suggestion_remembers_it() {
+        let mut settings = get_default_settings();
+        settings.edit_suggestions = vec![rep("Owel", "Owen")];
+        dismiss_edit_suggestion(&mut settings, &rep("Owel", "Owen"));
+        assert!(settings.edit_suggestions.is_empty());
+        assert_eq!(settings.dismissed_suggestions, vec![rep("Owel", "Owen")]);
+        assert!(add_edit_suggestions(&mut settings, vec![rep("Owel", "Owen")]).is_empty());
     }
 
     #[test]

@@ -1,4 +1,5 @@
 pub mod audio;
+pub mod edits;
 pub mod history;
 pub mod meetings;
 pub mod models;

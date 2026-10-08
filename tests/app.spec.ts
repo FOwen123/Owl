@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Handy App", () => {
+test.describe("Owl", () => {
   test("dev server responds", async ({ page }) => {
     // Just verify the dev server is running and responds
     const response = await page.goto("/");

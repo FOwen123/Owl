@@ -1,7 +1,7 @@
 use crate::input;
 use crate::settings;
 use crate::settings::{OverlayPosition, OverlayStyle};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize};
 
@@ -53,14 +53,25 @@ const OVERLAY_HEIGHT: f64 = 50.0;
 const OVERLAY_STREAM_WIDTH: f64 = 400.0;
 const OVERLAY_STREAM_HEIGHT: f64 = 120.0;
 
+// Owl learn-from-edits card (--ov-suggest-w x ~50 in RecordingOverlay.css).
+const OVERLAY_SUGGESTION_WIDTH: f64 = 340.0;
+const OVERLAY_SUGGESTION_HEIGHT: f64 = 64.0;
+
 /// Overlay window size (logical) for a given UI state.
 fn overlay_dimensions(state: &str) -> (f64, f64) {
-    if state == "streaming" {
-        (OVERLAY_STREAM_WIDTH, OVERLAY_STREAM_HEIGHT)
-    } else {
-        (OVERLAY_WIDTH, OVERLAY_HEIGHT)
+    match state {
+        "streaming" => (OVERLAY_STREAM_WIDTH, OVERLAY_STREAM_HEIGHT),
+        "suggestion" => (OVERLAY_SUGGESTION_WIDTH, OVERLAY_SUGGESTION_HEIGHT),
+        _ => (OVERLAY_WIDTH, OVERLAY_HEIGHT),
     }
 }
+
+/// What the overlay is showing, so an Owl suggestion never covers a dictation
+/// and never hides one when its countdown ends.
+static OVERLAY_MODE: AtomicU8 = AtomicU8::new(MODE_HIDDEN);
+const MODE_HIDDEN: u8 = 0;
+const MODE_DICTATION: u8 = 1;
+const MODE_SUGGESTION: u8 = 2;
 
 static LAST_MIC_LEVEL_EMIT: AtomicU64 = AtomicU64::new(0);
 const EMIT_THROTTLE_MS: u64 = 33; // ~30 FPS
@@ -493,6 +504,12 @@ fn show_overlay_state(app_handle: &AppHandle, state: &str) {
     if settings.overlay_style == OverlayStyle::None {
         return;
     }
+    let mode = if state == "suggestion" {
+        MODE_SUGGESTION
+    } else {
+        MODE_DICTATION
+    };
+    OVERLAY_MODE.store(mode, Ordering::SeqCst);
 
     // The rest queries monitors and the cursor and mutates window geometry. On
     // Linux the monitor/cursor lookups hit GDK/Xlib on the process's shared X11
@@ -630,6 +647,38 @@ pub fn show_processing_overlay(app_handle: &AppHandle) {
     show_overlay_state(app_handle, "processing");
 }
 
+/// Owl: true while the overlay shows a dictation (recording, transcribing...).
+pub fn showing_dictation() -> bool {
+    OVERLAY_MODE.load(Ordering::SeqCst) == MODE_DICTATION
+}
+
+/// Owl: shows a learn-from-edits suggestion with a countdown. Returns false
+/// when the overlay is turned off, so the caller can leave the suggestion on
+/// the Dictionary page instead.
+pub fn show_suggestion_overlay(
+    app_handle: &AppHandle,
+    suggestion: &settings::Replacement,
+    seconds: u64,
+) -> bool {
+    if settings::get_settings(app_handle).overlay_style == OverlayStyle::None {
+        return false;
+    }
+    let _ = app_handle.emit_to(
+        "recording_overlay",
+        "edit-suggestion",
+        serde_json::json!({ "from": suggestion.from, "to": suggestion.to, "seconds": seconds }),
+    );
+    show_overlay_state(app_handle, "suggestion");
+    true
+}
+
+/// Owl: hides the suggestion, unless a dictation has taken the overlay since.
+pub fn hide_suggestion_overlay(app_handle: &AppHandle) {
+    if OVERLAY_MODE.load(Ordering::SeqCst) == MODE_SUGGESTION {
+        hide_recording_overlay(app_handle);
+    }
+}
+
 /// Updates the overlay window position based on current settings
 pub fn update_overlay_position(app_handle: &AppHandle) {
     // Positioning queries monitors/cursor (GDK/Xlib on Linux) and moves the
@@ -689,6 +738,7 @@ static OVERLAY_SHOW_GENERATION: AtomicU64 = AtomicU64::new(0);
 pub fn hide_recording_overlay(app_handle: &AppHandle) {
     // Always hide the overlay regardless of settings - if setting was changed while recording,
     // we still want to hide it properly
+    OVERLAY_MODE.store(MODE_HIDDEN, Ordering::SeqCst);
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
         // Snapshot before doing anything observable, so any show that lands
         // after this point invalidates the delayed hide below.

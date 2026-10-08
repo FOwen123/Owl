@@ -22,7 +22,8 @@ and Linux code from Handy is still here but untested with Owl's changes.
   Simplified output.
 - **Snippets**: say a trigger phrase, Owl pastes the saved text.
 - **Dictionary**: your words, plus "heard → write" replacements that also work
-  for Chinese.
+  for Chinese. When you fix a misheard word after dictating, Owl suggests a
+  replacement.
 - **Notetaker**: record a meeting (microphone and system audio), get a
   transcript and an optional AI summary.
 - **A redesign**: see [DESIGN.md](DESIGN.md).
@@ -91,6 +92,8 @@ environment variables) stay the same to keep these merges small.
   [ggml / whisper.cpp](https://github.com/ggml-org/whisper.cpp),
   [transcribe-rs](https://github.com/cjpais/transcribe-rs) and
   [Silero VAD](https://github.com/snakers4/silero-vad).
+- [Muesli](https://github.com/Muesli-HQ/muesli) (MIT): the English rules for
+  learning from edits.
 - Design references: [Superwhisper](https://superwhisper.com),
   [T3 Code](https://github.com/pingdotgg/t3code) and
   [Wispr Flow](https://wisprflow.ai).

@@ -55,6 +55,24 @@ pasting doesn't work after a rebuild, run
 More detail: [BUILD.md](BUILD.md). Notes for AI coding assistants:
 [AGENTS.md](AGENTS.md).
 
+## Troubleshooting
+
+### Shortcuts stopped working (Secure Input)
+
+While macOS Secure Input is on, no app can see key presses, so Owl's shortcut
+does nothing. Password fields, Terminal's **Secure Keyboard Entry** and some
+password managers turn it on; usually it switches off again by itself.
+
+If it stays on, find the app holding it:
+
+```bash
+ioreg -l -w 0 | grep kCGSSessionSecureInputPID
+```
+
+Then look up that process ID with `ps -p <PID>` and quit the app, or turn off
+Secure Keyboard Entry in its menu. If it is `loginwindow`, lock and unlock the
+screen.
+
 ## Keeping up with Handy
 
 ```bash

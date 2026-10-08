@@ -713,7 +713,10 @@
   },
   "overlay": {
     "transcribing": "正在轉錄...",
-    "processing": "處理中..."
+    "processing": "處理中...",
+    "addingToDictionary": "正在加入字典",
+    "addedToDictionary": "已加入字典",
+    "dontAdd": "不要加入"
   },
   "whatsNew": {
     "title": "Owl v{{version}} 新功能"
@@ -747,7 +750,13 @@
       "replacementsDescription": "Owl 聽到左邊的內容時，會改寫成右邊的內容。適用於英文與中文。",
       "from": "聽到的，例如：克勞德",
       "to": "寫成，例如：Claude",
-      "empty": "還沒有替換規則。"
+      "empty": "還沒有替換規則。",
+      "suggestionsTitle": "建議",
+      "suggestionsDescription": "你聽寫後改正過的詞。",
+      "addSuggestion": "新增",
+      "dismissSuggestion": "忽略",
+      "learnLabel": "從我的修改中學習",
+      "learnDescription": "把你聽寫後改正的詞加入字典。"
     },
     "notetaker": {
       "title": "會議筆記",

@@ -713,7 +713,10 @@
   },
   "overlay": {
     "transcribing": "...جاري التفريغ",
-    "processing": "...جاري المعالجة"
+    "processing": "...جاري المعالجة",
+    "addingToDictionary": "Adding to dictionary",
+    "addedToDictionary": "Added to dictionary",
+    "dontAdd": "Don't add"
   },
   "whatsNew": {
     "title": "الجديد في Owl v{{version}}"
@@ -747,7 +750,13 @@
       "replacementsDescription": "When Owl hears the left side, it writes the right side. Works for English and Chinese.",
       "from": "Heard, e.g. cloud code",
       "to": "Write, e.g. Claude Code",
-      "empty": "No replacements yet."
+      "empty": "No replacements yet.",
+      "suggestionsTitle": "Suggestions",
+      "suggestionsDescription": "Words you fixed after dictating.",
+      "addSuggestion": "Add",
+      "dismissSuggestion": "Dismiss",
+      "learnLabel": "Learn from my edits",
+      "learnDescription": "Adds words you correct after dictating to your dictionary."
     },
     "notetaker": {
       "title": "Notetaker",

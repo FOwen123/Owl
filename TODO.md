@@ -60,7 +60,7 @@ After Owl pastes, it watches the text box for a short time. When I fix a mishear
 
 **Design:** one implementation for both languages, on one branch (`feat/learn-from-edits`, merged to `main` after the real test). Don't reuse Handy's fuzzy matcher (`audio_toolkit/text.rs`): it does a different job (finding known words in a transcript), and its Soundex check is English-only.
 
-- [ ] **Comparison logic** (pure function, tests first): `src-tauri/src/correction.rs`, `suggest(pasted, edited) -> Vec<Replacement>`. Three steps:
+- [x] **Comparison logic** (pure function, tests first): `src-tauri/src/correction.rs`, `suggest(pasted, edited) -> Vec<Replacement>`. Three steps:
   1. **Split and line up:** split into tokens (an English word, or one Chinese character), line up both texts with a longest-common-subsequence diff (~30 lines, no new crate), and collect the changed runs. This also handles mixed text like "我用 cloud code 寫的".
   2. **Judge each changed run by its script:** English rules or Chinese rules below.
   3. **Shared filters:** below.
@@ -86,23 +86,25 @@ After Owl pastes, it watches the text box for a short time. When I fix a mishear
     - Never suggest a single-character replacement: a Dictionary entry "在 → 再" would change every 在. Widen to 2+ characters using the neighbouring character.
     - Ignore number-style changes ("二十 → 20"): that's formatting, not a dictionary word
   - English words inside Chinese text ("我用 cloud code") use the English rules
-- [ ] **Text-box watcher** (macOS): `src-tauri/src/correction_watch.rs`
-  - Start it after a successful paste (`paste()` in `clipboard.rs`)
+- [x] **Text-box watcher** (macOS): `src-tauri/src/correction_watch.rs`
+  - Start it after a successful paste (the paste in `actions.rs`)
   - Read the focused text box's value through the Accessibility API
   - Check every 0.5 s for 45 s; compare once the text has been still for 1.5 s
   - Stop if I switch apps; never read password fields (`AXSecureTextField`)
   - Apps that don't expose their text (some terminals and Electron apps) are skipped silently
-- [ ] **Settings** (`settings.rs`, with tests):
+- [x] **Settings** (`settings.rs`, with tests):
   - `learn_from_edits` toggle, default on
-  - `dismissed_suggestions`, so a dismissed fix is never offered again
-- [ ] **UI:**
-  - A small "Add Owel → Owen to Dictionary?" prompt after a suggestion
+  - `edit_suggestions` waiting for Add/Dismiss; `dismissed_suggestions`, so a dismissed fix is never offered again
+  - Commands in `src-tauri/src/commands/edits.rs`
+- [x] **UI:**
+  - Wispr Flow-style card in the recording overlay (`src/overlay/`, `overlay.rs`): "Adding to dictionary · Owel → Owen", an X, and a 5-second countdown that runs around the card's edge. No X → the fix is added with a short "Added" animation. Waits while a dictation is on screen; with the overlay turned off, fixes wait on the Dictionary page instead.
   - A Suggestions list at the top of `src/components/owl/DictionaryPage.tsx` with Add / Dismiss; Add appends to `replacements`
+  - "Learn from my edits" switch under Replacements
   - Strings in `en`, `zh`, `zh-TW`
 - [ ] **Real test** in a built `Owl.app` (Accessibility only works there):
   - Dictate into Notes and TextEdit
   - Fix one English word and one Chinese word
-  - Check the suggestion appears and works on the next dictation
+  - Check the card appears, X skips the fix, waiting adds it, and it works on the next dictation
 - [ ] **Later:** save accepted fixes and raw → cleaned pairs as training data for my own cleanup model (fine-tune Qwen 3.5 0.8B/2B with LoRA on MLX, English + Traditional Chinese)
 
 ### Clean out Handy-only files

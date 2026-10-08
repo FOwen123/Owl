@@ -30,6 +30,11 @@ const settings: Record<string, unknown> = {
     { trigger: "我的地址", text: "台北市信義區市府路 1 號" },
   ],
   replacements: [{ from: "cloud code", to: "Claude Code" }],
+  learn_from_edits: true,
+  edit_suggestions: [
+    { from: "Owel", to: "Owen" },
+    { from: "公事", to: "公式" },
+  ],
   post_process_providers: [],
   post_process_prompts: [],
 };
@@ -109,8 +114,23 @@ export function installMockBackend() {
     { platform: "macos", os_type: "macos", version: "26.0", eol: "\n" };
   mockWindows("main");
   mockIPC(
-    (cmd) => {
+    (cmd, payload) => {
       if (cmd in responses) return responses[cmd];
+      if (
+        cmd === "accept_edit_suggestion" ||
+        cmd === "dismiss_edit_suggestion"
+      ) {
+        type Pair = { from: string; to: string };
+        const { suggestion } = payload as { suggestion: Pair };
+        const same = (r: Pair) =>
+          r.from === suggestion.from && r.to === suggestion.to;
+        settings.edit_suggestions = (
+          settings.edit_suggestions as Pair[]
+        ).filter((r) => !same(r));
+        if (cmd === "accept_edit_suggestion")
+          (settings.replacements as Pair[]).push(suggestion);
+        return null;
+      }
       if (cmd.startsWith("plugin:macos-permissions|check")) return true;
       if (cmd.startsWith("plugin:macos-permissions|")) return null;
       return null;

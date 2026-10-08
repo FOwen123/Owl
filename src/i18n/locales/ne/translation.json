@@ -716,7 +716,10 @@
   },
   "overlay": {
     "transcribing": "ट्रान्सक्राइब गरिँदैछ...",
-    "processing": "प्रशोधन गरिँदैछ..."
+    "processing": "प्रशोधन गरिँदैछ...",
+    "addingToDictionary": "Adding to dictionary",
+    "addedToDictionary": "Added to dictionary",
+    "dontAdd": "Don't add"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} ले 1 सर्टकट रोकिरहेको हुन सक्छ",
@@ -747,7 +750,13 @@
       "replacementsDescription": "When Owl hears the left side, it writes the right side. Works for English and Chinese.",
       "from": "Heard, e.g. cloud code",
       "to": "Write, e.g. Claude Code",
-      "empty": "No replacements yet."
+      "empty": "No replacements yet.",
+      "suggestionsTitle": "Suggestions",
+      "suggestionsDescription": "Words you fixed after dictating.",
+      "addSuggestion": "Add",
+      "dismissSuggestion": "Dismiss",
+      "learnLabel": "Learn from my edits",
+      "learnDescription": "Adds words you correct after dictating to your dictionary."
     },
     "notetaker": {
       "title": "Notetaker",

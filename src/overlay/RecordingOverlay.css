@@ -17,13 +17,12 @@
      the card's max footprint (--ov-work-w for compact, --ov-open-w for Live),
      since the card is anchored flush to the screen edge in CSS. Keep overlay.rs
      in sync when these change. */
-  --ov-rest-w: 172px; /* resting compact pill (minimal, recording) -- roomy enough
-                         for the English working label before the grow starts */
-  --ov-pill-w: 184px; /* base width / Live pill before it opens or collapses */
-  --ov-work-w: 216px; /* working pill (transcribing / polishing) -- wide enough to
+  --ov-rest-w: 112px; /* resting compact pill (minimal, recording): X | bars | dot */
+  --ov-pill-w: 148px; /* base width / Live pill before it opens or collapses */
+  --ov-work-w: 176px; /* working pill (transcribing / polishing) -- wide enough to
                          center longer labels; shared by Live (collapsed) + minimal */
   --ov-open-w: 392px; /* Live panel, expanded */
-  --ov-base-h: 40px; /* control-row height (.sbase) */
+  --ov-base-h: 32px; /* control-row height (.sbase) */
   --ov-cap-max-h: 64px; /* max height of the scrolling live-text region */
   --ov-suggest-w: 300px; /* Owl "Adding to dictionary" card, 300x52 (overlay.rs:
                             340x64; RING in RecordingOverlay.tsx traces it) */
@@ -149,6 +148,7 @@
 .scard.compact {
   animation: none;
   width: var(--ov-rest-w);
+  border-radius: 17px;
 }
 .scard.compact.cworking {
   width: var(--ov-work-w);
@@ -226,29 +226,29 @@
 .sbase {
   height: var(--ov-base-h);
   flex: none; /* the control row never squashes; only the text region gives */
-  padding: 0 10px;
+  padding: 0 6px;
   display: grid;
-  /* Equal side columns (min 22px to hold the cancel button) keep the center item
+  /* Equal side columns (min 20px to hold the cancel button) keep the center item
      — waveform or label — centered whether the pill is at min width or content-
      sized. */
-  grid-template-columns: minmax(22px, 1fr) auto minmax(22px, 1fr);
+  grid-template-columns: minmax(20px, 1fr) auto minmax(20px, 1fr);
   align-items: center;
 }
 .sbase-l {
   display: flex;
-  padding-left: 5px;
   align-items: center;
   justify-self: start;
 }
 .sbase-r {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  padding-right: 7px;
   justify-self: end;
 }
 .sdot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex: none;
   box-sizing: border-box;
@@ -290,30 +290,68 @@
 /* Waveform — reactive only after the first microphone callback. While arming,
    a muted travelling pulse acknowledges the shortcut without pretending that
    audio levels are already being received. */
+/* Bars are a fixed 16px and scaled vertically (transform is composited, so it
+   stays smooth); the eased transition fills in between ~30 Hz level updates. */
 .swave {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding-right: 8px;
-  height: 18px;
+  gap: 2.5px;
+  height: 16px;
+  padding: 0 6px;
   flex: none;
 }
 .swave i {
-  width: 4px;
-  min-height: 3px;
-  max-height: 18px;
+  width: 3px;
+  height: 16px;
   border-radius: 2px;
   background: var(--s-accent);
+  transform: scaleY(0.3);
   transition:
-    height 80ms linear,
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
     background-color 180ms ease,
     opacity 180ms ease;
 }
 .swave.arming i {
-  height: 6px !important;
+  transform: scaleY(0.3) !important;
   background: var(--s-muted);
   opacity: 0.35;
   animation: swave-arming 900ms ease-in-out infinite;
+}
+/* A slow ripple runs through the bars (via `scale`, which multiplies the level
+   set in `transform`), so they never sit frozen during a pause. Levels top out
+   at 0.8 (RecordingOverlay.tsx), so 0.8 x 1.25 keeps every bar inside its
+   16px box and the pill. */
+.swave.ready i {
+  animation: swave-idle 1.4s ease-in-out infinite;
+}
+.swave.ready i:nth-child(2),
+.swave.ready i:nth-child(8) {
+  animation-delay: -1.2s;
+}
+.swave.ready i:nth-child(3),
+.swave.ready i:nth-child(7) {
+  animation-delay: -1s;
+}
+.swave.ready i:nth-child(4),
+.swave.ready i:nth-child(6) {
+  animation-delay: -0.8s;
+}
+.swave.ready i:nth-child(5) {
+  animation-delay: -0.6s;
+}
+@keyframes swave-idle {
+  0%,
+  100% {
+    scale: 1 1;
+  }
+  50% {
+    scale: 1 1.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .swave.ready i {
+    animation: none;
+  }
 }
 .swave.arming i:nth-child(2),
 .swave.arming i:nth-child(8) {
@@ -333,17 +371,15 @@
 @keyframes swave-arming {
   0%,
   100% {
-    transform: scaleY(0.55);
-    opacity: 0.25;
+    opacity: 0.2;
   }
   50% {
-    transform: scaleY(1.5);
     opacity: 0.7;
   }
 }
 .sx {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   flex: none;
   padding: 0;
@@ -362,8 +398,8 @@
     transform 100ms ease;
 }
 .sx svg {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   display: block;
 }
 .sx:hover {
@@ -378,7 +414,7 @@
 /* working state (transcribing / polishing): a short bar in the signature
    gradient (DESIGN.md: the one control-sized element allowed to carry it) */
 .sspinner {
-  width: 22px;
+  width: 18px;
   height: 4px;
   border-radius: 999px;
   background: var(--gradient-signature);

@@ -34,6 +34,8 @@ interface EditSuggestion {
 // Number of reactive bars in the waveform (the simple, smoothed style shared by
 // every overlay form). Mic levels arrive as 16 FFT buckets; we take the first N.
 const WAVE_BARS = 9;
+// Taller in the middle, like a voice, so even uneven levels read as one shape.
+const WAVE_ENVELOPE = [0.5, 0.68, 0.84, 0.96, 1, 0.96, 0.84, 0.68, 0.5];
 
 const RecordingOverlay: React.FC = () => {
   const { t } = useTranslation();
@@ -133,11 +135,13 @@ const RecordingOverlay: React.FC = () => {
 
       const unlistenLevel = await listen<number[]>("mic-level", (event) => {
         const newLevels = event.payload as number[];
-        // Exponential smoothing across the 16 buckets, then take the first N
-        // bars for the shared waveform.
+        // Smoothing across the 16 buckets, then take the first N bars for the
+        // shared waveform. Rise quickly and fall slowly so the bars flow
+        // instead of flickering.
         const smoothed = smoothedLevelsRef.current.map((prev, i) => {
           const target = newLevels[i] || 0;
-          return prev * 0.7 + target * 0.3;
+          const keep = target > prev ? 0.45 : 0.82;
+          return prev * keep + target * (1 - keep);
         });
         smoothedLevelsRef.current = smoothed;
         setLevels(smoothed.slice(0, WAVE_BARS));
@@ -210,7 +214,8 @@ const RecordingOverlay: React.FC = () => {
         <i
           key={i}
           style={{
-            height: `${Math.max(3, Math.min(18, 3 + Math.pow(v, 0.7) * 15))}px`,
+            // Max 0.8: the idle ripple (x1.25 in the CSS) must stay inside the pill.
+            transform: `scaleY(${Math.min(0.8, 0.3 + Math.pow(v, 0.7) * 0.5 * WAVE_ENVELOPE[i])})`,
           }}
         />
       ))}
@@ -234,30 +239,28 @@ const RecordingOverlay: React.FC = () => {
     </button>
   );
 
-  // dot (left) | waveform (center) | timer + cancel (right) — same structure for
-  // pill & panel, so the Live morph is a pure width change.
+  // cancel (left) | waveform (center) | timer + dot (right) — same structure
+  // for pill & panel, so the Live morph is a pure width change.
   const listeningRow = (showTimer: boolean, showCancel: boolean) => (
     <div className="sbase">
-      <div className="sbase-l">
-        <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
-      </div>
+      <div className="sbase-l">{showCancel && cancelBtn}</div>
       {waveform}
       <div className="sbase-r">
         {showTimer && <span className="stimer">{fmtTime(elapsed)}</span>}
-        {showCancel && cancelBtn}
+        <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
       </div>
     </div>
   );
 
-  // spinner (left) | label (center) | cancel (right) — same 3-zone grid as the
-  // listening row, so the label is centered.
+  // cancel (left) | label (center) | spinner (right) — same 3-zone grid as the
+  // listening row, so the cancel button stays put and the label is centered.
   const workingRow = (label: string, showCancel: boolean) => (
     <div className="sbase">
-      <div className="sbase-l">
+      <div className="sbase-l">{showCancel && cancelBtn}</div>
+      <span className="swork-label">{label}</span>
+      <div className="sbase-r">
         <span className="sspinner" />
       </div>
-      <span className="swork-label">{label}</span>
-      <div className="sbase-r">{showCancel && cancelBtn}</div>
     </div>
   );
 

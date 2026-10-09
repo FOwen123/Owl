@@ -84,7 +84,7 @@ pub fn suggest(pasted: &str, edited: &str) -> Vec<Replacement> {
 
 // --- Tokens and alignment ---------------------------------------------------
 
-fn is_cjk(c: char) -> bool {
+pub(crate) fn is_cjk(c: char) -> bool {
     matches!(c, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}' | '\u{20000}'..='\u{2FFFF}')
 }
 

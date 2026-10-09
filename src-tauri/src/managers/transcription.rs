@@ -1828,7 +1828,13 @@ fn post_process_transcription_text(
             settings.filler_word_removal_enabled,
         );
 
-        normalize_transcription_output(&without_fillers)
+        let normalized = normalize_transcription_output(&without_fillers);
+        // Owl: the fixed cleanup rules (TODO-CLEANUP.md) for Light and Medium.
+        if settings.cleanup_level == crate::settings::CleanupLevel::None {
+            normalized
+        } else {
+            crate::cleanup_rules::apply(&normalized, settings.voice_commands_enabled)
+        }
     })
 }
 
@@ -2330,6 +2336,33 @@ mod tests {
     }
 
     #[test]
+    fn cleanup_level_none_keeps_the_raw_text_and_light_runs_the_rules() {
+        let run = |level: crate::settings::CleanupLevel| {
+            let settings = AppSettings {
+                chinese_script: ChineseScript::AsTranscribed,
+                cleanup_level: level,
+                filler_word_removal_enabled: level != crate::settings::CleanupLevel::None,
+                ..Default::default()
+            };
+            post_process_transcription_text(
+                "嗯，我用Claude寫的".to_string(),
+                &settings,
+                false,
+                &OutputLanguageEvidence::Unknown,
+                &languages(&["zh", "en"]),
+            )
+        };
+        assert_eq!(
+            run(crate::settings::CleanupLevel::None),
+            "嗯，我用Claude寫的"
+        );
+        assert_eq!(
+            run(crate::settings::CleanupLevel::Light),
+            "我用 Claude 寫的"
+        );
+    }
+
+    #[test]
     fn dictionary_replacements_run_after_script_conversion() {
         let settings = AppSettings {
             chinese_script: ChineseScript::Traditional,
@@ -2348,7 +2381,8 @@ mod tests {
             &languages(&["zh", "en"]),
         );
 
-        assert_eq!(result, "我用Claude寫代碼");
+        // Light (the default) also spaces Chinese and English.
+        assert_eq!(result, "我用 Claude 寫代碼");
     }
 
     #[test]

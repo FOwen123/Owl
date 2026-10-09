@@ -15,7 +15,7 @@
     "general": "聽寫",
     "models": "模型",
     "advanced": "進階",
-    "postProcessing": "AI",
+    "postProcessing": "後處理",
     "history": "歷史紀錄",
     "debug": "偵錯",
     "about": "關於",
@@ -542,8 +542,8 @@
         "description": "筆記型電腦闔蓋時使用的麥克風"
       },
       "postProcessingToggle": {
-        "label": "後製處理",
-        "description": "用下方的 AI 供應商整理每次聽寫。"
+        "label": "AI 整理",
+        "description": "讓下方的 AI 協助輕度與中度整理。"
       },
       "muteWhileRecording": {
         "label": "錄製時靜音",
@@ -649,6 +649,26 @@
         "title": "基於 Handy 打造",
         "description": "Owl 是 CJ Pais 與貢獻者所開發的 Handy 的分支（MIT 授權），與 Handy 並無隸屬關係。",
         "button": "查看 Handy"
+      }
+    },
+    "cleanup": {
+      "title": "整理",
+      "level": {
+        "title": "整理程度",
+        "options": {
+          "none": "無",
+          "light": "輕度",
+          "medium": "中度"
+        },
+        "descriptions": {
+          "none": "照你說的原樣貼上。",
+          "light": "移除贅字並修正文法。",
+          "medium": "也會改寫得更清楚。"
+        }
+      },
+      "voiceCommands": {
+        "label": "語音指令",
+        "description": "說「換行」、「逗號」或「刪掉上一句」。"
       }
     }
   },
@@ -772,7 +792,7 @@
       "summarize": "產生摘要",
       "resummarize": "重新產生摘要",
       "summarizing": "正在產生摘要…",
-      "summaryNeedsProvider": "請先在「AI」頁面選擇 AI 供應商與模型。",
+      "summaryNeedsProvider": "請先在「後處理」頁面選擇 AI 供應商與模型。",
       "transcript": "逐字稿",
       "noSpeech": "這段錄音中沒有偵測到說話內容。",
       "copy": "複製逐字稿",

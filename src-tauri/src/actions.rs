@@ -7,7 +7,9 @@ use crate::managers::history::HistoryManager;
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::StreamWorkKind;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::{get_settings, AppSettings, OverlayStyle, APPLE_INTELLIGENCE_PROVIDER_ID};
+use crate::settings::{
+    get_settings, AppSettings, CleanupLevel, OverlayStyle, APPLE_INTELLIGENCE_PROVIDER_ID,
+};
 use crate::shortcut;
 use crate::tray::{set_tray_state, TrayIconState};
 use crate::utils::{
@@ -113,6 +115,22 @@ fn legacy_prompt(template: &str, transcript: &str) -> String {
     }
 }
 
+/// Owl: the AI cleanup runs at Light and Medium, and only while Post Process
+/// is on, so a cleanup level alone never starts sending dictations out.
+fn ai_cleanup_on(settings: &AppSettings) -> bool {
+    settings.post_process_enabled && settings.cleanup_level != CleanupLevel::None
+}
+
+/// Owl: Medium lets the AI reword; Light keeps the selected prompt as it is.
+fn prompt_for_level(prompt: &str, level: CleanupLevel) -> String {
+    match level {
+        CleanupLevel::Medium => {
+            format!("{prompt}\n\nYou may reword for clarity and conciseness, keeping the meaning.")
+        }
+        _ => prompt.to_string(),
+    }
+}
+
 /// Owl: with Post Process on, the normal shortcut cleans up every dictation
 /// (as Felix and Muesli do) instead of needing a second shortcut.
 fn wants_post_process(binding_asks: bool, post_process_enabled: bool) -> bool {
@@ -210,6 +228,7 @@ pub(crate) async fn post_process_transcription(
         debug!("Post-processing skipped because the selected prompt is empty");
         return None;
     }
+    let prompt = prompt_for_level(&prompt, settings.cleanup_level);
 
     debug!(
         "Starting LLM post-processing with provider '{}' (model: {})",
@@ -407,8 +426,21 @@ pub(crate) async fn process_transcription_output(
     let mut post_processed_text: Option<String> = None;
     let mut post_process_prompt: Option<String> = None;
 
-    if post_process {
-        if let Some(processed_text) = post_process_transcription(&settings, &final_text).await {
+    if post_process && crate::cleanup_guard::worth_cleaning(&final_text) {
+        // Owl: a slow or off-topic AI reply falls back to the rule-cleaned text.
+        let limit = crate::cleanup_guard::time_limit(&final_text);
+        let reply = tokio::time::timeout(limit, post_process_transcription(&settings, &final_text))
+            .await
+            .unwrap_or_else(|_| {
+                debug!("AI cleanup took longer than {limit:?}; pasting the rule-cleaned text");
+                None
+            })
+            .and_then(|reply| {
+                crate::cleanup_guard::check(&final_text, &reply)
+                    .inspect_err(|why| debug!("AI cleanup reply rejected: {why}"))
+                    .ok()
+            });
+        if let Some(processed_text) = reply {
             post_processed_text = Some(processed_text.clone());
             final_text = processed_text;
 
@@ -647,8 +679,7 @@ impl ShortcutAction for TranscribeAction {
         play_feedback_sound(app, SoundType::Stop);
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
-        let post_process =
-            wants_post_process(self.post_process, get_settings(app).post_process_enabled);
+        let post_process = wants_post_process(self.post_process, ai_cleanup_on(&get_settings(app)));
         let cancel_generation = rm.cancel_generation();
 
         tauri::async_runtime::spawn(async move {
@@ -938,10 +969,12 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
 #[cfg(test)]
 mod tests {
     use super::{
-        complete_unless_cancelled, is_blank_transcription, legacy_prompt, prompt_messages,
-        should_use_streaming_overlay, strip_think_block, wants_post_process,
+        ai_cleanup_on, complete_unless_cancelled, is_blank_transcription, legacy_prompt,
+        prompt_for_level, prompt_messages, should_use_streaming_overlay, strip_think_block,
+        wants_post_process,
     };
     use crate::settings::OverlayStyle;
+    use crate::settings::{get_default_settings, CleanupLevel};
     use std::future;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -1062,5 +1095,32 @@ mod tests {
         assert!(!wants_post_process(false, false));
         // The CLI's --toggle-post-process still asks for it explicitly.
         assert!(wants_post_process(true, false));
+    }
+
+    #[test]
+    fn the_ai_runs_only_at_light_or_medium_with_post_process_on() {
+        let mut settings = get_default_settings();
+        for (level, post_process, expected) in [
+            (CleanupLevel::None, true, false),
+            (CleanupLevel::Light, false, false),
+            (CleanupLevel::Light, true, true),
+            (CleanupLevel::Medium, true, true),
+        ] {
+            settings.cleanup_level = level;
+            settings.post_process_enabled = post_process;
+            assert_eq!(ai_cleanup_on(&settings), expected, "{level:?}");
+        }
+    }
+
+    #[test]
+    fn medium_lets_the_ai_reword() {
+        assert_eq!(
+            prompt_for_level("Clean it.", CleanupLevel::Light),
+            "Clean it."
+        );
+        assert_eq!(
+            prompt_for_level("Clean it.", CleanupLevel::Medium),
+            "Clean it.\n\nYou may reword for clarity and conciseness, keeping the meaning."
+        );
     }
 }

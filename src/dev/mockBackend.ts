@@ -31,6 +31,9 @@ const settings: Record<string, unknown> = {
   ],
   replacements: [{ from: "cloud code", to: "Claude Code" }],
   learn_from_edits: true,
+  cleanup_level: "light",
+  post_process_enabled: true,
+  voice_commands_enabled: false,
   edit_suggestions: [
     { from: "Owel", to: "Owen" },
     { from: "公事", to: "公式" },
@@ -116,6 +119,10 @@ export function installMockBackend() {
   mockIPC(
     (cmd, payload) => {
       if (cmd in responses) return responses[cmd];
+      if (cmd === "change_cleanup_level_setting") {
+        settings.cleanup_level = (payload as { level: string }).level;
+        return null;
+      }
       if (
         cmd === "accept_edit_suggestion" ||
         cmd === "dismiss_edit_suggestion"

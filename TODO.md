@@ -134,6 +134,10 @@ Audit done 2026-10-08. One commit, on its own, separate from the edit-learning w
   - `src-tauri/icons/` Android, iOS and Windows Store sizes: these are Owl icons, written again by every `tauri icon` run
 - [x] **Check after cleanup:** `bun install` (no postinstall error), `bun run lint`, `bunx tsc --noEmit`, `bun run check:translations`, `cargo test`, and `git grep -i handy.computer` shows only the model download URLs
 
+## Phase 3c: Cleanup rules and levels
+
+See [TODO-CLEANUP.md](TODO-CLEANUP.md): None / Light / Medium, checks on the AI's reply, Chinese and English rules, silence phrases, voice commands.
+
 ## Phase 4: Before open-sourcing (later)
 
 - [ ] Re-host the 16 legacy models on my Hugging Face (Breeze ASR first; check each model's license); update URLs in `src-tauri/src/managers/model.rs`, keeping the SHA-256 values

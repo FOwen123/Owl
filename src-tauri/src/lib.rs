@@ -6,6 +6,8 @@ pub mod audio_toolkit;
 mod autostart;
 mod catalog;
 mod chinese_script;
+mod cleanup_guard;
+mod cleanup_rules;
 pub mod cli;
 mod clipboard;
 mod commands;
@@ -794,6 +796,8 @@ pub fn run(cli_args: CliArgs) {
             commands::edits::accept_edit_suggestion,
             commands::edits::dismiss_edit_suggestion,
             commands::edits::change_learn_from_edits_setting,
+            commands::cleanup::change_cleanup_level_setting,
+            commands::cleanup::change_voice_commands_setting,
             helpers::clamshell::is_laptop,
         ])
         .events(collect_events![

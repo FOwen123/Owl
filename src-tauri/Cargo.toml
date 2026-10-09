@@ -166,7 +166,7 @@ objc2-core-audio = "0.3"
 objc2-core-audio-types = "0.3"
 objc2-core-foundation = "0.3"
 # Owl learn-from-edits: read the focused text box (correction_watch.rs).
-objc2-application-services = { version = "0.3", default-features = false, features = ["std", "libc", "HIServices", "AXUIElement", "AXError"] }
+objc2-application-services = { version = "0.3", default-features = false, features = ["std", "HIServices", "AXUIElement", "AXError"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk-layer-shell = { version = "0.8", features = ["v0_6"] }

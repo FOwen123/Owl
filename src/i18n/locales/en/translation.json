@@ -557,7 +557,7 @@
       },
       "postProcessingToggle": {
         "label": "Post Process",
-        "description": "Turn on a second shortcut that sends your dictation to the AI provider below to clean it up. Meeting summaries use the same provider."
+        "description": "Cleans up every dictation with the AI provider below."
       },
       "muteWhileRecording": {
         "label": "Mute While Recording",

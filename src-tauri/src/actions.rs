@@ -81,8 +81,42 @@ fn strip_think_block(s: &str) -> &str {
 
 /// Build a system prompt from the user's prompt template.
 /// Removes `${output}` placeholder since the transcription is sent as the user message.
-fn build_system_prompt(prompt_template: &str) -> String {
-    prompt_template.replace("${output}", "").trim().to_string()
+/// Handy's prompts wrap `${output}` in transcript tags.
+static TRANSCRIPT_BLOCK: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
+    regex::Regex::new(r"(?s)<transcript>\s*\$\{output\}\s*</transcript>").expect("valid regex")
+});
+
+fn tagged_transcript(transcript: &str) -> String {
+    format!("<transcript>\n{transcript}\n</transcript>")
+}
+
+/// Owl: the prompt's instructions as the system message and the transcript,
+/// in tags, as the user message. Removing `${output}` alone used to leave an
+/// empty `<transcript></transcript>` in the instructions, telling the model
+/// the transcript was empty.
+fn prompt_messages(template: &str, transcript: &str) -> (String, String) {
+    let system = TRANSCRIPT_BLOCK
+        .replace_all(template, "")
+        .replace("${output}", "")
+        .trim()
+        .to_string();
+    (system, tagged_transcript(transcript))
+}
+
+/// Owl: one-message prompt for providers without system messages. A prompt
+/// without `${output}` gets the transcript appended instead of dropped.
+fn legacy_prompt(template: &str, transcript: &str) -> String {
+    if template.contains("${output}") {
+        template.replace("${output}", transcript)
+    } else {
+        format!("{}\n\n{}", template.trim(), tagged_transcript(transcript))
+    }
+}
+
+/// Owl: with Post Process on, the normal shortcut cleans up every dictation
+/// (as Felix and Muesli do) instead of needing a second shortcut.
+fn wants_post_process(binding_asks: bool, post_process_enabled: bool) -> bool {
+    binding_asks || post_process_enabled
 }
 
 /// Returns `true` when a transcription has no meaningful content to
@@ -196,8 +230,7 @@ pub(crate) async fn post_process_transcription(
     if provider.supports_structured_output {
         debug!("Using structured outputs for provider '{}'", provider.id);
 
-        let system_prompt = build_system_prompt(&prompt);
-        let user_content = transcription.to_string();
+        let (system_prompt, user_content) = prompt_messages(&prompt, transcription);
 
         // Handle Apple Intelligence separately since it uses native Swift APIs
         if provider.id == APPLE_INTELLIGENCE_PROVIDER_ID {
@@ -310,8 +343,8 @@ pub(crate) async fn post_process_transcription(
         }
     }
 
-    // Legacy mode: Replace ${output} variable in the prompt with the actual text
-    let processed_prompt = prompt.replace("${output}", transcription);
+    // Legacy mode: one message with the transcript in it
+    let processed_prompt = legacy_prompt(&prompt, transcription);
     debug!("Processed prompt length: {} chars", processed_prompt.len());
 
     match crate::llm_client::send_chat_completion(
@@ -614,7 +647,8 @@ impl ShortcutAction for TranscribeAction {
         play_feedback_sound(app, SoundType::Stop);
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
-        let post_process = self.post_process;
+        let post_process =
+            wants_post_process(self.post_process, get_settings(app).post_process_enabled);
         let cancel_generation = rm.cancel_generation();
 
         tauri::async_runtime::spawn(async move {
@@ -904,8 +938,8 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
 #[cfg(test)]
 mod tests {
     use super::{
-        complete_unless_cancelled, is_blank_transcription, should_use_streaming_overlay,
-        strip_think_block,
+        complete_unless_cancelled, is_blank_transcription, legacy_prompt, prompt_messages,
+        should_use_streaming_overlay, strip_think_block, wants_post_process,
     };
     use crate::settings::OverlayStyle;
     use std::future;
@@ -987,5 +1021,46 @@ mod tests {
         assert!(!should_use_streaming_overlay(OverlayStyle::Live, false));
         assert!(!should_use_streaming_overlay(OverlayStyle::Minimal, true));
         assert!(!should_use_streaming_overlay(OverlayStyle::None, true));
+    }
+
+    const HANDY_STYLE: &str =
+        "<transcript>\n${output}\n</transcript>\n\nThe above is a transcript. Clean it.";
+
+    #[test]
+    fn instructions_go_in_the_system_message_and_the_transcript_in_tags() {
+        let (system, user) = prompt_messages(HANDY_STYLE, "sorry, I mean Wednesday");
+        // No empty <transcript></transcript> left behind to tell the model
+        // the transcript is empty.
+        assert!(!system.contains("<transcript>"), "{system}");
+        assert!(!system.contains("${output}"), "{system}");
+        assert!(system.contains("Clean it."));
+        assert_eq!(user, "<transcript>\nsorry, I mean Wednesday\n</transcript>");
+
+        let (system, user) = prompt_messages("Clean up dictated text.", "hi");
+        assert_eq!(system, "Clean up dictated text.");
+        assert_eq!(user, "<transcript>\nhi\n</transcript>");
+    }
+
+    #[test]
+    fn single_message_prompt_always_contains_the_transcript() {
+        assert_eq!(
+            legacy_prompt("Fix: ${output}", "hi"),
+            "Fix: hi",
+            "Handy-style prompts keep their placeholder"
+        );
+        // A prompt without ${output} used to send no transcript at all.
+        assert_eq!(
+            legacy_prompt("Clean up dictated text.", "hi"),
+            "Clean up dictated text.\n\n<transcript>\nhi\n</transcript>"
+        );
+    }
+
+    #[test]
+    fn the_normal_shortcut_cleans_up_when_post_process_is_on() {
+        assert!(wants_post_process(false, true));
+        assert!(wants_post_process(true, true));
+        assert!(!wants_post_process(false, false));
+        // The CLI's --toggle-post-process still asks for it explicitly.
+        assert!(wants_post_process(true, false));
     }
 }

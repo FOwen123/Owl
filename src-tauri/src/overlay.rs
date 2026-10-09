@@ -674,9 +674,14 @@ pub fn show_suggestion_overlay(
 
 /// Owl: hides the suggestion, unless a dictation has taken the overlay since.
 pub fn hide_suggestion_overlay(app_handle: &AppHandle) {
-    if OVERLAY_MODE.load(Ordering::SeqCst) == MODE_SUGGESTION {
+    if showing_suggestion() {
         hide_recording_overlay(app_handle);
     }
+}
+
+/// Owl: true while a suggestion card is on screen (not replaced by a dictation).
+pub fn showing_suggestion() -> bool {
+    OVERLAY_MODE.load(Ordering::SeqCst) == MODE_SUGGESTION
 }
 
 /// Updates the overlay window position based on current settings

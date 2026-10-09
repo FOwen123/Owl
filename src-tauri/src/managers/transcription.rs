@@ -1828,13 +1828,13 @@ fn post_process_transcription_text(
             settings.filler_word_removal_enabled,
         );
 
-        let normalized = normalize_transcription_output(&without_fillers);
-        // Owl: the fixed cleanup rules (TODO-CLEANUP.md) for Light and Medium.
+        // Owl: None pastes the raw transcript, skipping even Handy's stutter
+        // and whitespace normalization; Light and Medium add the fixed rules.
         if settings.cleanup_level == crate::settings::CleanupLevel::None {
-            normalized
-        } else {
-            crate::cleanup_rules::apply(&normalized, settings.voice_commands_enabled)
+            return without_fillers.trim().to_string();
         }
+        let normalized = normalize_transcription_output(&without_fillers);
+        crate::cleanup_rules::apply(&normalized, settings.voice_commands_enabled)
     })
 }
 
@@ -2356,6 +2356,22 @@ mod tests {
             run(crate::settings::CleanupLevel::None),
             "嗯，我用Claude寫的"
         );
+        let raw = |text: &str| {
+            let settings = AppSettings {
+                cleanup_level: crate::settings::CleanupLevel::None,
+                filler_word_removal_enabled: false,
+                ..Default::default()
+            };
+            post_process_transcription_text(
+                text.to_string(),
+                &settings,
+                false,
+                &OutputLanguageEvidence::Unknown,
+                &languages(&["en"]),
+            )
+        };
+        assert_eq!(raw("I I I think"), "I I I think");
+        assert_eq!(raw("first line\nsecond line"), "first line\nsecond line");
         assert_eq!(
             run(crate::settings::CleanupLevel::Light),
             "我用 Claude 寫的"

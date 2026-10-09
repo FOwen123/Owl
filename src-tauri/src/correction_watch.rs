@@ -43,7 +43,7 @@ mod mac {
     pub fn watch(app: AppHandle, pasted: String) {
         // The paste can land a little later (the reliable paste path is
         // asynchronous), so look for the pasted text for up to 2 s.
-        let Some((pid, baseline)) = (0..4).find_map(|_| {
+        let Some((field, baseline)) = (0..4).find_map(|_| {
             sleep(POLL_EVERY);
             focused_text().filter(|(_, text)| text.contains(&pasted))
         }) else {
@@ -56,11 +56,16 @@ mod mac {
         let mut changed_at = Instant::now();
         while started.elapsed() < WATCH_FOR {
             sleep(POLL_EVERY);
-            let Some((now_pid, text)) = focused_text() else {
+            if !settings::get_settings(&app).learn_from_edits {
+                return; // turned off while watching
+            }
+            let Some((now_field, text)) = focused_text() else {
                 continue; // focus is briefly elsewhere, e.g. a menu
             };
-            if now_pid != pid {
-                return; // switched apps
+            // Another app, document or field: its text was never pasted.
+            let (a, b): (&CFType, &CFType) = (&field, &now_field);
+            if a != b {
+                return;
             }
             if text != last {
                 last = text;
@@ -106,17 +111,16 @@ mod mac {
             return;
         }
 
-        let pending = || {
-            settings::get_settings(app)
-                .edit_suggestions
-                .contains(suggestion)
-        };
         let ends = Instant::now() + COUNTDOWN;
         while Instant::now() < ends {
             sleep(Duration::from_millis(100));
-            if !pending() {
-                overlay::hide_suggestion_overlay(app); // X pressed
+            let s = settings::get_settings(app);
+            if !s.learn_from_edits || !s.edit_suggestions.contains(suggestion) {
+                overlay::hide_suggestion_overlay(app); // X pressed or learning off
                 return;
+            }
+            if !overlay::showing_suggestion() {
+                return; // a dictation took the overlay; the fix waits on the Dictionary page
             }
         }
 
@@ -136,9 +140,9 @@ mod mac {
         );
     }
 
-    /// The process ID and text of the focused text box, unless it's a
-    /// password field or doesn't expose its text.
-    fn focused_text() -> Option<(i32, String)> {
+    /// The focused text box and its text, unless it's a password field or
+    /// doesn't expose its text.
+    fn focused_text() -> Option<(CFRetained<AXUIElement>, String)> {
         unsafe {
             let system = AXUIElement::new_system_wide();
             // A hung app must not stall the watcher.
@@ -150,8 +154,7 @@ mod mac {
                 return None;
             }
             let text = string_attribute(&focused, "AXValue")?;
-            let mut pid = 0;
-            (focused.pid(NonNull::from(&mut pid)) == AXError::Success).then_some((pid, text))
+            Some((focused, text))
         }
     }
 

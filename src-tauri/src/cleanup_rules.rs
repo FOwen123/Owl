@@ -96,10 +96,17 @@ fn voice(text: &str) -> String {
         let before = t[..m.start()]
             .trim_end()
             .trim_end_matches(|c: char| ".!?。！？".contains(c));
+        // Keep through the whole sentence-ending character (。 is 3 bytes).
         let keep = before
-            .rfind(|c: char| ".!?。！？\n".contains(c))
-            .map_or("", |i| &before[..=i]);
-        t = format!("{keep} {}", t[m.end()..].trim_start());
+            .char_indices()
+            .rfind(|(_, c)| ".!?。！？\n".contains(*c))
+            .map_or("", |(i, c)| &before[..i + c.len_utf8()]);
+        let gap = if keep.ends_with(|c: char| c.is_ascii()) {
+            " "
+        } else {
+            ""
+        };
+        t = format!("{keep}{gap}{}", t[m.end()..].trim_start());
     }
     t
 }
@@ -498,5 +505,9 @@ mod tests {
             "Send the report. See you"
         );
         assert_eq!(voice("我們明天開會。刪掉上一句。後天見"), "後天見");
+        assert_eq!(
+            voice("第一句。第二句。刪掉上一句。第三句"),
+            "第一句。第三句"
+        );
     }
 }

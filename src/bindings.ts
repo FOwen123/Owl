@@ -983,6 +983,12 @@ async dismissEditSuggestion(suggestion: Replacement) : Promise<void> {
 async changeLearnFromEditsSetting(enabled: boolean) : Promise<void> {
     await TAURI_INVOKE("change_learn_from_edits_setting", { enabled });
 },
+async changeCleanupLevelSetting(level: CleanupLevel) : Promise<void> {
+    await TAURI_INVOKE("change_cleanup_level_setting", { level });
+},
+async changeVoiceCommandsSetting(enabled: boolean) : Promise<void> {
+    await TAURI_INVOKE("change_voice_commands_setting", { enabled });
+},
 /**
  * Checks if the Mac is a laptop by detecting battery presence
  * 
@@ -1064,6 +1070,14 @@ selected_channel?: number | null; clamshell_microphone?: string | null; selected
  */
 learn_from_edits?: boolean; 
 /**
+ * Owl: None / Light / Medium (`cleanup_rules.rs`, AI cleanup in `actions.rs`).
+ */
+cleanup_level?: CleanupLevel; 
+/**
+ * Owl: spoken commands such as "new line" (opt-in, see `cleanup_rules.rs`).
+ */
+voice_commands_enabled?: boolean; 
+/**
  * Owl: suggested replacements waiting for Add or Dismiss on the Dictionary page.
  */
 edit_suggestions?: Replacement[]; dismissed_suggestions?: Replacement[]; model_unload_timeout?: ModelUnloadTimeout; word_correction_threshold?: number; history_limit?: number; recording_retention_period?: RecordingRetentionPeriod; paste_method?: PasteMethod; clipboard_handling?: ClipboardHandling; auto_submit?: boolean; auto_submit_key?: AutoSubmitKey; post_process_enabled?: boolean; post_process_provider_id?: string; post_process_providers?: PostProcessProvider[]; post_process_api_keys?: SecretMap; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; theme?: Theme; experimental_enabled?: boolean; lazy_stream_close?: boolean; keyboard_implementation?: KeyboardImplementation; show_tray_icon?: boolean; paste_delay_ms?: number; paste_delay_after_ms?: number; 
@@ -1098,15 +1112,29 @@ export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
 export type BindingResponse = { success: boolean; binding: ShortcutBinding | null; error: string | null }
-/**
- * Script applied to Mandarin and Cantonese output. Other languages are never
- * converted.
- */
 export type ChineseScript = 
 /**
  * Keep whatever script the model produced.
  */
 "as_transcribed" | "simplified" | "traditional"
+/**
+ * Script applied to Mandarin and Cantonese output. Other languages are never
+ * converted.
+ * Owl: how much Owl tidies a dictation, as in Wispr Flow's Auto Cleanup.
+ */
+export type CleanupLevel = 
+/**
+ * The raw transcript (only Dictionary replacements and script conversion).
+ */
+"none" | 
+/**
+ * Fixed rules, then the AI fixes fillers, grammar and self-corrections.
+ */
+"light" | 
+/**
+ * Light, and the AI may reword for clarity.
+ */
+"medium"
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 export type EngineType = 

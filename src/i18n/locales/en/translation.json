@@ -15,7 +15,7 @@
     "general": "Dictation",
     "models": "Models",
     "advanced": "Advanced",
-    "postProcessing": "AI",
+    "postProcessing": "Post Process",
     "history": "History",
     "debug": "Debug",
     "about": "About",
@@ -556,8 +556,8 @@
         "description": "Microphone to use when laptop lid is closed"
       },
       "postProcessingToggle": {
-        "label": "Post Process",
-        "description": "Cleans up every dictation with the AI provider below."
+        "label": "AI cleanup",
+        "description": "Lets the AI below tidy Light and Medium cleanup."
       },
       "muteWhileRecording": {
         "label": "Mute While Recording",
@@ -649,6 +649,26 @@
         "title": "Built on Handy",
         "description": "Owl is a fork of Handy by CJ Pais and contributors (MIT). Not affiliated with Handy.",
         "button": "View Handy"
+      }
+    },
+    "cleanup": {
+      "title": "Cleanup",
+      "level": {
+        "title": "Cleanup level",
+        "options": {
+          "none": "None",
+          "light": "Light",
+          "medium": "Medium"
+        },
+        "descriptions": {
+          "none": "Pastes exactly what you said.",
+          "light": "Removes fillers and fixes grammar.",
+          "medium": "Also rewords for clarity."
+        }
+      },
+      "voiceCommands": {
+        "label": "Voice commands",
+        "description": "Say “new line”, “comma” or “scratch that”."
       }
     }
   },
@@ -772,7 +792,7 @@
       "summarize": "Summarize",
       "resummarize": "Summarize again",
       "summarizing": "Summarizing…",
-      "summaryNeedsProvider": "Choose an AI provider and model on the AI page first.",
+      "summaryNeedsProvider": "Choose an AI provider and model on the Post Process page first.",
       "transcript": "Transcript",
       "noSpeech": "No speech was found in this recording.",
       "copy": "Copy transcript",

@@ -138,6 +138,13 @@ pub fn register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<()
     }
 }
 
+/// Owl: Post Process runs on the normal shortcut, so Handy's second
+/// "transcribe_with_post_process" key is never registered. The CLI flag and
+/// signal still reach it through the coordinator.
+pub(crate) fn is_retired_binding(id: &str) -> bool {
+    id == "transcribe_with_post_process"
+}
+
 /// Unregister a shortcut using the appropriate implementation
 pub fn unregister_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
     let settings = get_settings(app);

@@ -543,7 +543,7 @@
       },
       "postProcessingToggle": {
         "label": "后处理",
-        "description": "开启第二组快捷键，将听写内容交给下方的 AI 提供商整理。会议摘要也使用同一个提供商。"
+        "description": "用下方的 AI 供应商整理每次听写。"
       },
       "muteWhileRecording": {
         "label": "录制时静音",

@@ -543,7 +543,7 @@
       },
       "postProcessingToggle": {
         "label": "後製處理",
-        "description": "開啟第二組快捷鍵，將聽寫內容交給下方的 AI 供應商整理。會議摘要也使用同一個供應商。"
+        "description": "用下方的 AI 供應商整理每次聽寫。"
       },
       "muteWhileRecording": {
         "label": "錄製時靜音",

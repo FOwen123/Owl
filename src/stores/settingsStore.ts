@@ -5,6 +5,7 @@ import type {
   AppSettings as Settings,
   AudioDevice,
   ChineseScript,
+  CleanupLevel,
   TranscribeAcceleratorSetting,
   OrtAcceleratorSetting,
   Replacement,
@@ -141,6 +142,10 @@ const settingUpdaters: {
   custom_words: (value) => commands.updateCustomWords(value as string[]),
   snippets: (value) => commands.updateSnippets(value as Snippet[]),
   replacements: (value) => commands.updateReplacements(value as Replacement[]),
+  cleanup_level: (value) =>
+    commands.changeCleanupLevelSetting(value as CleanupLevel),
+  voice_commands_enabled: (value) =>
+    commands.changeVoiceCommandsSetting(value as boolean),
   learn_from_edits: (value) =>
     commands.changeLearnFromEditsSetting(value as boolean),
   word_correction_threshold: (value) =>

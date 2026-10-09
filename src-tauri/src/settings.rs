@@ -194,6 +194,19 @@ pub enum ClipboardHandling {
 
 /// Script applied to Mandarin and Cantonese output. Other languages are never
 /// converted.
+/// Owl: how much Owl tidies a dictation, as in Wispr Flow's Auto Cleanup.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CleanupLevel {
+    /// The raw transcript (only Dictionary replacements and script conversion).
+    None,
+    /// Fixed rules, then the AI fixes fillers, grammar and self-corrections.
+    #[default]
+    Light,
+    /// Light, and the AI may reword for clarity.
+    Medium,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ChineseScript {
@@ -459,6 +472,12 @@ pub struct AppSettings {
     /// Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
     #[serde(default = "default_learn_from_edits")]
     pub learn_from_edits: bool,
+    /// Owl: None / Light / Medium (`cleanup_rules.rs`, AI cleanup in `actions.rs`).
+    #[serde(default)]
+    pub cleanup_level: CleanupLevel,
+    /// Owl: spoken commands such as "new line" (opt-in, see `cleanup_rules.rs`).
+    #[serde(default)]
+    pub voice_commands_enabled: bool,
     /// Owl: suggested replacements waiting for Add or Dismiss on the Dictionary page.
     #[serde(default)]
     pub edit_suggestions: Vec<Replacement>,
@@ -988,6 +1007,8 @@ pub fn get_default_settings() -> AppSettings {
         snippets: Vec::new(),
         replacements: Vec::new(),
         learn_from_edits: default_learn_from_edits(),
+        cleanup_level: CleanupLevel::default(),
+        voice_commands_enabled: false,
         edit_suggestions: Vec::new(),
         dismissed_suggestions: Vec::new(),
         model_unload_timeout: ModelUnloadTimeout::default(),
@@ -1210,6 +1231,17 @@ fn apply_settings_migrations(
         updated = true;
     }
 
+    // One-time Owl cleanup level migration. Post Process stays as it was, so
+    // upgrading never starts sending dictations to an AI the user had off.
+    if settings_value.get("cleanup_level").is_none() {
+        settings.cleanup_level = if settings.filler_word_removal_enabled {
+            CleanupLevel::Light
+        } else {
+            CleanupLevel::None
+        };
+        updated = true;
+    }
+
     let stored_schema_version = settings_value
         .get("settings_schema_version")
         .and_then(|v| v.as_u64())
@@ -1302,6 +1334,14 @@ pub fn set_dictation_language(settings: &mut AppSettings, choice: &str) {
     if let Some(script) = script {
         settings.chinese_script = script;
     }
+}
+
+/// Owl: a cleanup level also sets Handy's filler-removal switch it replaces.
+/// Whether the AI takes part stays with the "AI cleanup" switch
+/// (`post_process_enabled`) on the Post Process page.
+pub fn set_cleanup_level(settings: &mut AppSettings, level: CleanupLevel) {
+    settings.cleanup_level = level;
+    settings.filler_word_removal_enabled = level != CleanupLevel::None;
 }
 
 /// Queues new edit suggestions, skipping ones already in the Dictionary,
@@ -1797,6 +1837,48 @@ mod tests {
     }
 
     #[test]
+    fn cleanup_level_defaults_to_light() {
+        assert_eq!(get_default_settings().cleanup_level, CleanupLevel::Light);
+        assert!(!get_default_settings().voice_commands_enabled);
+    }
+
+    #[test]
+    fn cleanup_level_migration_keeps_what_upgrading_users_had() {
+        for (filler_removal, post_process, level) in [
+            (true, true, CleanupLevel::Light),
+            (true, false, CleanupLevel::Light),
+            (false, false, CleanupLevel::None),
+        ] {
+            let mut settings = get_default_settings();
+            settings.filler_word_removal_enabled = filler_removal;
+            settings.post_process_enabled = post_process;
+            let raw = serde_json::json!({ "filler_word_removal_enabled": filler_removal });
+
+            assert!(apply_settings_migrations(&mut settings, &raw));
+            assert_eq!(settings.cleanup_level, level);
+            // Never turns on a cloud AI the user had off.
+            assert_eq!(settings.post_process_enabled, post_process);
+        }
+    }
+
+    #[test]
+    fn choosing_a_level_sets_the_rules_but_never_the_ai_switch() {
+        for ai in [false, true] {
+            let mut settings = get_default_settings();
+            settings.post_process_enabled = ai;
+            set_cleanup_level(&mut settings, CleanupLevel::None);
+            assert!(!settings.filler_word_removal_enabled);
+            for level in [CleanupLevel::Light, CleanupLevel::Medium] {
+                set_cleanup_level(&mut settings, level);
+                assert_eq!(settings.cleanup_level, level);
+                assert!(settings.filler_word_removal_enabled);
+            }
+            // The "AI cleanup" switch on the Post Process page owns this.
+            assert_eq!(settings.post_process_enabled, ai);
+        }
+    }
+
+    #[test]
     fn chinese_script_migration_only_carries_over_legacy_intents() {
         for (intent, language, script) in [
             ("zh-Hans", "zh", ChineseScript::Simplified),
@@ -1938,6 +2020,7 @@ mod tests {
             "whats_new_last_seen_version": default_whats_new_last_seen_version(),
             "overlay_style": "live",
             "chinese_script": "as_transcribed",
+            "cleanup_level": "light",
             "transcribe_accelerator": "gpu",
             "transcribe_gpu_device": settings.transcribe_gpu_device
         });

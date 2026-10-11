@@ -9,12 +9,20 @@
 //! don't expose their text (some terminals and Electron apps) are skipped.
 //! The paste also asks it for the character before the cursor.
 
+#[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::AppHandle;
+
+/// Bumped by every paste, so an older watcher stops before it mistakes
+/// Owl's next paste for the user's edit.
+#[cfg(target_os = "macos")]
+static PASTES: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(target_os = "macos")]
 pub fn start(app: AppHandle, pasted: String) {
+    let paste = PASTES.fetch_add(1, Ordering::SeqCst) + 1;
     if crate::settings::get_settings(&app).learn_from_edits && !pasted.trim().is_empty() {
-        std::thread::spawn(move || mac::watch(app, pasted));
+        std::thread::spawn(move || mac::watch(app, pasted, paste));
     }
 }
 
@@ -43,6 +51,7 @@ mod mac {
     use objc2_application_services::{AXError, AXUIElement, AXValue, AXValueType};
     use objc2_core_foundation::{CFRange, CFRetained, CFString, CFType};
     use std::ptr::NonNull;
+    use std::sync::atomic::Ordering;
     use std::thread::sleep;
     use std::time::{Duration, Instant};
     use tauri::{AppHandle, Emitter};
@@ -54,7 +63,7 @@ mod mac {
     /// How long the overlay offers a fix before adding it.
     const COUNTDOWN: Duration = Duration::from_secs(5);
 
-    pub fn watch(app: AppHandle, pasted: String) {
+    pub fn watch(app: AppHandle, pasted: String, paste: u64) {
         // The paste can land a little later (the reliable paste path is
         // asynchronous), so look for the pasted text for up to 2 s.
         let Some((field, baseline)) = (0..4).find_map(|_| {
@@ -70,6 +79,9 @@ mod mac {
         let mut changed_at = Instant::now();
         while started.elapsed() < WATCH_FOR {
             sleep(POLL_EVERY);
+            if super::PASTES.load(Ordering::SeqCst) != paste {
+                return; // a newer dictation was pasted
+            }
             if !settings::get_settings(&app).learn_from_edits {
                 return; // turned off while watching
             }

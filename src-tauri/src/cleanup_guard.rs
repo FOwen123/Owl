@@ -78,7 +78,11 @@ pub fn check(said: &str, reply: &str) -> Result<String, &'static str> {
         .iter()
         .filter(|u| u.chars().count() > 3 || u.chars().any(|c| c.is_ascii_digit() || !c.is_ascii()))
         .collect();
-    let new = meaningful.iter().filter(|u| !heard.contains(*u)).count();
+    // Digits don't count as new: the prompt turns "two" into 2 and lists into 1. 2. 3.
+    let new = meaningful
+        .iter()
+        .filter(|u| !heard.contains(*u) && !u.chars().all(|c| c.is_ascii_digit()))
+        .count();
     if new * 4 > meaningful.len() {
         return Err("reply added too many new words");
     }
@@ -159,6 +163,16 @@ mod tests {
             "Please send the quarterly report to Anna before the meeting tomorrow, and make sure the numbers are double-checked by finance."
         )
         .is_err());
+    }
+
+    #[test]
+    fn numbers_and_lists_are_kept() {
+        assert!(check(
+            "one buy milk two call mom three pay rent",
+            "1. Buy milk\n2. Call mom\n3. Pay rent"
+        )
+        .is_ok());
+        assert!(check("set the port to eighty eighty", "Set the port to 8080.").is_ok());
     }
 
     #[test]

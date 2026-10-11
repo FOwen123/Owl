@@ -1388,6 +1388,8 @@ pub fn write_settings(app: &AppHandle, settings: AppSettings) {
         .expect("Failed to initialize store");
 
     store.set("settings", serde_json::to_value(&settings).unwrap());
+    // Owl: keep the menu bar's ticks in step with every settings change.
+    crate::app_menu::refresh(app);
 }
 
 pub fn get_bindings(app: &AppHandle) -> HashMap<String, ShortcutBinding> {

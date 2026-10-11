@@ -9,7 +9,21 @@
     "cancel": "Annuleren",
     "secureInputWarning": "⚠ Sneltoetsen geblokkeerd door Secure Input",
     "language": "Dictation Language",
-    "autoDetect": "Auto-detect"
+    "autoDetect": "Auto-detect",
+    "edit": "Edit",
+    "window": "Window",
+    "dictation": "Dictation",
+    "notetaker": "Notetaker",
+    "microphone": "Microphone",
+    "defaultMicrophone": "Default",
+    "cleanup": "Cleanup",
+    "cleanupNone": "None",
+    "cleanupLight": "Light",
+    "cleanupMedium": "Medium",
+    "aiCleanup": "AI Cleanup",
+    "startMeeting": "Start Meeting",
+    "stopMeeting": "Stop Meeting",
+    "showMeetings": "Show Meetings"
   },
   "sidebar": {
     "general": "Algemeen",

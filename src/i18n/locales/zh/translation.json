@@ -9,7 +9,21 @@
     "cancel": "取消",
     "secureInputWarning": "⚠ 快捷键被 Secure Input 阻止",
     "language": "听写语言",
-    "autoDetect": "自动检测"
+    "autoDetect": "自动检测",
+    "edit": "编辑",
+    "window": "窗口",
+    "dictation": "听写",
+    "notetaker": "会议笔记",
+    "microphone": "麦克风",
+    "defaultMicrophone": "默认",
+    "cleanup": "整理",
+    "cleanupNone": "无",
+    "cleanupLight": "轻度",
+    "cleanupMedium": "中度",
+    "aiCleanup": "AI 整理",
+    "startMeeting": "开始会议",
+    "stopMeeting": "停止会议",
+    "showMeetings": "显示会议"
   },
   "sidebar": {
     "general": "听写",

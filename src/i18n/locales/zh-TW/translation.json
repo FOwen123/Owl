@@ -9,7 +9,21 @@
     "cancel": "取消",
     "secureInputWarning": "⚠ 快捷鍵被 Secure Input 阻擋",
     "language": "聽寫語言",
-    "autoDetect": "自動偵測"
+    "autoDetect": "自動偵測",
+    "edit": "編輯",
+    "window": "視窗",
+    "dictation": "聽寫",
+    "notetaker": "會議筆記",
+    "microphone": "麥克風",
+    "defaultMicrophone": "預設",
+    "cleanup": "整理",
+    "cleanupNone": "無",
+    "cleanupLight": "輕度",
+    "cleanupMedium": "中度",
+    "aiCleanup": "AI 整理",
+    "startMeeting": "開始會議",
+    "stopMeeting": "停止會議",
+    "showMeetings": "顯示會議"
   },
   "sidebar": {
     "general": "聽寫",

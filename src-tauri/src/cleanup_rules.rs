@@ -4,6 +4,9 @@
 //! The English double-word, "you know" and self-correction rules follow
 //! BetterWispr's `TranscriptCleaner`
 //! (https://github.com/opennookorg/betterwispr, Apache-2.0).
+//!
+//! `format_lists` is the exception: it lays out the AI's numbered lists, so
+//! it runs on the AI's reply.
 
 use crate::correction::is_cjk;
 use once_cell::sync::Lazy;
@@ -211,6 +214,58 @@ pub fn needs_leading_space(before: char, text: &str) -> bool {
     }
 }
 
+/// Puts an inline numbered list ("The plan: 1. Foo 2. Bar") one item per
+/// line. Only a run 1, 2, … of two or more items counts. Follows Felix's
+/// `format_lists` (https://github.com/kz364/felix, MIT), plus Chinese
+/// punctuation.
+pub fn format_lists(text: &str) -> String {
+    static ITEM: Lazy<Regex> = Lazy::new(|| re(r"(^|[\s:;,：；，、])(\d{1,2})\.\s+"));
+    static NUMBERED: Lazy<Regex> = Lazy::new(|| re(r"^(\d{1,2}\. )(.*?)[,;，；、]?\s*$"));
+    let items: Vec<(usize, usize, u32)> = ITEM
+        .captures_iter(text)
+        .filter_map(|c| Some((c.get(1)?.end(), c.get(0)?.end(), c[2].parse().ok()?)))
+        .collect();
+    let Some(first) = items.iter().position(|item| item.2 == 1) else {
+        return text.to_string();
+    };
+    let mut run = vec![items[first]];
+    for &item in &items[first + 1..] {
+        if item.2 == run[run.len() - 1].2 + 1 {
+            run.push(item);
+        }
+    }
+    if run.len() < 2 {
+        return text.to_string();
+    }
+
+    let mut out = String::new();
+    let mut cursor = 0;
+    for (i, &(start, end, n)) in run.iter().enumerate() {
+        let before = text[cursor..start].trim_end_matches([' ', ',', ';', '，', '；', '、', '\n']);
+        out.push_str(before);
+        if i == 0 && !before.is_empty() && !before.ends_with([':', '：']) {
+            out.push(if before.ends_with(is_cjk) { '：' } else { ':' });
+        }
+        if !out.is_empty() {
+            out.push('\n');
+        }
+        out.push_str(&format!("{n}. "));
+        cursor = end;
+    }
+    out.push_str(&text[cursor..]);
+    out.lines()
+        .map(|line| match NUMBERED.captures(line) {
+            Some(c) => {
+                let mut item = c[2].chars();
+                let first = item.next().map(|f| f.to_uppercase().collect::<String>());
+                format!("{}{}{}", &c[1], first.unwrap_or_default(), item.as_str())
+            }
+            None => line.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 // --- English -----------------------------------------------------------------
 
 static EN_FILLER: Lazy<Regex> = Lazy::new(|| re(r"(?i)\b(?:er|erm)\b,?\s*"));
@@ -381,7 +436,7 @@ fn tidy(text: &str, original: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply, needs_leading_space};
+    use super::{apply, format_lists, needs_leading_space};
 
     fn light(text: &str) -> String {
         apply(text, false)
@@ -416,6 +471,38 @@ mod tests {
         assert_eq!(light("用Claude Code寫"), "用 Claude Code 寫");
         assert_eq!(light("我用Claude，很好"), "我用 Claude，很好");
         assert_eq!(light("買了3個"), "買了3個");
+    }
+
+    #[test]
+    fn numbered_lists_get_one_item_per_line() {
+        assert_eq!(
+            format_lists("The plan for this week is: 1. Finish the migration 2. Write the docs 3. Get the demo ready for Friday."),
+            "The plan for this week is:\n1. Finish the migration\n2. Write the docs\n3. Get the demo ready for Friday."
+        );
+        assert_eq!(
+            format_lists("The plan is 1. finish the migration, 2. write the docs, 3. ship"),
+            "The plan is:\n1. Finish the migration\n2. Write the docs\n3. Ship"
+        );
+        assert_eq!(
+            format_lists("1. Buy milk 2. Call mom 3. Pay rent"),
+            "1. Buy milk\n2. Call mom\n3. Pay rent"
+        );
+        assert_eq!(
+            format_lists("我今天要做三件事 1. 買牛奶，2. 打電話給媽媽，3. 繳房租。"),
+            "我今天要做三件事：\n1. 買牛奶\n2. 打電話給媽媽\n3. 繳房租。"
+        );
+    }
+
+    #[test]
+    fn text_that_is_not_a_list_is_untouched() {
+        for text in [
+            "Version 2. That's it.",
+            "We moved from 1. to 3. in a day.",
+            "Already:\n1. One\n2. Two",
+            "Use version 3.5 and port 8080.",
+        ] {
+            assert_eq!(format_lists(text), text);
+        }
     }
 
     #[test]

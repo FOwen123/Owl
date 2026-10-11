@@ -121,13 +121,17 @@ fn ai_cleanup_on(settings: &AppSettings) -> bool {
     settings.post_process_enabled && settings.cleanup_level != CleanupLevel::None
 }
 
-/// Owl: Medium lets the AI reword; Light keeps the selected prompt as it is.
+/// Owl: spoken lists, as Wispr Flow formats them. The AI decides what is a
+/// list; `cleanup_rules::format_lists` then puts each item on its own line.
+const LIST_RULE: &str = "When the speaker lists items (\"one … two …\", \"first … second …\", 第一…第二…), number them: 1. … 2. …";
+
+/// Owl: both levels format lists; Medium also lets the AI reword.
 fn prompt_for_level(prompt: &str, level: CleanupLevel) -> String {
     match level {
-        CleanupLevel::Medium => {
-            format!("{prompt}\n\nYou may reword for clarity and conciseness, keeping the meaning.")
-        }
-        _ => prompt.to_string(),
+        CleanupLevel::Medium => format!(
+            "{prompt}\n\n{LIST_RULE}\nYou may reword for clarity and conciseness, keeping the meaning."
+        ),
+        _ => format!("{prompt}\n\n{LIST_RULE}"),
     }
 }
 
@@ -445,6 +449,7 @@ pub(crate) async fn process_transcription_output(
             // Owl: the dictionary runs again in case the AI rewrote a fixed word.
             let processed_text =
                 crate::dictionary::apply_replacements(&processed_text, &settings.replacements);
+            let processed_text = crate::cleanup_rules::format_lists(&processed_text);
             post_processed_text = Some(processed_text.clone());
             final_text = processed_text;
 
@@ -975,7 +980,7 @@ mod tests {
     use super::{
         ai_cleanup_on, complete_unless_cancelled, is_blank_transcription, legacy_prompt,
         prompt_for_level, prompt_messages, should_use_streaming_overlay, strip_think_block,
-        wants_post_process,
+        wants_post_process, LIST_RULE,
     };
     use crate::settings::OverlayStyle;
     use crate::settings::{get_default_settings, CleanupLevel};
@@ -1120,11 +1125,11 @@ mod tests {
     fn medium_lets_the_ai_reword() {
         assert_eq!(
             prompt_for_level("Clean it.", CleanupLevel::Light),
-            "Clean it."
+            format!("Clean it.\n\n{LIST_RULE}")
         );
         assert_eq!(
             prompt_for_level("Clean it.", CleanupLevel::Medium),
-            "Clean it.\n\nYou may reword for clarity and conciseness, keeping the meaning."
+            format!("Clean it.\n\n{LIST_RULE}\nYou may reword for clarity and conciseness, keeping the meaning.")
         );
     }
 }

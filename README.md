@@ -94,6 +94,8 @@ environment variables) stay the same to keep these merges small.
   [Silero VAD](https://github.com/snakers4/silero-vad).
 - [Muesli](https://github.com/Muesli-HQ/muesli) (MIT): the English rules for
   learning from edits.
+- [Felix](https://github.com/kz364/felix) (MIT): the numbered-list layout and
+  AI reply checks.
 - Design references: [Superwhisper](https://superwhisper.com),
   [T3 Code](https://github.com/pingdotgg/t3code) and
   [Wispr Flow](https://wisprflow.ai).

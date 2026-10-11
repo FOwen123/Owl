@@ -194,6 +194,23 @@ fn space_chinese_english(text: &str) -> String {
     t
 }
 
+/// Whether a dictation pasted right after `before` (the character before the
+/// cursor) needs a space first: after a word or English punctuation, but
+/// between Chinese characters only next to English letters, as above.
+pub fn needs_leading_space(before: char, text: &str) -> bool {
+    let Some(first) = text.chars().next().filter(|c| c.is_alphanumeric()) else {
+        return false;
+    };
+    let after_word = before.is_alphanumeric() || ".,!?;:)]}\"”".contains(before);
+    if is_cjk(before) {
+        first.is_ascii_alphabetic()
+    } else if is_cjk(first) {
+        after_word && !before.is_ascii_digit()
+    } else {
+        after_word
+    }
+}
+
 // --- English -----------------------------------------------------------------
 
 static EN_FILLER: Lazy<Regex> = Lazy::new(|| re(r"(?i)\b(?:er|erm)\b,?\s*"));
@@ -364,7 +381,7 @@ fn tidy(text: &str, original: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::apply;
+    use super::{apply, needs_leading_space};
 
     fn light(text: &str) -> String {
         apply(text, false)
@@ -399,6 +416,32 @@ mod tests {
         assert_eq!(light("用Claude Code寫"), "用 Claude Code 寫");
         assert_eq!(light("我用Claude，很好"), "我用 Claude，很好");
         assert_eq!(light("買了3個"), "買了3個");
+    }
+
+    #[test]
+    fn leading_space_before_a_dictation() {
+        for (before, text, space) in [
+            ('d', "And then", true),
+            ('.', "Next", true),
+            (',', "and", true),
+            (' ', "Next", false),
+            ('\n', "Next", false),
+            ('(', "Next", false),
+            ('.', "\"Quote\"", false),
+            ('好', "我們走", false),
+            ('好', "Claude", true),
+            ('e', "我們走", true),
+            ('.', "我們走", true),
+            ('3', "個", false),
+            ('。', "Next", false),
+            ('，', "我們", false),
+        ] {
+            assert_eq!(
+                needs_leading_space(before, text),
+                space,
+                "{before:?} + {text:?}"
+            );
+        }
     }
 
     #[test]

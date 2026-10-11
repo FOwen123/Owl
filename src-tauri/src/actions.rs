@@ -441,6 +441,9 @@ pub(crate) async fn process_transcription_output(
                     .ok()
             });
         if let Some(processed_text) = reply {
+            // Owl: the dictionary runs again in case the AI rewrote a fixed word.
+            let processed_text =
+                crate::dictionary::apply_replacements(&processed_text, &settings.replacements);
             post_processed_text = Some(processed_text.clone());
             final_text = processed_text;
 

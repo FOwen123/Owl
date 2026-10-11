@@ -127,14 +127,15 @@ fn chinese_fillers(text: &str) -> String {
 
 fn chinese_stutters(text: &str) -> String {
     // One character said 3+ times: 我我我 → 我. Doubles are real words (謝謝,
-    // 看看) and laughter is meant, so both stay.
+    // 看看), and laughter and numbers (八八八, 六六六) are meant, so they stay.
     let chars: Vec<char> = text.chars().collect();
     let mut t = String::new();
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
         let run = chars[i..].iter().take_while(|&&x| x == c).count();
-        let stutter = run >= 3 && is_cjk(c) && !"哈呵嘻嘿".contains(c);
+        let stutter =
+            run >= 3 && is_cjk(c) && !"哈呵嘻嘿零〇一二三四五六七八九十百千萬万兩两".contains(c);
         t.extend(std::iter::repeat_n(c, if stutter { 1 } else { run }));
         i += run;
     }
@@ -269,9 +270,12 @@ static YOU_KNOW_MIDDLE: Lazy<Regex> = Lazy::new(|| re(r"(?i),\s*you know\s*,\s*"
 static YOU_KNOW_END: Lazy<Regex> = Lazy::new(|| re(r"(?i),\s*you know\s*([.!?]|$)"));
 static YOU_KNOW_START: Lazy<Regex> = Lazy::new(|| re(r"(?i)^\s*you know\s*,\s*"));
 static WORD: Lazy<Regex> = Lazy::new(|| re(r"[A-Za-z']+"));
-/// Doubles people say on purpose.
-const KEPT_DOUBLES: &[&str] = &[
-    "that", "had", "is", "very", "really", "long", "bye", "no", "ha",
+/// Small words people stutter on. Only these lose a double: everything else
+/// ("eighty eighty", "so so", "Bora Bora", "that that") can be meant.
+const STUTTER_WORDS: &[&str] = &[
+    "i", "i'm", "i'll", "a", "an", "the", "to", "and", "but", "or", "of", "in", "on", "at", "for",
+    "with", "it", "it's", "we", "you", "he", "she", "they", "my", "this", "if", "can", "will",
+    "would", "just", "was", "are", "there", "then",
 ];
 
 fn english_fillers(text: &str) -> String {
@@ -294,7 +298,7 @@ fn english_fillers(text: &str) -> String {
     YOU_KNOW_START.replace_all(&t, "").into_owned()
 }
 
-/// "I I think" → "I think", keeping emphatic doubles like "very very".
+/// "I I think" → "I think", for small stutter words only.
 fn english_doubles(text: &str) -> String {
     let mut out = String::new();
     let mut last = 0;
@@ -303,7 +307,7 @@ fn english_doubles(text: &str) -> String {
         let doubled = prev.is_some_and(|p| {
             text[p.end()..m.start()].chars().all(|c| c == ' ')
                 && p.as_str().eq_ignore_ascii_case(m.as_str())
-                && !KEPT_DOUBLES.contains(&m.as_str().to_lowercase().as_str())
+                && STUTTER_WORDS.contains(&m.as_str().to_lowercase().as_str())
         });
         if doubled {
             out.push_str(&text[last..prev.map_or(0, |p| p.end())]);
@@ -459,6 +463,7 @@ mod tests {
         assert_eq!(light("我們，我們去"), "我們去");
         assert_eq!(light("謝謝你，看看天天媽媽"), "謝謝你，看看天天媽媽");
         assert_eq!(light("哈哈哈好好笑"), "哈哈哈好好笑");
+        assert_eq!(light("八八八，六六六"), "八八八，六六六");
     }
 
     #[test]
@@ -549,6 +554,14 @@ mod tests {
             "it was a very very long day"
         );
         assert_eq!(light("no no, bye bye"), "no no, bye bye");
+        assert_eq!(
+            light("local host eighty eighty in twenty twenty"),
+            "local host eighty eighty in twenty twenty"
+        );
+        assert_eq!(
+            light("so so, chop chop, Bora Bora, had had, that that"),
+            "so so, chop chop, Bora Bora, had had, that that"
+        );
     }
 
     #[test]

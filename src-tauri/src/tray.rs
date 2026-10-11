@@ -24,7 +24,7 @@ use crate::managers::history::{HistoryEntry, HistoryManager};
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings;
-use crate::tray_i18n::get_tray_translations;
+use crate::tray_i18n::{get_tray_translations, TrayStrings};
 use log::{debug, error, info, trace, warn};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -558,18 +558,7 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
             model_submenu.append(&item)?;
         }
 
-        let language_submenu = Submenu::with_id(app, "language_submenu", &strings.language, true)?;
-        for (choice, label) in [
-            ("auto", strings.auto_detect.as_str()),
-            ("en", "English"),
-            ("zh-Hant", "中文（繁體）"),
-            ("zh-Hans", "中文（简体）"),
-        ] {
-            let item_id = format!("lang:{choice}");
-            let checked = inputs.language == choice;
-            let item = CheckMenuItem::with_id(app, &item_id, label, true, checked, None::<&str>)?;
-            language_submenu.append(&item)?;
-        }
+        let language_submenu = language_submenu(app, &strings, inputs.language)?;
 
         let unload_model_i = MenuItem::with_id(
             app,
@@ -618,6 +607,28 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
     }
 
     Ok((menu, tooltip))
+}
+
+/// Owl: the dictation language quick switch, shared with the menu bar
+/// (`app_menu.rs`). Clicks arrive as `lang:<choice>`.
+pub(crate) fn language_submenu(
+    app: &AppHandle,
+    strings: &TrayStrings,
+    current: &str,
+) -> tauri::Result<Submenu<tauri::Wry>> {
+    let submenu = Submenu::with_id(app, "language_submenu", &strings.language, true)?;
+    for (choice, label) in [
+        ("auto", strings.auto_detect.as_str()),
+        ("en", "English"),
+        ("zh-Hant", "中文（繁體）"),
+        ("zh-Hans", "中文（简体）"),
+    ] {
+        let item_id = format!("lang:{choice}");
+        let item =
+            CheckMenuItem::with_id(app, &item_id, label, true, current == choice, None::<&str>)?;
+        submenu.append(&item)?;
+    }
+    Ok(submenu)
 }
 
 fn last_transcript_text(entry: &HistoryEntry) -> &str {

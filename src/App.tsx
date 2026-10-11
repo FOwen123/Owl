@@ -181,6 +181,16 @@ function App() {
     };
   }, [t]);
 
+  // Owl: the menu bar's "Show Meetings" opens a page.
+  useEffect(() => {
+    const unlisten = listen<SidebarSection>("show-section", (event) => {
+      setCurrentSection(event.payload);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   // Listen for transcription failures and show a toast.
   // The payload is the backend error message (also logged to handy.log).
   useEffect(() => {

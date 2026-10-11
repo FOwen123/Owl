@@ -1,4 +1,5 @@
 mod actions;
+mod app_menu;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod apple_intelligence;
 mod audio_feedback;
@@ -334,6 +335,10 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             "quit" => {
                 app.exit(0);
             }
+            "show_meetings" => {
+                show_main_window(app);
+                let _ = app.emit("show-section", "notetaker");
+            }
             id if id.starts_with("lang:") => {
                 let mut settings = settings::get_settings(app);
                 settings::set_dictation_language(&mut settings, &id["lang:".len()..]);
@@ -363,7 +368,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
                     tray::update_tray_menu(&app_clone);
                 });
             }
-            _ => {}
+            id => app_menu::handle(app, id),
         })
         .build(app_handle)
         .unwrap();
@@ -377,6 +382,13 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     if !settings.show_tray_icon {
         tray::set_tray_visibility(app_handle, false);
     }
+
+    // Owl: the macOS menu bar, kept in step with meetings starting and stopping
+    app_menu::refresh_microphones(app_handle);
+    let app_handle_for_menu = app_handle.clone();
+    app_handle.listen("meetings-updated", move |_| {
+        app_menu::refresh(&app_handle_for_menu);
+    });
 
     // Refresh tray menu when model state changes
     let app_handle_for_listener = app_handle.clone();
@@ -1123,6 +1135,10 @@ pub fn run(cli_args: CliArgs) {
                     }
                     // No tray: keep the dock icon visible so the user can reopen
                 }
+            }
+            // Owl: microphones may have changed while Owl was in the background
+            tauri::WindowEvent::Focused(true) if window.label() == "main" => {
+                app_menu::refresh_microphones(window.app_handle());
             }
             tauri::WindowEvent::ThemeChanged(theme) => {
                 log::info!("Theme changed to: {:?}", theme);

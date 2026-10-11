@@ -335,8 +335,9 @@ pub(crate) async fn post_process_transcription(
                             );
                             return Some(result);
                         } else {
+                            // Owl: never paste the model's JSON; fall back to the rule-cleaned text.
                             error!("Structured output response missing 'transcription' field");
-                            return Some(strip_invisible_chars(content));
+                            return None;
                         }
                     }
                     Err(e) => {

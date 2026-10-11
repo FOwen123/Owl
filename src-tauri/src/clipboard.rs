@@ -784,6 +784,14 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
         text
     };
 
+    // Owl: continue the text before the cursor with a space, as typing would.
+    let text = match crate::correction_watch::char_before_cursor() {
+        Some(before) if crate::cleanup_rules::needs_leading_space(before, &text) => {
+            format!(" {text}")
+        }
+        _ => text,
+    };
+
     info!(
         "Using paste method: {:?}, delay before: {}ms, delay after: {}ms",
         paste_method, paste_delay_ms, paste_delay_after_ms

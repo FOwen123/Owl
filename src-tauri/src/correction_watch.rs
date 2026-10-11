@@ -7,6 +7,7 @@
 //! needs for pasting. Never reads password fields, stops when the user
 //! switches apps, and keeps nothing but the suggestions it finds. Apps that
 //! don't expose their text (some terminals and Electron apps) are skipped.
+//! The paste also asks it for the character before the cursor.
 
 use tauri::AppHandle;
 
@@ -20,14 +21,27 @@ pub fn start(app: AppHandle, pasted: String) {
 #[cfg(not(target_os = "macos"))]
 pub fn start(_app: AppHandle, _pasted: String) {}
 
+/// The character just before the cursor in the focused text box, for the
+/// space before a dictation. None for password fields and apps that hide
+/// their text.
+#[cfg(target_os = "macos")]
+pub fn char_before_cursor() -> Option<char> {
+    mac::char_before_cursor()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn char_before_cursor() -> Option<char> {
+    None
+}
+
 #[cfg(target_os = "macos")]
 mod mac {
     use crate::correction::{edited_span, suggest};
     use crate::overlay;
     use crate::settings::{self, Replacement};
     use log::debug;
-    use objc2_application_services::{AXError, AXUIElement};
-    use objc2_core_foundation::{CFRetained, CFString, CFType};
+    use objc2_application_services::{AXError, AXUIElement, AXValue, AXValueType};
+    use objc2_core_foundation::{CFRange, CFRetained, CFString, CFType};
     use std::ptr::NonNull;
     use std::thread::sleep;
     use std::time::{Duration, Instant};
@@ -156,6 +170,28 @@ mod mac {
             let text = string_attribute(&focused, "AXValue")?;
             Some((focused, text))
         }
+    }
+
+    pub fn char_before_cursor() -> Option<char> {
+        let (field, text) = focused_text()?;
+        let mut range = CFRange {
+            location: 0,
+            length: 0,
+        };
+        unsafe {
+            let value = attribute(&field, "AXSelectedTextRange")?
+                .downcast::<AXValue>()
+                .ok()?;
+            if !value.value(AXValueType::CFRange, NonNull::from(&mut range).cast()) {
+                return None;
+            }
+        }
+        // The range counts UTF-16 units, as macOS strings do.
+        let before: Vec<u16> = text
+            .encode_utf16()
+            .take(usize::try_from(range.location).ok()?)
+            .collect();
+        String::from_utf16_lossy(&before).chars().last()
     }
 
     unsafe fn attribute(element: &AXUIElement, name: &str) -> Option<CFRetained<CFType>> {

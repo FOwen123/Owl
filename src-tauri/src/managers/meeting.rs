@@ -629,8 +629,9 @@ impl MeetingManager {
         self.run_import(id, &path);
         let meeting = self.get(id)?;
         match meeting.status {
+            MeetingStatus::Ready => Ok(meeting),
             MeetingStatus::Failed => Err(anyhow!(meeting.error.unwrap_or_default())),
-            _ => Ok(meeting),
+            _ => Err(anyhow!("The transcript couldn't be saved")),
         }
     }
 
@@ -774,17 +775,27 @@ impl MeetingManager {
                 });
                 continue;
             }
-            for (start, end, voice) in parts {
+            let mut split = Vec::with_capacity(parts.len());
+            for &(start, end, voice) in &parts {
                 let text = self.run_model(&samples[at(start)..at(end)])?;
-                if !text.trim().is_empty() {
-                    out.push(TranscriptLine {
-                        start_ms: start,
-                        end_ms: end,
-                        speaker: Speaker::Others,
-                        voice: Some(voice),
-                        text: text.trim().to_string(),
-                    });
-                }
+                split.push(TranscriptLine {
+                    start_ms: start,
+                    end_ms: end,
+                    speaker: Speaker::Others,
+                    voice: Some(voice),
+                    text: text.trim().to_string(),
+                });
+            }
+            // A part heard as nothing would lose words the whole line had:
+            // keep the line, under whoever spoke longest.
+            if split.iter().any(|l| l.text.is_empty()) {
+                let longest = parts.iter().max_by_key(|p| p.1 - p.0).map(|p| p.2);
+                out.push(TranscriptLine {
+                    voice: longest,
+                    ..line
+                });
+            } else {
+                out.extend(split);
             }
         }
         out.sort_by_key(|l| l.start_ms);

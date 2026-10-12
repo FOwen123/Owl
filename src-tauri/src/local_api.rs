@@ -285,7 +285,15 @@ fn parts<'a>(body: &'a [u8], boundary: &str) -> Vec<Part<'a>> {
         let Some(part) = rest.strip_prefix(b"\r\n") else {
             break;
         };
-        let Some(end) = find(part, delimiter) else {
+        // A real delimiter ends its line or the body; "--b" inside a file
+        // followed by anything else is just data.
+        let Some(end) = (0..part.len()).find(|&i| {
+            part[i..].starts_with(delimiter)
+                && matches!(
+                    part.get(i + delimiter.len()..i + delimiter.len() + 2),
+                    Some(b"\r\n") | Some(b"--")
+                )
+        }) else {
             break;
         };
         let chunk = &part[..end];
@@ -327,7 +335,7 @@ mod tests {
     #[test]
     fn multipart_fields_and_files_are_read() {
         let body = b"--XyZ\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n\
---XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n\x00\x01\r\nab--XyZ\x02\r\n\
+--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n\x00\x01\r\nab--XyZ\x02\r\n--XyZX\r\n\
 --XyZ--\r\n";
         let found = parts(body, "XyZ");
         assert_eq!(found.len(), 2);
@@ -336,7 +344,7 @@ mod tests {
             ("model", &b"whisper-1"[..])
         );
         assert_eq!(found[1].filename.as_deref(), Some("a.m4a"));
-        assert_eq!(found[1].data, b"\x00\x01\r\nab--XyZ\x02");
+        assert_eq!(found[1].data, b"\x00\x01\r\nab--XyZ\x02\r\n--XyZX");
     }
 
     #[test]

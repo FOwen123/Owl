@@ -974,6 +974,31 @@ async summarizeMeeting(id: number) : Promise<Result<string, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async renameSpeaker(id: number, voice: number, name: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rename_speaker", { id, voice, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Whether the speaker model is installed; meetings work without it.
+ */
+async speakerModelInstalled() : Promise<boolean> {
+    return await TAURI_INVOKE("speaker_model_installed");
+},
+/**
+ * Downloads the speaker model, sending `speaker-model-progress` events.
+ */
+async downloadSpeakerModel() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("download_speaker_model") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async acceptEditSuggestion(suggestion: Replacement) : Promise<void> {
     await TAURI_INVOKE("accept_edit_suggestion", { suggestion });
 },
@@ -1088,7 +1113,7 @@ edit_suggestions?: Replacement[]; dismissed_suggestions?: Replacement[]; model_u
  */
 reliable_paste?: boolean; typing_tool?: TypingTool; external_script_path?: string | null; filler_word_removal_enabled?: boolean; custom_filler_words?: string[] | null; 
 /**
- * Fresh installs default from the OS locale; existing stores are migrated
+ * Fresh installs default from the OS locale, else Traditional; existing stores are migrated
  * in `apply_settings_migrations`.
  */
 chinese_script?: ChineseScript; transcribe_accelerator?: TranscribeAcceleratorSetting; ort_accelerator?: OrtAcceleratorSetting; 
@@ -1169,6 +1194,10 @@ export type Meeting = { id: number;
  */
 started_at: number; duration_ms: number; status: MeetingStatus; transcript: TranscriptLine[]; summary: string | null; 
 /**
+ * Names given to speakers, by speaker number.
+ */
+speaker_names: Partial<{ [key in number]: string }>; 
+/**
  * The AI is writing the summary right now.
  */
 summarizing: boolean; 
@@ -1186,7 +1215,7 @@ export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null
  */
 export type ModelSource = 
 /**
- * Direct HTTP download from a URL (current blob.handy.computer hosting).
+ * Direct HTTP download from an application-provided URL.
  */
 { Url: { url: string; 
 /**
@@ -1327,7 +1356,15 @@ export type StreamWorkKind = "transcribing" | "polishing"
  */
 export type Theme = "system" | "light" | "dark"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
-export type TranscriptLine = { start_ms: number; speaker: Speaker; text: string }
+export type TranscriptLine = { start_ms: number; 
+/**
+ * 0 on meetings from before speaker labels.
+ */
+end_ms?: number; speaker: Speaker; 
+/**
+ * Which of the other people said it (1, 2, …), once speaker labels ran.
+ */
+voice?: number | null; text: string }
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }

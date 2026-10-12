@@ -85,15 +85,24 @@ const responses: Record<string, unknown> = {
       started_at: Date.now() - 86_400_000,
       duration_ms: 1_520_000,
       status: "ready",
-      summary: null,
+      summary:
+        "<@speaker:1> and you agreed to ship the beta on Friday.\n\n### Launch\n- <@speaker:2> says QA has 12 open bugs.",
+      speaker_names: { 1: "Harry" },
       summarizing: false,
-      error: "system_audio_missing",
+      error: null,
       transcript: [
         { start_ms: 2_000, speaker: "you", text: "好，我們開始今天的週會。" },
         {
           start_ms: 6_500,
           speaker: "others",
+          voice: 1,
           text: "Sure. The beta build is ready for testing.",
+        },
+        {
+          start_ms: 9_000,
+          speaker: "others",
+          voice: 2,
+          text: "QA still has twelve open bugs.",
         },
         {
           start_ms: 12_000,
@@ -103,6 +112,7 @@ const responses: Record<string, unknown> = {
       ],
     },
   ],
+  speaker_model_installed: false,
   get_secure_input_status: { active: false },
   is_update_checks_locked: true,
   is_portable: false,

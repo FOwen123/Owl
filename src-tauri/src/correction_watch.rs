@@ -29,6 +29,13 @@ pub fn start(app: AppHandle, pasted: String) {
 #[cfg(not(target_os = "macos"))]
 pub fn start(_app: AppHandle, _pasted: String) {}
 
+/// Stops the watcher of the last dictation, so text Owl itself changes next
+/// (Edit by voice) isn't learned as the user's fix.
+pub fn stop() {
+    #[cfg(target_os = "macos")]
+    PASTES.fetch_add(1, Ordering::SeqCst);
+}
+
 /// The character just before the cursor in the focused text box, for the
 /// space before a dictation. None for password fields and apps that hide
 /// their text.

@@ -64,8 +64,19 @@ struct TranscribeAction {
     edit: bool,
 }
 
-/// Owl (Edit by voice): the text selected when the shortcut went down.
-static EDIT_SELECTION: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// Owl (Edit by voice): where the edit goes, as it was when the shortcut
+/// went down. The result is only pasted if that's still so.
+struct EditTarget {
+    /// The app in front.
+    app: Option<i32>,
+    /// The selection as Accessibility saw it ("" for none); None in apps
+    /// that hide their text.
+    seen: Option<String>,
+    /// What the AI changes; None when nothing is selected.
+    text: Option<String>,
+}
+
+static EDIT_TARGET: std::sync::Mutex<Option<EditTarget>> = std::sync::Mutex::new(None);
 
 const EDIT_PROMPT: &str = "You edit text by voice. The user's spoken instruction is in <instruction>. \
 If <selected_text> is given, rewrite it as the instruction asks and reply with only the rewritten text, in its language unless the instruction asks for another. \
@@ -428,12 +439,41 @@ fn edit_ai(settings: &AppSettings) -> Option<(PostProcessProvider, String)> {
     Some((provider.clone(), model.clone()))
 }
 
-/// Owl: the selected text, through Accessibility or, in apps that hide it,
-/// Cmd+C. None when nothing is selected.
-fn selection(app: &AppHandle) -> Option<String> {
-    if let Some(text) = crate::correction_watch::selected_text() {
-        return Some(text).filter(|t| !t.trim().is_empty());
+#[cfg(target_os = "macos")]
+fn frontmost_app() -> Option<i32> {
+    objc2_app_kit::NSWorkspace::sharedWorkspace()
+        .frontmostApplication()
+        .map(|app| app.processIdentifier())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn frontmost_app() -> Option<i32> {
+    None
+}
+
+/// Owl: the app in front and its selected text, through Accessibility or, in
+/// apps that hide it, Cmd+C.
+fn edit_target(app: &AppHandle) -> EditTarget {
+    let seen = crate::correction_watch::selected_text();
+    let text = match &seen {
+        Some(text) => Some(text.clone()).filter(|t| !t.trim().is_empty()),
+        None => copied_selection(app),
+    };
+    EditTarget {
+        app: frontmost_app(),
+        seen,
+        text,
     }
+}
+
+/// Whether the same app is in front with the same selection, so the edit
+/// lands where it was asked for.
+fn still_there(target: &EditTarget) -> bool {
+    frontmost_app() == target.app
+        && (target.seen.is_none() || crate::correction_watch::selected_text() == target.seen)
+}
+
+fn copied_selection(app: &AppHandle) -> Option<String> {
     #[cfg(target_os = "macos")]
     {
         // Keyboard layouts can only be read on the main thread.
@@ -594,7 +634,9 @@ impl ShortcutAction for TranscribeAction {
                 let _ = app.emit("edit-needs-ai", ());
                 return;
             }
-            *EDIT_SELECTION.lock().unwrap_or_else(|e| e.into_inner()) = selection(app);
+            // The last dictation's watcher would take the edit for a fix.
+            crate::correction_watch::stop();
+            *EDIT_TARGET.lock().unwrap_or_else(|e| e.into_inner()) = Some(edit_target(app));
         }
 
         // Load model in the background
@@ -907,13 +949,14 @@ impl ShortcutAction for TranscribeAction {
                                     show_processing_overlay(&ah);
                                 }
                             }
+                            let target = edit
+                                .then(|| {
+                                    EDIT_TARGET.lock().unwrap_or_else(|e| e.into_inner()).take()
+                                })
+                                .flatten();
                             let output = async {
-                                if edit {
-                                    let selection = EDIT_SELECTION
-                                        .lock()
-                                        .unwrap_or_else(|e| e.into_inner())
-                                        .take();
-                                    edited(&ah, &transcription, selection).await
+                                if let Some(target) = &target {
+                                    edited(&ah, &transcription, target.text.clone()).await
                                 } else {
                                     process_transcription_output(&ah, &transcription, post_process)
                                         .await
@@ -966,7 +1009,17 @@ impl ShortcutAction for TranscribeAction {
                                         return;
                                     }
 
-                                    match utils::paste(final_text.clone(), ah_clone.clone()) {
+                                    if target.as_ref().is_some_and(|t| !still_there(t)) {
+                                        let _ = ah_clone.emit(
+                                            "transcription-error",
+                                            "The selection changed while Owl was working, so the edit wasn't pasted.",
+                                        );
+                                        utils::hide_recording_overlay(&ah_clone);
+                                        set_tray_state(&ah_clone, TrayIconState::Idle);
+                                        return;
+                                    }
+
+                                    match utils::paste(final_text.clone(), ah_clone.clone(), !edit) {
                                         Ok(()) => {
                                             debug!(
                                                 "Text pasted successfully in {:?}",

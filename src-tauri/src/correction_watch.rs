@@ -99,7 +99,15 @@ mod mac {
             } else if last != checked && changed_at.elapsed() >= QUIET_FOR {
                 checked = last.clone();
                 if let Some(edited) = edited_span(&baseline, &last, &pasted) {
-                    record(&app, suggest(&pasted, &edited));
+                    let words = crate::spelling::words_in(&[&pasted, &edited]);
+                    let known = crate::spelling::known_words(&app, &words);
+                    // No spell checker: Handy's rules, which treat no word as known.
+                    let is_word = |w: &str| {
+                        known
+                            .as_ref()
+                            .is_some_and(|k| k.contains(&w.to_lowercase()))
+                    };
+                    record(&app, suggest(&pasted, &edited, &is_word));
                 }
             }
         }

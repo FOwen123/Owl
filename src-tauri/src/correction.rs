@@ -48,8 +48,12 @@ pub fn edited_span(baseline: &str, current: &str, pasted: &str) -> Option<String
     Some(current[head.len()..current.len() - tail.len()].to_string())
 }
 
-/// Dictionary replacements suggested by the change from `pasted` to `edited`.
-pub fn suggest(pasted: &str, edited: &str) -> Vec<Replacement> {
+/// What the change from `pasted` to `edited` teaches. A suggestion with an
+/// empty `from` is a Words entry (a name or term to spell right), the rest
+/// are Dictionary replacements. `is_word` says whether the OS spell checker
+/// knows a word: a real word is never made into a replacement, since the rule
+/// would rewrite it everywhere ("skip" → "keep").
+pub fn suggest(pasted: &str, edited: &str, is_word: &dyn Fn(&str) -> bool) -> Vec<Replacement> {
     let (a, b) = (tokens(pasted), tokens(edited));
     if a.is_empty() || b.is_empty() || a.len() > MAX_TOKENS || b.len() > MAX_TOKENS {
         return Vec::new();
@@ -68,7 +72,7 @@ pub fn suggest(pasted: &str, edited: &str) -> Vec<Replacement> {
         let found = if changed().all(|t| is_cjk_token(t)) {
             chinese_fix(&a, &b, old, new).into_iter().collect()
         } else if changed().all(|t| !is_cjk_token(t)) {
-            english_fixes(&a[old], &b[new])
+            english_fixes(&a[old], &b[new], is_word)
         } else {
             Vec::new() // mixed scripts, e.g. 二十 → 20, is formatting
         };
@@ -170,27 +174,47 @@ fn shares_context(a: &[String], b: &[String], matched: usize) -> bool {
 
 // --- English ------------------------------------------------------------
 
-fn english_fixes(old: &[String], new: &[String]) -> Vec<Replacement> {
+fn english_fixes(
+    old: &[String],
+    new: &[String],
+    is_word: &dyn Fn(&str) -> bool,
+) -> Vec<Replacement> {
     // Same number of words changed: judge each word on its own.
     if old.len() == new.len() && old.len() > 1 {
         return old
             .iter()
             .zip(new)
-            .filter_map(|(o, n)| english_fix(std::slice::from_ref(o), std::slice::from_ref(n)))
+            .filter_map(|(o, n)| {
+                english_fix(std::slice::from_ref(o), std::slice::from_ref(n), is_word)
+            })
             .collect();
     }
-    english_fix(old, new).into_iter().collect()
+    english_fix(old, new, is_word).into_iter().collect()
 }
 
-fn english_fix(old: &[String], new: &[String]) -> Option<Replacement> {
+fn english_fix(
+    old: &[String],
+    new: &[String],
+    is_word: &dyn Fn(&str) -> bool,
+) -> Option<Replacement> {
     let [to] = new else { return None };
     let from = old.join(" ");
-    let ok = if old.len() == 1 {
+    let plausible = if old.len() == 1 {
         single_word_fix(&from, to)
     } else {
         joined_words_fix(old, to)
     };
-    ok.then(|| Replacement {
+    if !plausible {
+        return None;
+    }
+    if has_strong_signal(to) || !is_word(to) {
+        // A name or term ("iPhone", "depick"): learn the spelling as a Word.
+        return Some(Replacement {
+            from: String::new(),
+            to: to.clone(),
+        });
+    }
+    (!old.iter().all(|w| is_word(w))).then(|| Replacement {
         from,
         to: to.clone(),
     })
@@ -341,8 +365,17 @@ fn blur(syllable: &str) -> String {
 mod tests {
     use super::*;
 
+    /// Words a spell checker knows, standing in for the OS one.
+    fn is_word(w: &str) -> bool {
+        const KNOWN: &str = "i met today let's have a meeting call tomorrow saw the dog outside \
+            bought an work at now then we left early first asked about it need support are test \
+            testing app hello world how you open code and run skip keep just simple send sent ship \
+            shop depict cloud claude owen chat word";
+        KNOWN.split_whitespace().any(|k| k == w.to_lowercase())
+    }
+
     fn pairs(pasted: &str, edited: &str) -> Vec<(String, String)> {
-        suggest(pasted, edited)
+        suggest(pasted, edited, &is_word)
             .into_iter()
             .map(|r| (r.from, r.to))
             .collect()
@@ -409,25 +442,31 @@ mod tests {
     }
 
     #[test]
-    fn capitals_count_for_names_and_brands() {
+    fn names_and_brands_become_words() {
         one(
             "I bought an iphone today",
             "I bought an iPhone today",
-            "iphone",
+            "",
             "iPhone",
         );
-        one(
-            "I work at openai now",
-            "I work at OpenAI now",
-            "openai",
-            "OpenAI",
-        );
+        one("I work at openai now", "I work at OpenAI now", "", "OpenAI");
+        one("I used depict today", "I used depick today", "", "depick");
         none("then we left early", "Then we left early");
     }
 
     #[test]
+    fn real_words_never_become_replacements() {
+        // The bug: dictating "just keep it simple" came out as "skip"; fixing it
+        // must not teach Owl to turn every "skip" into "keep".
+        none("just skip it simple", "just keep it simple");
+        none("I send it today", "I sent it today");
+        none("open the ship", "open the shop");
+        none("open cloud code and run it", "open Claude Code and run it");
+    }
+
+    #[test]
     fn spelled_out_letters_become_an_acronym() {
-        one("call the a p i first", "call the API first", "a p i", "API");
+        one("call the a p i first", "call the API first", "", "API");
     }
 
     #[test]
@@ -435,7 +474,7 @@ mod tests {
         one(
             "I asked chat GPT about it",
             "I asked ChatGPT about it",
-            "chat GPT",
+            "",
             "ChatGPT",
         );
     }
@@ -445,7 +484,7 @@ mod tests {
         one(
             "we need internationalization support",
             "we need i18n support",
-            "internationalization",
+            "",
             "i18n",
         );
     }
@@ -468,9 +507,9 @@ mod tests {
     #[test]
     fn several_words_fixed_in_one_run() {
         one(
-            "open cloud code and run it",
+            "open clode code and run it",
             "open Claude Code and run it",
-            "cloud",
+            "clode",
             "Claude",
         );
     }
@@ -525,6 +564,6 @@ mod tests {
 
     #[test]
     fn english_inside_chinese_uses_english_rules() {
-        one("我用chat GPT寫的", "我用ChatGPT寫的", "chat GPT", "ChatGPT");
+        one("我用chat GPT寫的", "我用ChatGPT寫的", "", "ChatGPT");
     }
 }

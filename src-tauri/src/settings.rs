@@ -1345,14 +1345,16 @@ pub fn set_cleanup_level(settings: &mut AppSettings, level: CleanupLevel) {
 }
 
 /// Queues new edit suggestions, skipping ones already in the Dictionary,
-/// already waiting, or dismissed before. Returns the ones added.
+/// already waiting, or dismissed before. Returns the ones added. A suggestion
+/// with an empty `from` is a Words entry (see `correction::suggest`).
 pub fn add_edit_suggestions(
     settings: &mut AppSettings,
     found: Vec<Replacement>,
 ) -> Vec<Replacement> {
     let mut added = Vec::new();
     for r in found {
-        let known = settings.replacements.iter().any(|x| x.from == r.from)
+        let known = has_word(settings, &r)
+            || (!r.from.is_empty() && settings.replacements.iter().any(|x| x.from == r.from))
             || settings.edit_suggestions.contains(&r)
             || settings.dismissed_suggestions.contains(&r)
             || added.contains(&r);
@@ -1364,9 +1366,21 @@ pub fn add_edit_suggestions(
     added
 }
 
+fn has_word(settings: &AppSettings, suggestion: &Replacement) -> bool {
+    suggestion.from.is_empty()
+        && settings
+            .custom_words
+            .iter()
+            .any(|w| w.eq_ignore_ascii_case(&suggestion.to))
+}
+
 pub fn accept_edit_suggestion(settings: &mut AppSettings, suggestion: &Replacement) {
     settings.edit_suggestions.retain(|r| r != suggestion);
-    if !settings
+    if suggestion.from.is_empty() {
+        if !has_word(settings, suggestion) {
+            settings.custom_words.push(suggestion.to.clone());
+        }
+    } else if !settings
         .replacements
         .iter()
         .any(|r| r.from == suggestion.from)
@@ -1472,6 +1486,20 @@ mod tests {
         accept_edit_suggestion(&mut settings, &rep("Owel", "Owen"));
         assert_eq!(settings.edit_suggestions, vec![rep("公事", "公式")]);
         assert_eq!(settings.replacements, vec![rep("Owel", "Owen")]);
+    }
+
+    #[test]
+    fn accepting_a_word_suggestion_adds_it_to_words_once() {
+        let mut settings = get_default_settings();
+        let word = rep("", "Depick");
+        assert_eq!(
+            add_edit_suggestions(&mut settings, vec![word.clone()]),
+            vec![word.clone()]
+        );
+        accept_edit_suggestion(&mut settings, &word);
+        assert_eq!(settings.custom_words, vec!["Depick".to_string()]);
+        assert!(settings.replacements.is_empty());
+        assert!(add_edit_suggestions(&mut settings, vec![rep("", "depick")]).is_empty());
     }
 
     #[test]

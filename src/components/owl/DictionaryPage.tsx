@@ -38,8 +38,12 @@ export const DictionaryPage: React.FC = () => {
                 key={`${s.from}→${s.to}`}
                 className="flex items-center gap-3 px-4 py-2 text-sm"
               >
-                <span className="font-medium break-words">{s.from}</span>
-                <ArrowRight className="w-4 h-4 shrink-0 text-mid-gray" />
+                {s.from && (
+                  <>
+                    <span className="font-medium break-words">{s.from}</span>
+                    <ArrowRight className="w-4 h-4 shrink-0 text-mid-gray" />
+                  </>
+                )}
                 <span className="flex-1 min-w-0 break-words">{s.to}</span>
                 <Button
                   size="sm"

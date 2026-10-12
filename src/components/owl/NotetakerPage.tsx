@@ -201,6 +201,9 @@ const MeetingDetail: React.FC<{
       {meeting.error === "system_audio_missing" && (
         <Alert variant="warning">{t("owl.notetaker.systemAudioMissing")}</Alert>
       )}
+      {meeting.error === "mic_failed" && (
+        <Alert variant="warning">{t("owl.notetaker.micFailed")}</Alert>
+      )}
 
       {meeting.status === "ready" && (
         <SettingsGroup title={t("owl.notetaker.summary")}>

@@ -746,7 +746,8 @@
     "processing": "處理中...",
     "addingToDictionary": "正在加入字典",
     "addedToDictionary": "已加入字典",
-    "dontAdd": "不要加入"
+    "dontAdd": "不要加入",
+    "loadingModel": "正在載入模型..."
   },
   "whatsNew": {
     "title": "Owl v{{version}} 新功能"
@@ -809,6 +810,7 @@
       "copy": "複製逐字稿",
       "copied": "已複製逐字稿",
       "systemAudioMissing": "Owl 無法收到系統音訊，所以這份逐字稿只有你的麥克風。請到「系統設定 → 隱私權與安全性 → 螢幕與系統音訊錄製」允許 Owl。",
+      "micFailed": "會議中麥克風中斷了，部分內容可能遺失。",
       "speaker": {
         "you": "你",
         "others": "其他人"

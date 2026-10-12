@@ -31,6 +31,7 @@ import {
   useSpeakerLabel,
 } from "./MeetingSpeakers";
 import { MeetingTemplates, useTemplateOptions } from "./MeetingTemplates";
+import { useSettings } from "../../hooks/useSettings";
 
 const clock = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -389,6 +390,20 @@ const MeetingDetail: React.FC<{
   const templates = useTemplateOptions(options.built_in_templates);
   const [template, setTemplate] = useState<string | null>(meeting.template);
   const [provider, setProvider] = useState<string | null>(null);
+  const { getSetting } = useSettings();
+  // Show what Summarize will use, and send exactly that.
+  const shownTemplate =
+    [template, getSetting("meeting_template")].find((id) =>
+      templates.some((o) => o.value === id),
+    ) ??
+    templates[0]?.value ??
+    null;
+  const activeProvider = getSetting("post_process_provider_id");
+  const shownProvider =
+    provider ??
+    options.providers.find((p) => p.id === activeProvider)?.id ??
+    options.providers[0]?.id ??
+    null;
   const transcriptText = meeting.transcript
     .map((l) => `[${clock(l.start_ms)}] ${speaker(l)}: ${l.text}`)
     .join("\n");
@@ -396,8 +411,8 @@ const MeetingDetail: React.FC<{
   const summarize = async () => {
     const result = await commands.summarizeMeeting(
       meeting.id,
-      template,
-      provider,
+      shownTemplate,
+      shownProvider,
     );
     if (result.status === "error" && result.error === "no_provider") {
       toast(t("owl.notetaker.summaryNeedsProvider"), {
@@ -506,7 +521,7 @@ const MeetingDetail: React.FC<{
             <div className="flex flex-wrap items-center gap-2">
               <Dropdown
                 options={templates}
-                selectedValue={template ?? templates[0]?.value ?? null}
+                selectedValue={shownTemplate}
                 onSelect={setTemplate}
               />
               {options.providers.length > 1 && (
@@ -516,7 +531,7 @@ const MeetingDetail: React.FC<{
                     label: p.label,
                     description: p.model,
                   }))}
-                  selectedValue={provider ?? options.providers[0].id}
+                  selectedValue={shownProvider}
                   onSelect={setProvider}
                 />
               )}

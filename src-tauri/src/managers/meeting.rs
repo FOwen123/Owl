@@ -150,7 +150,23 @@ fn split_title(reply: &str) -> (Option<String>, String) {
 
 /// The prompt for `template`, plus the user's Chinese script and dictionary
 /// spellings, so the notes match what their dictations look like.
-fn summary_prompt(settings: &AppSettings, template: &str, labelled: bool) -> String {
+/// Whether most of a transcript is Chinese, counting a character as a word.
+fn mostly_chinese(text: &str) -> bool {
+    let is_cjk = crate::correction::is_cjk;
+    let chinese = text.chars().filter(|c| is_cjk(*c)).count();
+    let other = text
+        .split_whitespace()
+        .filter(|w| w.chars().any(char::is_alphabetic) && !w.chars().any(is_cjk))
+        .count();
+    chinese > other
+}
+
+fn summary_prompt(
+    settings: &AppSettings,
+    template: &str,
+    labelled: bool,
+    transcript: &str,
+) -> String {
     let others = if labelled {
         OTHERS_LABELLED
     } else {
@@ -158,7 +174,10 @@ fn summary_prompt(settings: &AppSettings, template: &str, labelled: bool) -> Str
     };
     let mut prompt =
         PROMPT_HEAD.replace("{OTHERS}", others) + template_format(settings, template) + PROMPT_TAIL;
+    // Only for a Chinese meeting: the line alone can tip a model into
+    // writing an English meeting's notes in Chinese.
     match settings.chinese_script {
+        _ if !mostly_chinese(transcript) => {}
         ChineseScript::Traditional => {
             prompt.push_str("\nIf you write Chinese, use Traditional characters.")
         }
@@ -404,9 +423,10 @@ impl MeetingManager {
                 }
             }
         }
+        // Any line lost: the meeting is transcribed again from its saved audio.
         match failed {
-            Some(e) if lines.is_empty() => Err(e),
-            _ => Ok(lines),
+            Some(e) => Err(e),
+            None => Ok(lines),
         }
     }
 
@@ -416,15 +436,7 @@ impl MeetingManager {
         speaker: Speaker,
         segment: &Segment,
     ) -> Result<Option<TranscriptLine>> {
-        let tm = self.app.state::<Arc<TranscriptionManager>>();
-        if !tm.is_model_loaded() {
-            let model = get_settings(&self.app).selected_model;
-            if model.is_empty() {
-                return Err(anyhow!("Choose a speech model on the Models page first"));
-            }
-            tm.load_model(&model)?;
-        }
-        let text = tm.transcribe(segment.samples.clone())?;
+        let text = self.run_model(&segment.samples)?;
         let text = text.trim();
         Ok((!text.is_empty()).then(|| TranscriptLine {
             start_ms: (segment.start * 1000 / SAMPLE_RATE) as i64,
@@ -433,6 +445,29 @@ impl MeetingManager {
             voice: None,
             text: text.to_string(),
         }))
+    }
+
+    /// The speech model's text for `samples`, loading the model when none is
+    /// (it may have been unloaded) and trying once more after a failure: a
+    /// dictation cancelled meanwhile stops the transcription in progress.
+    fn run_model(&self, samples: &[f32]) -> Result<String> {
+        let tm = self.app.state::<Arc<TranscriptionManager>>();
+        let run = || {
+            // An ONNX model reads as unloaded while another caller runs it.
+            if tm.get_current_model().is_none() {
+                let model = get_settings(&self.app).selected_model;
+                if model.is_empty() {
+                    return Err(anyhow!("Choose a speech model on the Models page first"));
+                }
+                tm.load_model(&model)?;
+            }
+            tm.transcribe(samples.to_vec())
+        };
+        run().or_else(|e| {
+            log::warn!("Meeting: transcription failed ({e:#}); trying once more");
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            run()
+        })
     }
 
     /// Stops recording and transcribes in the background.
@@ -467,7 +502,16 @@ impl MeetingManager {
                 .map_err(|_| anyhow!("The transcriber crashed"))
                 .and_then(|r| r);
             let result = recorded.and_then(|mic_warning| {
-                let lines = this.with_speakers(active.id, &folder, lines?);
+                let lines = match lines {
+                    Ok(lines) => this.with_speakers(active.id, &folder, lines),
+                    Err(e) => {
+                        log::warn!(
+                            "Meeting {}: a live line failed ({e:#}); transcribing the saved audio",
+                            active.id
+                        );
+                        this.transcribe(active.id)?.0
+                    }
+                };
                 Ok((lines, mic_warning.or(system_audio_warning(&folder))))
             });
             this.finish(active.id, result);
@@ -568,7 +612,10 @@ impl MeetingManager {
             params![started_at],
         )?;
         let id = conn.last_insert_rowid();
-        std::fs::create_dir_all(self.dir.join(id.to_string()))?;
+        if let Err(e) = std::fs::create_dir_all(self.dir.join(id.to_string())) {
+            let _ = conn.execute("DELETE FROM meetings WHERE id = ?1", params![id]);
+            return Err(e.into());
+        }
         self.changed();
         Ok(id)
     }
@@ -576,7 +623,7 @@ impl MeetingManager {
     fn run_import(&self, id: i64, path: &Path) {
         let folder = self.dir.join(id.to_string());
         let result = (|| {
-            let samples = crate::media::decode(path)?;
+            let samples = crate::media::decode(path, usize::MAX)?;
             crate::audio_toolkit::audio::save_wav_file(folder.join("system.wav"), &samples)?;
             self.conn()?.execute(
                 "UPDATE meetings SET duration_ms = ?1 WHERE id = ?2",
@@ -587,9 +634,10 @@ impl MeetingManager {
         self.finish(id, result);
     }
 
-    /// A file's speech as text, saved nowhere: the local API.
-    pub fn transcribe_file(&self, path: &Path) -> Result<String> {
-        let samples = crate::media::decode(path)?;
+    /// A file's speech as text, saved nowhere: the local API. Refuses audio
+    /// longer than `max_seconds` with `media::TOO_LONG`.
+    pub fn transcribe_file(&self, path: &Path, max_seconds: usize) -> Result<String> {
+        let samples = crate::media::decode(path, max_seconds * SAMPLE_RATE)?;
         let mut lines = Vec::new();
         for (speaker, segment) in split_tracks(&self.stages(), &samples, None) {
             lines.extend(self.transcribe_segment(speaker, &segment)?);
@@ -678,7 +726,6 @@ impl MeetingManager {
         }
         let turns = crate::diarization::diarize(&self.app, &path)?;
         let samples = read_wav_samples(&path)?;
-        let tm = self.app.state::<Arc<TranscriptionManager>>();
         let at = |ms: i64| ((ms.max(0) as usize) * SAMPLE_RATE / 1000).min(samples.len());
         let mut out = Vec::with_capacity(lines.len());
         for line in lines {
@@ -695,7 +742,7 @@ impl MeetingManager {
                 continue;
             }
             for (start, end, voice) in parts {
-                let text = tm.transcribe(samples[at(start)..at(end)].to_vec())?;
+                let text = self.run_model(&samples[at(start)..at(end)])?;
                 if !text.trim().is_empty() {
                     out.push(TranscriptLine {
                         start_ms: start,
@@ -777,7 +824,7 @@ impl MeetingManager {
             api_key,
             model,
             format!("<transcript>\n{transcript}\n</transcript>"),
-            Some(summary_prompt(&settings, &template, labelled)),
+            Some(summary_prompt(&settings, &template, labelled, &transcript)),
             None,
             false,
         )
@@ -1456,11 +1503,13 @@ mod tests {
             from: "depict".into(),
             to: "Depick".into(),
         }];
-        let prompt = summary_prompt(&settings, "general", false);
+        let prompt = summary_prompt(&settings, "general", false, "[0:00] Me: 我們明天開會");
         assert!(prompt.contains("\"Others\" is everyone else"));
         assert!(prompt.ends_with(
             "If you write Chinese, use Traditional characters.\nWhere the transcript clearly means one of these, spell it this way: Depick."
         ));
+        let english = summary_prompt(&settings, "general", false, "[0:00] Me: we meet tomorrow");
+        assert!(!english.contains("Traditional"));
     }
 
     #[test]
@@ -1486,19 +1535,24 @@ mod tests {
     fn every_template_gets_the_shared_rules() {
         let settings = crate::settings::get_default_settings();
         for (id, format) in BUILT_IN_TEMPLATES {
-            let prompt = summary_prompt(&settings, id, false);
+            let prompt = summary_prompt(&settings, id, false, "");
             assert!(
                 prompt.contains(format) && prompt.contains("Title: …"),
                 "{id}"
             );
         }
         // An unknown template falls back to General.
-        assert!(summary_prompt(&settings, "gone", false).contains(GENERAL_FORMAT));
+        assert!(summary_prompt(&settings, "gone", false, "").contains(GENERAL_FORMAT));
     }
 
     #[test]
     fn labelled_notes_use_speaker_placeholders() {
-        let prompt = summary_prompt(&crate::settings::get_default_settings(), "general", true);
+        let prompt = summary_prompt(
+            &crate::settings::get_default_settings(),
+            "general",
+            true,
+            "",
+        );
         assert!(prompt.contains("<@speaker:2>") && !prompt.contains("{OTHERS}"));
     }
 

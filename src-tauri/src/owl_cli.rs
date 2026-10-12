@@ -93,9 +93,13 @@ pub fn meeting_text(m: &Meeting, notes: bool, transcript: bool) -> String {
             .map(|s| fill_speakers(s, &m.speaker_names))
             .unwrap_or_default();
     }
-    let text = render(m, ExportFormat::Text);
     if transcript {
-        return text
+        // Without notes, so a "Transcript" heading in them can't be mistaken for it.
+        let bare = Meeting {
+            summary: None,
+            ..m.clone()
+        };
+        return render(&bare, ExportFormat::Text)
             .split_once("Transcript\n\n")
             .map(|(_, t)| t.to_string())
             .unwrap_or_default();
@@ -160,11 +164,12 @@ pub fn install() -> Result<PathBuf> {
 
 fn link_to(exe: &Path, dir: &Path, link: &Path) -> Result<()> {
     std::fs::create_dir_all(dir)?;
-    // Replace an old link (e.g. to a moved app), never a real file.
-    if link
-        .symlink_metadata()
-        .is_ok_and(|m| m.file_type().is_symlink())
-    {
+    // Replace an old link to Owl (e.g. to a moved app), never a real file or
+    // another program's link.
+    if let Ok(target) = std::fs::read_link(link) {
+        if link.exists() && target.file_name() != exe.file_name() {
+            return Err(anyhow!("{} belongs to another program", link.display()));
+        }
         std::fs::remove_file(link)?;
     }
     #[cfg(unix)]
@@ -173,4 +178,25 @@ fn link_to(exe: &Path, dir: &Path, link: &Path) -> Result<()> {
     return Err(anyhow!("Installing the command line is macOS-only for now"));
     #[cfg(unix)]
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn install_keeps_other_programs_links_and_replaces_dead_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let link = dir.path().join("owl");
+        let exe = Path::new("/Applications/Owl.app/Contents/MacOS/handy");
+
+        std::os::unix::fs::symlink("/bin/ls", &link).unwrap();
+        assert!(link_to(exe, dir.path(), &link).is_err());
+        assert_eq!(std::fs::read_link(&link).unwrap(), Path::new("/bin/ls"));
+
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink("/gone/Owl.app/Contents/MacOS/handy", &link).unwrap();
+        link_to(exe, dir.path(), &link).unwrap();
+        assert_eq!(std::fs::read_link(&link).unwrap(), exe);
+    }
 }

@@ -29,13 +29,16 @@ fn with_enigo<T>(
 }
 
 /// Owl (Edit by voice): the selection in an app that hides it from
-/// Accessibility, copied with Cmd+C; the clipboard's text is put back after.
-/// None when nothing was copied. Runs on the main thread, like paste.
+/// Accessibility, copied with Cmd+C. The clipboard is put back after, in
+/// every format it held (text, images, files), unless something else changed
+/// it meanwhile. None when nothing was copied. Runs on the main thread.
 #[cfg(target_os = "macos")]
 pub fn copy_selection(app_handle: &AppHandle) -> Option<String> {
-    let board = objc2_app_kit::NSPasteboard::generalPasteboard();
+    use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+
+    let board = NSPasteboard::generalPasteboard();
+    let saved = pasteboard::snapshot(&board);
     let before = board.changeCount();
-    let saved = app_handle.clipboard().read_text().ok();
     with_enigo(app_handle, input::send_copy).ok()?;
     // Apps copy asynchronously; give it up to 300 ms.
     let copied = (0..10).any(|_| {
@@ -45,11 +48,89 @@ pub fn copy_selection(app_handle: &AppHandle) -> Option<String> {
     if !copied {
         return None;
     }
-    let text = app_handle.clipboard().read_text().ok();
-    if let Some(saved) = saved {
-        let _ = write_text_to_clipboard(app_handle, &saved);
+    let ours = board.changeCount();
+    // SAFETY: NSPasteboardTypeString is an AppKit constant.
+    let text = unsafe { board.stringForType(NSPasteboardTypeString) }.map(|t| t.to_string());
+    if board.changeCount() == ours {
+        pasteboard::restore(&board, &saved);
     }
     text.filter(|t| !t.trim().is_empty())
+}
+
+#[cfg(target_os = "macos")]
+mod pasteboard {
+    use objc2::rc::Retained;
+    use objc2::runtime::ProtocolObject;
+    use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardType};
+    use objc2_foundation::{NSArray, NSData};
+
+    pub type Snapshot = Vec<Vec<(Retained<NSData>, Retained<NSPasteboardType>)>>;
+
+    /// Every item on the pasteboard, in every format.
+    pub fn snapshot(board: &NSPasteboard) -> Snapshot {
+        board
+            .pasteboardItems()
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|item| {
+                        item.types()
+                            .iter()
+                            .filter_map(|kind| Some((item.dataForType(&kind)?, kind)))
+                            .collect()
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn restore(board: &NSPasteboard, saved: &Snapshot) {
+        board.clearContents();
+        let items: Vec<_> = saved
+            .iter()
+            .map(|formats| {
+                let item = NSPasteboardItem::new();
+                for (data, kind) in formats {
+                    item.setData_forType(data, kind);
+                }
+                ProtocolObject::from_retained(item)
+            })
+            .collect();
+        if !items.is_empty() {
+            board.writeObjects(&NSArray::from_retained_slice(&items));
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use objc2_app_kit::NSPasteboardTypeString;
+        use objc2_foundation::NSString;
+
+        #[test]
+        fn every_format_comes_back() {
+            // A private pasteboard, so the user's clipboard is never touched.
+            let board = NSPasteboard::pasteboardWithUniqueName();
+            let png = NSString::from_str("public.png");
+            let item = NSPasteboardItem::new();
+            item.setData_forType(&NSData::with_bytes(b"\x89PNG fake"), &png);
+            // SAFETY: an AppKit constant.
+            let text = unsafe { NSPasteboardTypeString };
+            item.setString_forType(&NSString::from_str("hello"), text);
+            board.clearContents();
+            board.writeObjects(&NSArray::from_retained_slice(&[
+                ProtocolObject::from_retained(item),
+            ]));
+
+            let saved = snapshot(&board);
+            board.clearContents();
+            board.setString_forType(&NSString::from_str("copied selection"), text);
+            restore(&board, &saved);
+
+            assert_eq!(board.stringForType(text).unwrap().to_string(), "hello");
+            assert_eq!(board.dataForType(&png).unwrap().to_vec(), b"\x89PNG fake");
+        }
+    }
 }
 
 fn write_text_to_clipboard(app_handle: &AppHandle, text: &str) -> Result<(), String> {
@@ -795,21 +876,27 @@ fn should_send_auto_submit(auto_submit: bool, paste_method: PasteMethod) -> bool
     auto_submit && paste_method != PasteMethod::None
 }
 
-pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
+/// `dictation` is false for Owl's Edit by voice: its text replaces a
+/// selection exactly, so no spaces are added, and it never auto-submits.
+pub fn paste(text: String, app_handle: AppHandle, dictation: bool) -> Result<(), String> {
     let settings = get_settings(&app_handle);
     let paste_method = settings.paste_method;
     let paste_delay_ms = settings.paste_delay_ms;
     let paste_delay_after_ms = settings.paste_delay_after_ms;
+    let auto_submit = settings.auto_submit && dictation;
 
     // Append trailing space if setting is enabled
-    let text = if settings.append_trailing_space {
+    let text = if settings.append_trailing_space && dictation {
         format!("{} ", text)
     } else {
         text
     };
 
     // Owl: continue the text before the cursor with a space, as typing would.
-    let text = match crate::correction_watch::char_before_cursor() {
+    let before = dictation
+        .then(crate::correction_watch::char_before_cursor)
+        .flatten();
+    let text = match before {
         Some(before) if crate::cleanup_rules::needs_leading_space(before, &text) => {
             format!(" {text}")
         }
@@ -848,7 +935,7 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
                         &app_handle,
                         &paste_method,
                         enigo,
-                        settings.auto_submit,
+                        auto_submit,
                         settings.auto_submit_key,
                         settings.clipboard_handling,
                     )
@@ -878,7 +965,7 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
         }
     }
 
-    if should_send_auto_submit(settings.auto_submit, paste_method) {
+    if should_send_auto_submit(auto_submit, paste_method) {
         std::thread::sleep(Duration::from_millis(50));
         if let Err(error) = with_enigo(&app_handle, |enigo| {
             send_return_key(enigo, settings.auto_submit_key)

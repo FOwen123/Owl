@@ -17,6 +17,10 @@ use symphonia::core::probe::Hint;
 
 /// Error text the UI translates into "this format isn't supported yet".
 pub const UNSUPPORTED: &str = "unsupported_format";
+/// Error text for audio longer than the caller allows.
+pub const TOO_LONG: &str = "too_long";
+/// Sample rates real audio uses; anything else is a broken header.
+const RATES: std::ops::RangeInclusive<u32> = 8_000..=384_000;
 
 const RATE: usize = crate::managers::meeting::SAMPLE_RATE;
 
@@ -52,7 +56,7 @@ fn open(path: &Path) -> Result<Opened> {
             let decoder = codecs
                 .make(&t.codec_params, &DecoderOptions::default())
                 .ok()?;
-            t.codec_params.sample_rate?;
+            t.codec_params.sample_rate.filter(|r| RATES.contains(r))?;
             Some((t.id, decoder))
         })
         .ok_or_else(|| anyhow!(UNSUPPORTED))?;
@@ -63,13 +67,24 @@ fn open(path: &Path) -> Result<Opened> {
     })
 }
 
-/// Whether `path` can be imported, without decoding it.
-pub fn check(path: &Path) -> Result<()> {
-    open(path).map(|_| ())
+/// Symphonia can panic on a broken header (a WAV without a sample rate):
+/// that's an unsupported file, not a crash.
+fn guarded<T>(f: impl FnOnce() -> Result<T>) -> Result<T> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
+        .unwrap_or_else(|_| Err(anyhow!(UNSUPPORTED)))
 }
 
-/// The file's audio as 16 kHz mono.
-pub fn decode(path: &Path) -> Result<Vec<f32>> {
+/// Whether `path` can be imported, without decoding it.
+pub fn check(path: &Path) -> Result<()> {
+    guarded(|| open(path).map(|_| ()))
+}
+
+/// The file's audio as 16 kHz mono; `TOO_LONG` past `max_samples`.
+pub fn decode(path: &Path, max_samples: usize) -> Result<Vec<f32>> {
+    guarded(|| decode_file(path, max_samples))
+}
+
+fn decode_file(path: &Path, max_samples: usize) -> Result<Vec<f32>> {
     let Opened {
         mut format,
         mut decoder,
@@ -96,6 +111,9 @@ pub fn decode(path: &Path) -> Result<Vec<f32>> {
             Err(e) => return Err(e.into()),
         };
         let spec = *decoded.spec();
+        if !RATES.contains(&spec.rate) {
+            return Err(anyhow!(UNSUPPORTED));
+        }
         let channels = spec.channels.count().max(1);
         let mut buffer = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
         buffer.copy_interleaved_ref(decoded);
@@ -109,6 +127,9 @@ pub fn decode(path: &Path) -> Result<Vec<f32>> {
                 FrameResampler::new(spec.rate as usize, RATE, Duration::from_millis(30))
             })
             .push(&mono, |frame| out.extend_from_slice(frame));
+        if out.len() > max_samples {
+            return Err(anyhow!(TOO_LONG));
+        }
     }
     if let Some(resampler) = resampler.as_mut() {
         resampler.finish(|frame| out.extend_from_slice(frame));
@@ -141,7 +162,7 @@ mod tests {
     fn a_stereo_48k_file_becomes_16k_mono_of_the_same_length() {
         let path = std::env::temp_dir().join("owl-media-test.wav");
         wav(&path, 48_000, 2, 2.0);
-        let samples = decode(&path).unwrap();
+        let samples = decode(&path, usize::MAX).unwrap();
         let seconds = samples.len() as f32 / RATE as f32;
         assert!((1.9..2.1).contains(&seconds), "{seconds} s");
         assert!(samples.iter().any(|s| s.abs() > 0.1));
@@ -156,13 +177,32 @@ mod tests {
             std::env::var("OWL_TEST_AUDIO").unwrap_or("/tmp/owl-audio".into()),
         );
         for file in ["en.m4a", "en.mp3", "en.mp4"] {
-            let seconds = decode(&dir.join(file)).unwrap().len() as f32 / RATE as f32;
+            let seconds = decode(&dir.join(file), usize::MAX).unwrap().len() as f32 / RATE as f32;
             assert!((5.0..5.6).contains(&seconds), "{file}: {seconds} s");
         }
         assert_eq!(
-            decode(&dir.join("en.opus")).unwrap_err().to_string(),
+            decode(&dir.join("en.opus"), usize::MAX)
+                .unwrap_err()
+                .to_string(),
             UNSUPPORTED
         );
+    }
+
+    #[test]
+    fn a_wav_without_a_sample_rate_is_unsupported_and_long_audio_is_refused() {
+        let path = std::env::temp_dir().join("owl-media-zero-rate.wav");
+        wav(&path, 16_000, 1, 0.5);
+        let mut bytes = std::fs::read(&path).unwrap();
+        bytes[24..28].copy_from_slice(&0u32.to_le_bytes()); // fmt chunk sample rate
+        std::fs::write(&path, bytes).unwrap();
+        assert_eq!(check(&path).unwrap_err().to_string(), UNSUPPORTED);
+        assert_eq!(
+            decode(&path, usize::MAX).unwrap_err().to_string(),
+            UNSUPPORTED
+        );
+
+        wav(&path, 16_000, 1, 2.0);
+        assert_eq!(decode(&path, RATE).unwrap_err().to_string(), TOO_LONG);
     }
 
     #[test]

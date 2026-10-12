@@ -378,7 +378,10 @@ impl MeetingManager {
         )?;
         let id = conn.last_insert_rowid();
         let folder = self.dir.join(id.to_string());
-        std::fs::create_dir_all(&folder)?;
+        if let Err(e) = std::fs::create_dir_all(&folder) {
+            let _ = conn.execute("DELETE FROM meetings WHERE id = ?1", params![id]);
+            return Err(e.into());
+        }
 
         let stop = Arc::new(AtomicBool::new(false));
         let mic_name = get_settings(&self.app).selected_microphone;
@@ -413,6 +416,7 @@ impl MeetingManager {
             self.app
                 .path()
                 .resolve(path, tauri::path::BaseDirectory::Resource)
+                .map_err(|e| log::warn!("Meeting: can't find {path}: {e}"))
                 .ok()
         };
         Stages {
@@ -493,11 +497,19 @@ impl MeetingManager {
             }
             tm.transcribe(samples.to_vec())
         };
-        run().or_else(|e| {
-            log::warn!("Meeting: transcription failed ({e:#}); trying once more");
-            std::thread::sleep(std::time::Duration::from_millis(300));
-            run()
-        })
+        // An ONNX model in use by a dictation comes back within seconds.
+        let mut result = run();
+        let mut wait = 300;
+        while let Err(e) = &result {
+            if wait > 2_400 {
+                break;
+            }
+            log::warn!("Meeting: transcription failed ({e:#}); trying again in {wait} ms");
+            std::thread::sleep(std::time::Duration::from_millis(wait));
+            wait *= 2;
+            result = run();
+        }
+        result
     }
 
     /// Stops recording and transcribes in the background.
@@ -606,11 +618,30 @@ impl MeetingManager {
         let this = self.clone();
         std::thread::spawn(move || {
             // A microphone that failed while recording still failed.
-            let kept = old.error.filter(|e| e == "mic_failed");
-            let result = this
-                .transcribe(id)
-                .map(|(lines, warning)| (lines, kept.or(warning)));
-            this.finish(id, result);
+            let kept = old.error.clone().filter(|e| e == "mic_failed");
+            let result = this.transcribe(id).and_then(|(lines, warning)| {
+                // Audio that reads as empty never replaces the lines kept.
+                if lines.is_empty() && !old.transcript.is_empty() {
+                    return Err(anyhow!(
+                        "This meeting's audio can't be read, so its transcript was kept."
+                    ));
+                }
+                Ok((lines, kept.or(warning)))
+            });
+            match result {
+                // A ready meeting stays as it was, saying why nothing changed.
+                Err(e) if old.status == MeetingStatus::Ready => {
+                    log::warn!("Meeting {id}: transcribing again failed: {e:#}");
+                    if let Ok(conn) = this.conn() {
+                        let _ = conn.execute(
+                            "UPDATE meetings SET status = 'ready', error = ?1 WHERE id = ?2",
+                            params![e.to_string(), id],
+                        );
+                    }
+                    this.changed();
+                }
+                result => this.finish(id, result),
+            }
         });
         Ok(())
     }
@@ -718,11 +749,14 @@ impl MeetingManager {
             let path = folder.join(file);
             path.exists().then(|| read_wav_samples(&path)).transpose()
         };
-        let (mic, system) = (read("mic.wav")?.unwrap_or_default(), read("system.wav")?);
-        let stages = self.stages();
         let mut lines = Vec::new();
-        for (speaker, segment) in split_tracks(&stages, &mic, system.as_deref()) {
-            lines.extend(self.transcribe_segment(speaker, &segment)?);
+        {
+            // Freed before speaker labels read the call audio again.
+            let (mic, system) = (read("mic.wav")?.unwrap_or_default(), read("system.wav")?);
+            let stages = self.stages();
+            for (speaker, segment) in split_tracks(&stages, &mic, system.as_deref()) {
+                lines.extend(self.transcribe_segment(speaker, &segment)?);
+            }
         }
         lines.sort_by_key(|l| l.start_ms);
         Ok((
@@ -963,6 +997,8 @@ struct Track {
     consumer: rtrb::Consumer<f32>,
     resampler: FrameResampler,
     writer: hound::WavWriter<std::io::BufWriter<std::fs::File>>,
+    /// When the file's header last caught up with its audio.
+    saved: Instant,
 }
 
 impl Track {
@@ -977,6 +1013,7 @@ impl Track {
             consumer,
             resampler: FrameResampler::new(rate as usize, SAMPLE_RATE, Duration::from_millis(30)),
             writer: hound::WavWriter::create(path, spec)?,
+            saved: Instant::now(),
         })
     }
 
@@ -991,6 +1028,12 @@ impl Track {
         self.resampler
             .push(&samples, |frame| out.extend_from_slice(frame));
         self.write(&out);
+        // A WAV's header gives its length, so update it now and then: if Owl
+        // quits or crashes mid-meeting, the file still reads back.
+        if self.saved.elapsed() >= Duration::from_secs(5) {
+            let _ = self.writer.flush();
+            self.saved = Instant::now();
+        }
         out
     }
 
@@ -1535,6 +1578,20 @@ mod tests {
             .iter()
             .map(|s| (s.start, s.start + s.samples.len()))
             .collect()
+    }
+
+    #[test]
+    fn a_track_reads_back_before_it_is_finished() {
+        let path = std::env::temp_dir().join("owl-track-checkpoint.wav");
+        let (mut producer, consumer) = rtrb::RingBuffer::new(32_000);
+        let mut track = Track::new(SAMPLE_RATE as u32, consumer, &path).unwrap();
+        for _ in 0..SAMPLE_RATE {
+            producer.push(0.1).unwrap();
+        }
+        track.saved -= Duration::from_secs(10);
+        track.drain();
+        std::mem::forget(track); // as if Owl quit mid-meeting
+        assert!(read_wav_samples(&path).unwrap().len() > SAMPLE_RATE * 9 / 10);
     }
 
     /// Real devices: `cargo test --lib records_both_tracks -- --ignored`.

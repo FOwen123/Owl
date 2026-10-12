@@ -22,7 +22,10 @@ pub fn stop_meeting(meetings: State<Arc<MeetingManager>>) -> Result<(), String> 
 
 #[tauri::command]
 #[specta::specta]
-pub fn get_meetings(meetings: State<Arc<MeetingManager>>) -> Result<Vec<Meeting>, String> {
+/// Async, so reading every meeting never blocks the main thread.
+pub async fn get_meetings(
+    meetings: State<'_, Arc<MeetingManager>>,
+) -> Result<Vec<Meeting>, String> {
     meetings.list().map_err(|e| e.to_string())
 }
 

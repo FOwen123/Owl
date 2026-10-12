@@ -4,7 +4,32 @@
 use clap::Parser;
 use handy_app_lib::CliArgs;
 
+/// Owl: launched through the `owl` link, run the real binary instead. Tauri
+/// won't resolve the app's resources (speech detection, echo removal) from a
+/// symlinked executable path. The second launch has its real path, so this
+/// happens once.
+#[cfg(unix)]
+fn run_from_real_path() {
+    use std::os::unix::process::CommandExt;
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let Ok(real) = exe.canonicalize() else {
+        return;
+    };
+    if real != exe {
+        let error = std::process::Command::new(&real)
+            .args(std::env::args_os().skip(1))
+            .exec();
+        eprintln!("error: couldn't run {}: {error}", real.display());
+        std::process::exit(1);
+    }
+}
+
 fn main() {
+    #[cfg(unix)]
+    run_from_real_path();
+
     #[cfg(target_os = "linux")]
     {
         // DMABUF renderer causes crashes on various GPU/display server configurations

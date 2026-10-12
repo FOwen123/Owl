@@ -30,6 +30,14 @@ const settings: Record<string, unknown> = {
     { trigger: "我的地址", text: "台北市信義區市府路 1 號" },
   ],
   replacements: [{ from: "cloud code", to: "Claude Code" }],
+  meeting_template: "general",
+  meeting_templates: [
+    {
+      id: "own-1",
+      name: "Sales call",
+      prompt: "### Customer needs, ### Objections, ### Next Steps",
+    },
+  ],
   learn_from_edits: true,
   cleanup_level: "light",
   post_process_enabled: true,
@@ -87,6 +95,8 @@ const responses: Record<string, unknown> = {
       status: "ready",
       summary:
         "<@speaker:1> and you agreed to ship the beta on Friday.\n\n### Launch\n- <@speaker:2> says QA has 12 open bugs.",
+      title: "Beta launch plan",
+      template: "general",
       speaker_names: { 1: "Harry" },
       summarizing: false,
       error: null,
@@ -113,6 +123,18 @@ const responses: Record<string, unknown> = {
     },
   ],
   speaker_model_installed: false,
+  get_summary_options: {
+    built_in_templates: [
+      "general",
+      "one_on_one",
+      "interview",
+      "standup",
+      "lecture",
+    ],
+    providers: [
+      { id: "openrouter", label: "OpenRouter", model: "deepseek-v4-flash" },
+    ],
+  },
   get_secure_input_status: { active: false },
   is_update_checks_locked: true,
   is_portable: false,

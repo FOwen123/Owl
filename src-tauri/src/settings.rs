@@ -100,6 +100,15 @@ pub struct Replacement {
     pub to: String,
 }
 
+/// Owl: a meeting-notes template the user wrote; the built-ins live in
+/// `managers/meeting.rs`. `prompt` says what the notes should contain.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+pub struct MeetingTemplate {
+    pub id: String,
+    pub name: String,
+    pub prompt: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
 pub struct LLMPrompt {
     pub id: String,
@@ -469,6 +478,13 @@ pub struct AppSettings {
     pub snippets: Vec<Snippet>,
     #[serde(default)]
     pub replacements: Vec<Replacement>,
+    /// Owl: the user's meeting-notes templates.
+    #[serde(default)]
+    pub meeting_templates: Vec<MeetingTemplate>,
+    /// Owl: the template new meeting notes use (a built-in id or one of the
+    /// user's).
+    #[serde(default = "default_meeting_template")]
+    pub meeting_template: String,
     /// Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
     #[serde(default = "default_learn_from_edits")]
     pub learn_from_edits: bool,
@@ -692,6 +708,10 @@ fn default_sound_theme() -> SoundTheme {
 }
 
 /// Owl: dark by default. A theme the user already saved is kept.
+fn default_meeting_template() -> String {
+    "general".to_string()
+}
+
 fn default_learn_from_edits() -> bool {
     true
 }
@@ -1006,6 +1026,8 @@ pub fn get_default_settings() -> AppSettings {
         custom_words: Vec::new(),
         snippets: Vec::new(),
         replacements: Vec::new(),
+        meeting_templates: Vec::new(),
+        meeting_template: default_meeting_template(),
         learn_from_edits: default_learn_from_edits(),
         cleanup_level: CleanupLevel::default(),
         voice_commands_enabled: false,

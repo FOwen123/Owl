@@ -966,9 +966,9 @@ async deleteMeeting(id: number) : Promise<Result<null, string>> {
 /**
  * Summarizes with the AI provider set up for post-processing.
  */
-async summarizeMeeting(id: number) : Promise<Result<string, string>> {
+async summarizeMeeting(id: number, template: string | null, provider: string | null) : Promise<Result<string, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("summarize_meeting", { id }) };
+    return { status: "ok", data: await TAURI_INVOKE("summarize_meeting", { id, template, provider }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -977,6 +977,41 @@ async summarizeMeeting(id: number) : Promise<Result<string, string>> {
 async renameSpeaker(id: number, voice: number, name: string) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("rename_speaker", { id, voice, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getSummaryOptions() : Promise<SummaryOptions> {
+    return await TAURI_INVOKE("get_summary_options");
+},
+async renameMeeting(id: number, title: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rename_meeting", { id, title }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async retranscribeMeeting(id: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("retranscribe_meeting", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateMeetingTemplates(templates: MeetingTemplate[]) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_meeting_templates", { templates }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeMeetingTemplateSetting(template: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_meeting_template_setting", { template }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1091,6 +1126,15 @@ whats_new_last_seen_version?: string; selected_model?: string; onboarding_comple
  */
 selected_channel?: number | null; clamshell_microphone?: string | null; selected_output_device?: string | null; translate_to_english?: boolean; selected_language?: string; overlay_position?: OverlayPosition; debug_mode?: boolean; log_level?: LogLevel; custom_words?: string[]; snippets?: Snippet[]; replacements?: Replacement[]; 
 /**
+ * Owl: the user's meeting-notes templates.
+ */
+meeting_templates?: MeetingTemplate[]; 
+/**
+ * Owl: the template new meeting notes use (a built-in id or one of the
+ * user's).
+ */
+meeting_template?: string; 
+/**
  * Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
  */
 learn_from_edits?: boolean; 
@@ -1190,6 +1234,14 @@ export type LLMPrompt = { id: string; name: string; prompt: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type Meeting = { id: number; 
 /**
+ * Written by the AI with the first notes, or by the user.
+ */
+title: string | null; 
+/**
+ * The template the notes were written with.
+ */
+template: string | null; 
+/**
  * Unix milliseconds.
  */
 started_at: number; duration_ms: number; status: MeetingStatus; transcript: TranscriptLine[]; summary: string | null; 
@@ -1207,6 +1259,11 @@ summarizing: boolean;
  */
 error: string | null }
 export type MeetingStatus = "recording" | "transcribing" | "ready" | "failed"
+/**
+ * Owl: a meeting-notes template the user wrote; the built-ins live in
+ * `managers/meeting.rs`. `prompt` says what the notes should contain.
+ */
+export type MeetingTemplate = { id: string; name: string; prompt: string }
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; is_directory: boolean; engine_type: EngineType; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
 /**
@@ -1350,6 +1407,15 @@ export type StreamTextEvent = { committed: string; tentative: string }
  * Semantic kind of "working" phase, used to localize the spinner label.
  */
 export type StreamWorkKind = "transcribing" | "polishing"
+/**
+ * What the notes can be written with: the built-in template ids (named in
+ * the UI) and the AIs that are set up.
+ */
+export type SummaryOptions = { built_in_templates: string[]; providers: SummaryProvider[] }
+/**
+ * An AI that can write meeting notes: a Post Process provider with a model.
+ */
+export type SummaryProvider = { id: string; label: string; model: string }
 /**
  * UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
  * and `Dark` force one of the two palettes Handy already ships.

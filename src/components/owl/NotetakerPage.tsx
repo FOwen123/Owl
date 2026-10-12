@@ -509,6 +509,11 @@ const MeetingDetail: React.FC<{
             : meeting.error}
         </Alert>
       )}
+      {meeting.status === "ready" &&
+        meeting.error &&
+        !["system_audio_missing", "mic_failed"].includes(meeting.error) && (
+          <Alert variant="warning">{meeting.error}</Alert>
+        )}
       {meeting.error === "system_audio_missing" && (
         <Alert variant="warning">{t("owl.notetaker.systemAudioMissing")}</Alert>
       )}

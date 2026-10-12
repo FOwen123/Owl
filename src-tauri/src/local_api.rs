@@ -6,14 +6,17 @@ use crate::managers::meeting::MeetingManager;
 use crate::settings::{get_settings, write_settings, Secret};
 use anyhow::{anyhow, Result};
 use std::io::Read;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager};
 use tiny_http::{Header, Request, Response, Server};
 
 pub const PORT: u16 = 8723;
-/// Bigger uploads are refused before they're read (about 4 h of compressed audio).
-const MAX_UPLOAD: usize = 500 * 1024 * 1024;
+/// Bigger uploads are refused before they're read (OpenAI's limit too).
+const MAX_UPLOAD: usize = 25 * 1024 * 1024;
+/// Longer audio is refused while it's decoded.
+const MAX_SECONDS: usize = 60 * 60;
 
 static SERVER: Mutex<Option<Arc<Server>>> = Mutex::new(None);
 
@@ -42,10 +45,11 @@ pub fn sync(app: &AppHandle) -> Result<()> {
     *running = Some(server.clone());
     let app = app.clone();
     std::thread::spawn(move || {
+        // One request at a time, so uploads and decoded audio never pile up.
         for request in server.incoming_requests() {
-            let app = app.clone();
-            // Transcribing takes a while; other requests needn't wait.
-            std::thread::spawn(move || answer(&app, request));
+            if catch_unwind(AssertUnwindSafe(|| answer(&app, request))).is_err() {
+                log::error!("Local API: a request crashed");
+            }
         }
     });
     Ok(())
@@ -63,7 +67,8 @@ fn new_token() -> Result<String> {
 fn answer(app: &AppHandle, request: Request) {
     let token = get_settings(app).local_api_token.0;
     serve(request, &token, &|path| {
-        app.state::<Arc<MeetingManager>>().transcribe_file(path)
+        app.state::<Arc<MeetingManager>>()
+            .transcribe_file(path, MAX_SECONDS)
     });
 }
 
@@ -136,9 +141,20 @@ fn respond(
         .iter()
         .find(|p| p.name == "file")
         .ok_or((400, "No `file` field".to_string()))?;
-    let as_text = parts
+    let format = parts
         .iter()
-        .any(|p| p.name == "response_format" && p.data == b"text");
+        .find(|p| p.name == "response_format")
+        .map(|p| String::from_utf8_lossy(p.data).trim().to_string());
+    let as_text = match format.as_deref() {
+        None | Some("json") => false,
+        Some("text") => true,
+        Some(other) => {
+            return Err((
+                400,
+                format!("response_format `{other}` isn't supported; use json or text"),
+            ))
+        }
+    };
 
     // Keep the extension: it's how the decoder recognises the format.
     let extension = file
@@ -151,10 +167,12 @@ fn respond(
     let name = new_token().map_err(|e| (500, e.to_string()))?;
     let upload = std::env::temp_dir().join(format!("owl-api-{name}.{extension}"));
     std::fs::write(&upload, file.data).map_err(|e| (500, e.to_string()))?;
-    let result = transcribe(&upload);
+    let result = catch_unwind(AssertUnwindSafe(|| transcribe(&upload)))
+        .unwrap_or_else(|_| Err(anyhow!("Transcribing crashed")));
     let _ = std::fs::remove_file(&upload);
     let text = result.map_err(|e| match e.to_string().as_str() {
         crate::media::UNSUPPORTED => (400, "This audio format isn't supported".to_string()),
+        crate::media::TOO_LONG => (413, "Send at most an hour of audio".to_string()),
         message => (500, message.to_string()),
     })?;
     Ok((text, as_text))
@@ -189,14 +207,16 @@ struct Part<'a> {
 
 /// The fields of a multipart/form-data body.
 fn parts<'a>(body: &'a [u8], boundary: &str) -> Vec<Part<'a>> {
-    let delimiter = format!("--{boundary}");
+    let first = format!("--{boundary}");
+    // Later delimiters start a line, so `--boundary` inside a file isn't one.
+    let delimiter = format!("\r\n--{boundary}");
     let delimiter = delimiter.as_bytes();
     let mut out = Vec::new();
-    let mut rest = match find(body, delimiter) {
-        Some(i) => &body[i + delimiter.len()..],
+    let mut rest = match find(body, first.as_bytes()) {
+        Some(i) => &body[i + first.len()..],
         None => return out,
     };
-    // Each part: CRLF, headers, CRLF CRLF, data, CRLF, delimiter.
+    // Each part: CRLF, headers, CRLF CRLF, data, then CRLF and the delimiter.
     while !rest.starts_with(b"--") {
         let Some(part) = rest.strip_prefix(b"\r\n") else {
             break;
@@ -215,7 +235,6 @@ fn parts<'a>(body: &'a [u8], boundary: &str) -> Vec<Part<'a>> {
             .find(|l| l.to_ascii_lowercase().starts_with("content-disposition:"))
             .unwrap_or_default();
         let data = &chunk[split + 4..];
-        let data = data.strip_suffix(b"\r\n").unwrap_or(data);
         let field = |key: &str| {
             disposition
                 .split(';')
@@ -244,7 +263,7 @@ mod tests {
     #[test]
     fn multipart_fields_and_files_are_read() {
         let body = b"--XyZ\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n\
---XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n\x00\x01\r\n\x02\r\n\
+--XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n\x00\x01\r\nab--XyZ\x02\r\n\
 --XyZ--\r\n";
         let found = parts(body, "XyZ");
         assert_eq!(found.len(), 2);
@@ -253,7 +272,7 @@ mod tests {
             ("model", &b"whisper-1"[..])
         );
         assert_eq!(found[1].filename.as_deref(), Some("a.m4a"));
-        assert_eq!(found[1].data, b"\x00\x01\r\n\x02");
+        assert_eq!(found[1].data, b"\x00\x01\r\nab--XyZ\x02");
     }
 
     #[test]
@@ -292,6 +311,7 @@ Content-Length: {}\r\n\r\n{body}",
         assert!(json.starts_with("HTTP/1.1 200"), "{json}");
         assert!(json.ends_with(r#"{"text":"3 bytes"}"#), "{json}");
         assert!(post("Bearer owl_t", "text").ends_with("\r\n\r\n3 bytes"));
+        assert!(post("Bearer owl_t", "srt").starts_with("HTTP/1.1 400"));
     }
 
     #[test]

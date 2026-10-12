@@ -819,6 +819,25 @@
         "download": "下載（139 MB）",
         "downloading": "正在下載… {{percent}}%"
       },
+      "notes": "筆記",
+      "more": "更多",
+      "retranscribe": "重新轉寫",
+      "rename": "重新命名",
+      "templates": {
+        "title": "筆記範本",
+        "description": "會議筆記包含的內容。",
+        "default": "預設範本",
+        "general": "一般",
+        "one_on_one": "一對一",
+        "interview": "面試",
+        "standup": "站會",
+        "lecture": "講座",
+        "add": "新增範本",
+        "name": "名稱",
+        "prompt": "筆記應包含的內容",
+        "remove": "刪除",
+        "untitled": "我的範本"
+      },
       "speaker": {
         "you": "你",
         "others": "其他人"

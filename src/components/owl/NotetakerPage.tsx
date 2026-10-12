@@ -510,7 +510,9 @@ const MeetingDetail: React.FC<{
         <Alert variant="error">
           {meeting.error === "too_long"
             ? t("owl.notetaker.importTooLong")
-            : meeting.error}
+            : meeting.error === "unsupported_format"
+              ? t("owl.notetaker.unsupportedFormat")
+              : meeting.error}
         </Alert>
       )}
       {meeting.status === "ready" &&

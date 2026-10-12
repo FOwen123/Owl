@@ -546,7 +546,7 @@ pub struct AppSettings {
     pub filler_word_removal_enabled: bool,
     #[serde(default)]
     pub custom_filler_words: Option<Vec<String>>,
-    /// Fresh installs default from the OS locale; existing stores are migrated
+    /// Fresh installs default from the OS locale, else Traditional; existing stores are migrated
     /// in `apply_settings_migrations`.
     #[serde(default)]
     pub chinese_script: ChineseScript,
@@ -648,7 +648,7 @@ fn default_filler_word_removal_enabled() -> bool {
 fn default_chinese_script() -> ChineseScript {
     tauri_plugin_os::locale()
         .and_then(|locale| crate::chinese_script::chinese_script_for_locale(&locale))
-        .unwrap_or_default()
+        .unwrap_or(ChineseScript::Traditional)
 }
 
 fn default_debug_mode() -> bool {

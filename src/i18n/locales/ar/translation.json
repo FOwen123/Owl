@@ -1,7 +1,7 @@
 {
   "tray": {
-    "settings": "...الإعدادات",
-    "checkUpdates": "...التحقق من وجود تحديثات",
+    "settings": "الإعدادات...",
+    "checkUpdates": "التحقق من وجود تحديثات...",
     "copyLastTranscript": "نسخ آخر نص تم تفريغه",
     "unloadModel": "تفريغ النموذج",
     "model": "النموذج",
@@ -127,7 +127,7 @@
       },
       "grant": "منح الإذن",
       "granted": "تم المنح",
-      "waiting": "...في الانتظار",
+      "waiting": "في الانتظار...",
       "allGranted": "كل شيء جاهز!",
       "errors": {
         "checkFailed": "فشل التحقق من الأذونات. يرجير المحاولة مرة أخرى.",
@@ -142,14 +142,14 @@
     "noModelsAvailable": "لا توجد نماذج متاحة",
     "verifying": "جارٍ التحقق من {{modelName}}...",
     "verifyingGeneric": "جارٍ التحقق...",
-    "extracting": "...جاري استخراج {{modelName}}",
-    "extractingMultiple": "...جاري استخراج {{count}} من النماذج",
-    "extractingGeneric": "...جاري الاستخراج",
+    "extracting": "جاري استخراج {{modelName}}...",
+    "extractingMultiple": "جاري استخراج {{count}} من النماذج...",
+    "extractingGeneric": "جاري الاستخراج...",
     "downloading": "جاري التنزيل {{percentage}}%",
     "downloadingMultiple": "جاري تنزيل {{count}} من النماذج...",
     "modelReady": "النموذج جاهز",
-    "loading": "...جاري تحميل {{modelName}}",
-    "loadingGeneric": "...جاري التحميل",
+    "loading": "جاري تحميل {{modelName}}...",
+    "loadingGeneric": "جاري التحميل...",
     "modelError": "خطأ في النموذج",
     "modelUnloaded": "تم إلغاء تحميل النموذج",
     "noModelDownloadRequired": "لا يوجد نموذج - التنزيل مطلوب",
@@ -175,10 +175,10 @@
       "shortcut": {
         "title": "اختصارات Owl",
         "description": "إعداد اختصارات لوحة المفاتيح لبدء تسجيل التفريغ الصوتي",
-        "loading": "...جاري تحميل الاختصارات",
+        "loading": "جاري تحميل الاختصارات...",
         "none": "لا توجد اختصارات مجهزة",
         "notFound": "الاختصار غير موجود",
-        "pressKeys": "...اضغط على المفاتيح",
+        "pressKeys": "اضغط على المفاتيح...",
         "bindings": {
           "transcribe": {
             "name": "اختصار التفريغ الصوتي",
@@ -226,8 +226,8 @@
       "microphone": {
         "title": "الميكروفون",
         "description": "اختر جهاز الميكروفون المفضل لديك",
-        "placeholder": "...اختر الميكروفون",
-        "loading": "...جاري التحميل"
+        "placeholder": "اختر الميكروفون...",
+        "loading": "جاري التحميل..."
       },
       "channel": {
         "title": "قناة الإدخال",
@@ -242,8 +242,8 @@
       "outputDevice": {
         "title": "جهاز الإخراج",
         "description": "اختر جهاز إخراج الصوت المفضل لتنبيهات الصوت",
-        "placeholder": "...اختر جهاز الإخراج",
-        "loading": "...جاري التحميل"
+        "placeholder": "اختر جهاز الإخراج...",
+        "loading": "جاري التحميل..."
       },
       "volume": {
         "title": "مستوى الصوت",
@@ -458,7 +458,7 @@
     "history": {
       "title": "السجل",
       "openFolder": "فتح مجلد التسجيلات",
-      "loading": "...جاري تحميل السجل",
+      "loading": "جاري تحميل السجل...",
       "empty": "!لا يوجد تفريغ صوتي بعد. ابدأ التسجيل لبناء سجلك",
       "copyToClipboard": "نسخ التفريغ إلى الحافظة",
       "copyError": "تعذر نسخ التفريغ إلى الحافظة.",
@@ -683,13 +683,13 @@
     }
   },
   "footer": {
-    "checkingUpdates": "...جاري التحقق من وجود تحديثات",
+    "checkingUpdates": "جاري التحقق من وجود تحديثات...",
     "updateAvailableShort": "تحديث متاح",
     "upToDate": "محدث",
     "updateCheckingDisabled": "تم تعطيل التحقق من التحديث",
-    "downloading": "...جاري التنزيل {{progress}}%",
-    "installing": "...جاري التثبيت",
-    "preparing": "...جاري التحضير",
+    "downloading": "جاري التنزيل {{progress}}%...",
+    "installing": "جاري التثبيت...",
+    "preparing": "جاري التحضير...",
     "checkForUpdates": "التحقق من وجود تحديثات",
     "portableUpdateTitle": "التحديث اليدوي مطلوب",
     "portableUpdateMessage": "لا يمكن تحديث التثبيتات المحمولة تلقائيًا. نزّل المثبّت المناسب لنظامك من الزر أدناه، شغّله، وثبّته في المجلد نفسه — يبقى مجلد Data/ (الإعدادات والنماذج والتسجيلات) في مكانه.",
@@ -698,7 +698,7 @@
     "portableUpdateBrowseButton": "فتح GitHub Releases"
   },
   "common": {
-    "loading": "...جاري التحميل",
+    "loading": "جاري التحميل...",
     "delete": "حذف",
     "close": "إغلاق",
     "open": "فتح",
@@ -746,7 +746,10 @@
     "processing": "...جاري المعالجة",
     "addingToDictionary": "Adding to dictionary",
     "addedToDictionary": "Added to dictionary",
-    "dontAdd": "Don't add"
+    "dontAdd": "Don't add",
+    "transcribing": "جاري التفريغ...",
+    "processing": "جاري المعالجة...",
+    "loadingModel": "جارٍ تحميل النموذج..."
   },
   "whatsNew": {
     "title": "الجديد في Owl v{{version}}"
@@ -809,6 +812,7 @@
       "copy": "Copy transcript",
       "copied": "Transcript copied",
       "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "micFailed": "The microphone stopped during the meeting, so part of it may be missing.",
       "speaker": {
         "you": "You",
         "others": "Others"

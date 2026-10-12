@@ -148,14 +148,14 @@ What each item does and when it's done: [docs/prd-meeting-pipeline.md](docs/prd-
 
 Like Glimpse and Muesli, but local-first and in Owl's shape. **Platform rule:** Mac first, but pick parts that also run on Windows (transcribe.cpp or ONNX, not CoreML/FluidAudio); keep Mac-only code in small files. **Open** = how to build it hasn't been decided yet.
 
-**Speaker labels** (branch `feat/meeting-speakers`, worktree `../Owl-speakers`)
+**Speaker labels** (built on branch `feat/meeting-pipeline`, worktree `../Owl-speakers`)
 
-- [ ] Merge Handy's latest `main` first (decided: merge, not rebuild; 10 commits since 2026-10-05): transcribe.cpp 0.4.0 (#2265; Owl has 16 compile errors on 0.4.0 without it), transcription in its own worker (#2208), model-loading status (#2227), mic capture moved to the `handy-recorder` crate (#2188), transcribe.cpp's own VAD (#2267). Trial merge: 33 conflicting files, 26 of them translations and 5 docs Owl changed; the real work is `audio_toolkit/audio/mod.rs`, `lib.rs`, and Owl's meeting recorder, which uses `cpal`, `rtrb` and `FrameResampler` that Handy removed. The meeting mic moves to `handy-recorder` (decided: reports lost audio and unplugged mics, gives 30 ms pieces for speech detection); system capture keeps `rtrb`
-- [ ] Meetings use transcribe.cpp's speech detection (Silero) instead of the loudness check, so quiet speakers aren't dropped (decided)
-- [ ] Engine first: Sortformer v2.1 on upstream transcribe.cpp 0.4.0 (4 speakers, 80% agreement on the 12 Oct meeting, 1 speaker correctly found on the call track), no fork (decided: build on it now, swap in Nemotron 3 later)
-- [ ] Split only the call-audio track into Speaker 1..N; the mic stays "You". Cut the audio where the speaker changes, so each line has one speaker
-- [ ] Store a speaker number per line (old meetings still open); click a speaker to rename them for the whole meeting. The summary uses placeholders (`<@speaker:2>`, like Wispr Flow) that Owl fills in, so a rename updates it without a new AI call
-- [ ] Speaker model download: one "Download speaker labels" button on the Notetaker page, no model picker. Sortformer v2.1 (139 MB) comes from the existing `handy-computer/diar_streaming_sortformer_4spk-v2.1-gguf` repo; the Nemotron 3 file Owl makes later goes on `owl-dictation`. Listed like Glimpse does: full `huggingface.co/<org>/<repo>/resolve/<revision>/<file>` URL, size and SHA-256
+- [x] Merge Handy's latest `main` first (decided: merge, not rebuild; 10 commits since 2026-10-05): transcribe.cpp 0.4.0 (#2265; Owl has 16 compile errors on 0.4.0 without it), transcription in its own worker (#2208), model-loading status (#2227), mic capture moved to the `handy-recorder` crate (#2188), transcribe.cpp's own VAD (#2267). Trial merge: 33 conflicting files, 26 of them translations and 5 docs Owl changed; the real work is `audio_toolkit/audio/mod.rs`, `lib.rs`, and Owl's meeting recorder, which uses `cpal`, `rtrb` and `FrameResampler` that Handy removed. The meeting mic moves to `handy-recorder` (decided: reports lost audio and unplugged mics, gives 30 ms pieces for speech detection); system capture keeps `rtrb`
+- [x] Meetings use transcribe.cpp's speech detection (Silero) instead of the loudness check, so quiet speakers aren't dropped (decided)
+- [x] Engine first: Sortformer v2.1 on upstream transcribe.cpp 0.4.0 (4 speakers, 80% agreement on the 12 Oct meeting, 1 speaker correctly found on the call track), no fork (decided: build on it now, swap in Nemotron 3 later). Built: it runs in its own process (`owl --owl-diarize`), since transcribe.cpp's engine worker only opens speech sessions
+- [x] Split only the call-audio track into Speaker 1..N; the mic stays "You". Cut the audio where the speaker changes, so each line has one speaker
+- [x] Store a speaker number per line (old meetings still open); click a speaker to rename them for the whole meeting. The summary uses placeholders (`<@speaker:2>`, like Wispr Flow) that Owl fills in, so a rename updates it without a new AI call
+- [x] Speaker model download: one "Download speaker labels" button on the Notetaker page, no model picker. Sortformer v2.1 (139 MB) comes from the existing `handy-computer/diar_streaming_sortformer_4spk-v2.1-gguf` repo; the Nemotron 3 file Owl makes later goes on `owl-dictation`. Listed like Glimpse does: full `huggingface.co/<org>/<repo>/resolve/<revision>/<file>` URL, size and SHA-256
 - [ ] Later: the AI suggests names from the conversation ("thanks, Harry") and macOS Calendar attendees; I confirm
 - Not doing: remembering voices across meetings (privacy)
 
@@ -170,32 +170,32 @@ Like Glimpse and Muesli, but local-first and in Owl's shape. **Platform rule:** 
 
 **Notes**
 
-- [ ] Auto titles: the AI writes the title in the same call as the summary, saved in a new `title` column and shown in the meeting list. Without an AI the title stays the date. Titles can be edited by hand
-- [ ] Meeting page layout (decided): list rows show title, date, duration and the summary's first line; Import audio and Start meeting at the top. The meeting page has a back link, Export menu (Markdown, text, SRT, VTT), and a ⋯ menu (Re-transcribe, Delete); an editable title; date, duration and speaker chips (click to rename); Notes with the template dropdown and Summarize again; the transcript with Copy at the bottom. While recording, the live transcript fills the page with Stop
-- [ ] Templates: built-ins General (today's notes), 1:1, Interview, Stand-up, Lecture, plus my own, edited on the Notetaker page. Pick one from a dropdown next to "Summarize again"; a default in Notetaker settings. Keep the UI clean
-- [ ] After building the meeting pages, export the design to Paper, so later changes are made in Paper first and then implemented
-- [ ] Re-summarize with another template or AI model (the "Summarize again" button gets a picker)
-- [ ] Re-transcribe a saved meeting from its kept audio, so new dictionary words and a better model apply (Muesli has this)
+- [x] Auto titles: the AI writes the title in the same call as the summary, saved in a new `title` column and shown in the meeting list. Without an AI the title stays the date. Titles can be edited by hand
+- [x] Meeting page layout (decided): list rows show title, date, duration and the summary's first line; Import audio and Start meeting at the top. The meeting page has a back link, Export menu (Markdown, text, SRT, VTT), and a ⋯ menu (Re-transcribe, Delete); an editable title; date, duration and speaker chips (click to rename); Notes with the template dropdown and Summarize again; the transcript with Copy at the bottom. While recording, the live transcript fills the page with Stop
+- [x] Templates: built-ins General (today's notes), 1:1, Interview, Stand-up, Lecture, plus my own, edited on the Notetaker page. Pick one from a dropdown next to "Summarize again"; a default in Notetaker settings. Keep the UI clean
+- [x] After building the meeting pages, export the design to Paper, so later changes are made in Paper first and then implemented
+- [x] Re-summarize with another template or AI model (the "Summarize again" button gets a picker)
+- [x] Re-transcribe a saved meeting from its kept audio, so new dictionary words and a better model apply (Muesli has this)
 
 **Echo removal** (only matters without earphones)
 
-- [ ] Test first: record one call on laptop speakers, count "You" lines that repeat the other side
-- [ ] Remove the speakers' sound from the mic with **LocalVQE v1.4-AEC** (decided: echo only, 3 MB, Apache-2.0, model from `LocalAI-io/LocalVQE`; Muesli uses it), with the call audio as the reference. Also test v1.2 (echo + noise, Muesli's choice) on the same recording. It ships its own copy of ggml, so build it as a separate library to avoid clashing with transcribe.cpp's. Bundled inside the app (decided). Runs live, before each stretch of speech is transcribed, since live lines are final (decided); the raw `mic.wav` is kept so Re-transcribe can redo it
+- [ ] Test on a real call: record one on laptop speakers, count "You" lines that repeat the other side (only the synthetic test has been run)
+- [x] Remove the speakers' sound from the mic with **LocalVQE v1.4-AEC** (decided: echo only, 3 MB, Apache-2.0, model from `LocalAI-io/LocalVQE`; Muesli uses it), with the call audio as the reference. Also test v1.2 (echo + noise, Muesli's choice) on the same recording. It ships its own copy of ggml, so build it as a separate library to avoid clashing with transcribe.cpp's. Bundled inside the app (decided). Runs live, before each stretch of speech is transcribed, since live lines are final (decided); the raw `mic.wav` is kept so Re-transcribe can redo it. Built and tested on a synthetic call (v1.4: 65 dB echo removed, v1.2: 63 dB; the cleaned mic transcribed exactly). Built CPU-only by `scripts/build_localvqe.sh`
 
 **Live transcript**
 
-- [ ] Show the transcript while the meeting runs (decided): each stretch of speech is transcribed as soon as it ends, with the local model, and that text is final. After the meeting Owl only adds speaker labels and joins neighbouring lines from the same speaker. Wispr Flow instead shows Soniox's live lines and replaces them with a second, cloud pass; Owl would run the same model twice. The manual "Re-transcribe" covers switching to a better model
+- [x] Show the transcript while the meeting runs (decided): each stretch of speech is transcribed as soon as it ends, with the local model, and that text is final. After the meeting Owl only adds speaker labels and joins neighbouring lines from the same speaker. Wispr Flow instead shows Soniox's live lines and replaces them with a second, cloud pass; Owl would run the same model twice. The manual "Re-transcribe" covers switching to a better model
 
 **Import and export**
 
-- [ ] Import audio or video into the meeting list: one track, so all of it goes through speaker labels. Decoder: `symphonia` (decided; pure Rust, Mac and Windows, already in Owl through `rodio`): mp3, m4a/AAC, wav, flac, ogg/Vorbis, and the audio inside mp4/mov. It can't decode Opus (WebM, `.opus`, WhatsApp voice notes), so say so plainly for those files
-- [ ] Export a meeting as Markdown, plain text, SRT or VTT subtitles (decided: plain text formatting, no library). Subtitles need each line's end time, so store `end_ms` too. PDF later
+- [x] Import audio or video into the meeting list: one track, so all of it goes through speaker labels. Decoder: `symphonia` (decided; pure Rust, Mac and Windows, already in Owl through `rodio`): mp3, m4a/AAC, wav, flac, ogg/Vorbis, and the audio inside mp4/mov. It can't decode Opus (WebM, `.opus`, WhatsApp voice notes), so say so plainly for those files
+- [x] Export a meeting as Markdown, plain text, SRT or VTT subtitles (decided: plain text formatting, no library). Subtitles need each line's end time, so store `end_ms` too. PDF later
 
 **Outside access**
 
-- [ ] CLI: `owl meetings`, `owl meeting <id> --notes|--transcript`, `owl transcribe <file>` (Handy already has CLI flags in `cli.rs`)
-- [ ] Local API: an OpenAI-compatible `/v1/audio/transcriptions`, off by default, only reachable from this Mac, needs a token
-- [ ] AI-agent access: `owl mcp`, a read-only MCP server so Claude Code and others can search and read meetings and dictations (Glimpse has this); no starting or deleting
+- [x] CLI: `owl meetings`, `owl meeting <id> --notes|--transcript`, `owl transcribe <file>` (Handy already has CLI flags in `cli.rs`). Install from Advanced → Other apps
+- [x] Local API: an OpenAI-compatible `/v1/audio/transcriptions`, off by default, only reachable from this Mac, needs a token. Port 8723, token in Advanced → Other apps
+- [x] AI-agent access: `owl mcp`, a read-only MCP server so Claude Code and others can search and read meetings and dictations (Glimpse has this); no starting or deleting. Tested with Claude Code: `claude mcp add owl -- owl mcp`
 
 **Calendar** (later, after the rest of this phase)
 
@@ -203,8 +203,8 @@ Like Glimpse and Muesli, but local-first and in Owl's shape. **Platform rule:** 
 
 ## Phase 5: Dictation extras
 
-- [ ] Edit by voice, like Wispr Flow's Command Mode (decided): its own shortcut, Option+Shift+Space (decided; Wispr's default is Fn + Ctrl). That key was Handy's "Transcribe with Post-Processing"; that action stays in Settings with no key assigned (decided). Select text, hold the shortcut, say what to change ("make this shorter", 「翻成英文」), release: the Post Process AI's answer replaces the selection. Esc cancels. With nothing selected, the answer is written at the cursor. Undo is the app's own Cmd+Z
-- [ ] Auto dictionary, like Glimpse's and Wispr Flow's: when I correct a pasted word into a name, brand or acronym, add that word to the Dictionary's **Words** list (decided), as well as the replacement pair Phase 3b learns, so the model spells it right however it mishears it next time. Asks with the existing card (decided). Note: Nemotron 3.5 takes no vocabulary hints (only Whisper, Qwen3-ASR, FunASR-Nano, Granite and MOSS do), so for it Words work through the fix-up after transcription and the summary's spelling list
+- [x] Edit by voice, like Wispr Flow's Command Mode (decided): its own shortcut, Option+Shift+Space (decided; Wispr's default is Fn + Ctrl). That key was Handy's "Transcribe with Post-Processing"; that action stays in Settings with no key assigned (decided). Select text, hold the shortcut, say what to change ("make this shorter", 「翻成英文」), release: the Post Process AI's answer replaces the selection. Esc cancels. With nothing selected, the answer is written at the cursor. Undo is the app's own Cmd+Z. Built: Owl had already hidden Handy's post-processing key (Post Process runs on the normal shortcut), so it keeps no key and stays hidden. The selection is read through Accessibility, with Cmd+C for apps that hide it
+- [x] Auto dictionary, like Glimpse's and Wispr Flow's: when I correct a pasted word into a name, brand or acronym, add that word to the Dictionary's **Words** list (decided), as well as the replacement pair Phase 3b learns, so the model spells it right however it mishears it next time. Asks with the existing card (decided). Note: Nemotron 3.5 takes no vocabulary hints (only Whisper, Qwen3-ASR, FunASR-Nano, Granite and MOSS do), so for it Words work through the fix-up after transcription and the summary's spelling list. Built, including capital-only fixes ("depick" → "Depick")
 
 ## Phase 6: Before open-sourcing (last)
 

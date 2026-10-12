@@ -191,6 +191,36 @@ function App() {
     };
   }, []);
 
+  // Owl: Edit by voice without an AI asks for one, as Summarize does.
+  useEffect(() => {
+    const unlisten = listen("edit-needs-ai", () => {
+      toast(t("owl.notetaker.summaryNeedsProvider"), {
+        action: {
+          label: t("owl.notetaker.setUpAi"),
+          onClick: () => setCurrentSection("postprocessing"),
+        },
+      });
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [t]);
+
+  // Owl: Edit by voice only changes text it can see and that's still selected.
+  useEffect(() => {
+    const unlisteners = [
+      listen("edit-cant-see-text", () =>
+        toast.error(t("owl.editByVoice.cantSeeText")),
+      ),
+      listen("edit-not-pasted", () =>
+        toast.error(t("owl.editByVoice.selectionChanged")),
+      ),
+    ];
+    return () => {
+      unlisteners.forEach((u) => u.then((fn) => fn()));
+    };
+  }, [t]);
+
   // Listen for transcription failures and show a toast.
   // The payload is the backend error message (also logged to handy.log).
   useEffect(() => {

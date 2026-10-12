@@ -202,10 +202,15 @@
         "none": "未配置快捷键",
         "notFound": "未找到快捷键",
         "pressKeys": "请按键...",
+        "notSet": "未设置",
         "bindings": {
           "transcribe": {
             "name": "转录快捷键",
             "description": "用于录制和转录语音的键盘快捷键。"
+          },
+          "edit_by_voice": {
+            "name": "语音编辑",
+            "description": "改写选中的文字，或写出你要的内容。"
           },
           "cancel": {
             "name": "取消快捷键",
@@ -279,11 +284,34 @@
         "output": "输出",
         "transcription": "转录",
         "history": "历史",
+        "outside": "其他应用",
         "experimental": "实验性"
       },
       "experimentalToggle": {
         "label": "实验性功能",
         "description": "启用仍在开发中的实验性功能。"
+      },
+      "outside": {
+        "cli": {
+          "title": "命令行",
+          "description": "在终端中使用 Owl。",
+          "install": "安装",
+          "installed": "已安装到 {{path}}",
+          "failed": "无法安装命令行。"
+        },
+        "api": {
+          "title": "本地 API",
+          "description": "让这台 Mac 上的其他应用用 Owl 转写音频。",
+          "busy": "无法启动 API，其端口已被其他应用占用。",
+          "address": "地址",
+          "addressDescription": "应用发送音频的位置。",
+          "token": "令牌",
+          "tokenDescription": "应用需附上它才能使用。"
+        },
+        "mcp": {
+          "title": "AI 代理",
+          "description": "让 AI 应用读取你的会议和听写内容。请在终端中运行。"
+        }
       },
       "lazyStreamClose": {
         "label": "在转录之间保持麦克风开启",
@@ -746,7 +774,8 @@
     "processing": "处理中...",
     "addingToDictionary": "正在加入词典",
     "addedToDictionary": "已加入词典",
-    "dontAdd": "不要加入"
+    "dontAdd": "不要加入",
+    "loadingModel": "正在加载模型..."
   },
   "whatsNew": {
     "title": "Owl v{{version}} 新功能"
@@ -809,6 +838,47 @@
       "copy": "复制逐字稿",
       "copied": "已复制逐字稿",
       "systemAudioMissing": "Owl 无法收到系统音频，所以这份逐字稿只有你的麦克风。请到“系统设置 → 隐私与安全性 → 屏幕与系统音频录制”允许 Owl。",
+      "micFailed": "会议中麦克风中断了，部分内容可能缺失。",
+      "speakerNumbered": "说话者 {{n}}",
+      "speakerName": "名字",
+      "speakerModel": {
+        "title": "说话者标签",
+        "description": "区分通话中的每个人。",
+        "download": "下载（139 MB）",
+        "downloading": "正在下载… {{percent}}%"
+      },
+      "notes": "笔记",
+      "more": "更多",
+      "retranscribe": "重新转写",
+      "rename": "重命名",
+      "listening": "正在聆听…",
+      "import": "导入音频",
+      "audioOrVideo": "音频或视频",
+      "unsupportedFormat": "暂不支持这种格式。",
+      "importTooLong": "这个文件超过 4 小时，Owl 无法导入。",
+      "export": "导出",
+      "exported": "已保存",
+      "exportAs": {
+        "markdown": "Markdown",
+        "text": "纯文本",
+        "srt": "SRT 字幕",
+        "vtt": "VTT 字幕"
+      },
+      "templates": {
+        "title": "笔记模板",
+        "description": "会议笔记包含的内容。",
+        "default": "默认模板",
+        "general": "通用",
+        "one_on_one": "一对一",
+        "interview": "面试",
+        "standup": "站会",
+        "lecture": "讲座",
+        "add": "添加模板",
+        "name": "名称",
+        "prompt": "笔记应包含的内容",
+        "remove": "删除",
+        "untitled": "我的模板"
+      },
       "speaker": {
         "you": "你",
         "others": "其他人"
@@ -819,6 +889,10 @@
         "ready": "完成",
         "failed": "失败"
       }
+    },
+    "editByVoice": {
+      "cantSeeText": "Owl 看不到这个应用里的文字，所以无法用语音编辑。",
+      "selectionChanged": "Owl 处理时选取的文字变了，所以没有贴上修改。"
     }
   }
 }

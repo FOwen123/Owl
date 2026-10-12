@@ -1,6 +1,6 @@
 # Owl: meeting pipeline and dictation extras (PRD)
 
-Status: agreed in planning on 2026-10-12, not built yet. The task list is `TODO.md` Phase 4 and 5; this file says what each item does and when it is done.
+Status: steps 1 to 8 built on branch `feat/meeting-pipeline` (2026-10-12); step 9 not started. The task list is `TODO.md` Phase 4 and 5; this file says what each item does and when it is done.
 
 **Rules for every step**
 

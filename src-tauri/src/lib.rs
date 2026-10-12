@@ -14,13 +14,20 @@ mod clipboard;
 mod commands;
 mod correction;
 mod correction_watch;
+pub mod diarization;
 mod dictionary;
+mod echo;
+pub mod engine_supervisor;
 mod helpers;
 mod input;
 mod llm_client;
+mod local_api;
 mod managers;
+pub mod mcp;
+mod media;
 mod memory;
 mod overlay;
+pub mod owl_cli;
 mod paste_tx;
 pub mod portable;
 mod secure_input;
@@ -28,12 +35,15 @@ mod settings;
 mod shortcut;
 mod signal_handle;
 mod snippets;
+mod spelling;
 mod transcription_coordinator;
 mod tray;
 mod tray_i18n;
 mod utils;
 
 pub use cli::CliArgs;
+/// Owl's app id (`tauri.conf.json`); its data lives in a folder of this name.
+pub const OWL_IDENTIFIER: &str = "com.hao.owl";
 #[cfg(debug_assertions)]
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use tauri_specta::{collect_commands, collect_events, Builder};
@@ -102,7 +112,7 @@ fn build_console_filter() -> env_filter::Filter {
     builder.build()
 }
 
-fn show_main_window(app: &AppHandle) {
+pub(crate) fn show_main_window(app: &AppHandle) {
     if let Some(main_window) = app.get_webview_window("main") {
         if let Err(e) = main_window.unminimize() {
             log::error!("Failed to unminimize webview window: {}", e);
@@ -217,10 +227,6 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             .expect("Failed to initialize meeting manager"),
     );
 
-    // Initialize the transcribe-cpp native backend (logging + backend module
-    // registration) once, before any whisper model is loaded.
-    managers::transcription::init_transcribe_backend();
-
     // Apply accelerator preferences before any model loads
     managers::transcription::apply_accelerator_settings(app_handle);
 
@@ -231,6 +237,13 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(history_manager.clone());
     app_handle.manage(meeting_manager);
     app_handle.manage(tray::TrayState::new());
+    // A busy port turns the API off, so Settings shows what's true.
+    if let Err(e) = local_api::sync(app_handle) {
+        log::warn!("Local API: {e:#}");
+        let mut settings = get_settings(app_handle);
+        settings.local_api_enabled = false;
+        settings::write_settings(app_handle, settings);
+    }
 
     // Note: Shortcuts are NOT initialized here.
     // The frontend is responsible for calling the `initialize_shortcuts` command
@@ -321,10 +334,8 @@ fn initialize_core_logic(app_handle: &AppHandle) {
                     log::warn!("No model is currently loaded.");
                     return;
                 }
-                match transcription_manager.unload_model() {
-                    Ok(()) => log::info!("Model unloaded via tray."),
-                    Err(e) => log::error!("Failed to unload model via tray: {}", e),
-                }
+                transcription_manager.request_unload();
+                log::info!("Model unloaded via tray.");
             }
             "cancel" => {
                 use crate::utils::cancel_current_operation;
@@ -468,10 +479,31 @@ mod headless_guard_tests {
 fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
     use std::time::Instant;
 
+    if let Some(owl_cli::OwlCommand::Transcribe { file }) = &args.command {
+        let meetings = app.state::<Arc<managers::meeting::MeetingManager>>();
+        return match meetings.import_and_wait(file.clone()) {
+            Ok(m) => {
+                println!("{}", owl_cli::meeting_text(&m, false, false));
+                0
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                1
+            }
+        };
+    }
+
     // --list-devices: print registered compute devices (with indices) and exit.
     // Useful on multi-GPU machines to discover the index for --device-index.
     if args.list_devices {
-        let devices = crate::managers::transcription::describe_compute_devices();
+        let tm = app.state::<Arc<TranscriptionManager>>();
+        let devices = match crate::managers::transcription::describe_compute_devices(&tm) {
+            Ok(devices) => devices,
+            Err(e) => {
+                eprintln!("error: {}", e);
+                return 1;
+            }
+        };
         if devices.is_empty() {
             println!("No transcribe-cpp compute devices registered.");
         } else {
@@ -751,6 +783,8 @@ pub fn run(cli_args: CliArgs) {
             show_main_window_command,
             commands::cancel_operation,
             commands::is_portable,
+            commands::change_local_api_setting,
+            commands::install_command_line,
             commands::is_update_checks_locked,
             commands::get_app_dir_path,
             commands::get_app_settings,
@@ -805,6 +839,16 @@ pub fn run(cli_args: CliArgs) {
             commands::meetings::get_meetings,
             commands::meetings::delete_meeting,
             commands::meetings::summarize_meeting,
+            commands::meetings::rename_speaker,
+            commands::meetings::import_meeting,
+            commands::meetings::export_meeting,
+            commands::meetings::get_summary_options,
+            commands::meetings::rename_meeting,
+            commands::meetings::retranscribe_meeting,
+            commands::meetings::update_meeting_templates,
+            commands::meetings::change_meeting_template_setting,
+            commands::meetings::speaker_model_installed,
+            commands::meetings::download_speaker_model,
             commands::edits::accept_edit_suggestion,
             commands::edits::dismiss_edit_suggestion,
             commands::edits::change_learn_from_edits_setting,
@@ -830,8 +874,10 @@ pub fn run(cli_args: CliArgs) {
 
     // The headless path must run as its own instance (see the single-instance
     // note below), not forward to an already-running app.
-    let headless_mode =
-        cli_args.transcribe_file.is_some() || cli_args.list_devices || cli_args.list_models;
+    let headless_mode = cli_args.transcribe_file.is_some()
+        || cli_args.list_devices
+        || cli_args.list_models
+        || cli_args.command.is_some();
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
@@ -959,19 +1005,24 @@ pub fn run(cli_args: CliArgs) {
                     TranscriptionManager::new(&app_handle, model_manager.clone())
                         .expect("Failed to initialize transcription manager"),
                 );
+                managers::transcription::report_compute_devices(&transcription_manager);
                 app_handle.manage(model_manager);
                 app_handle.manage(transcription_manager);
-                managers::transcription::init_transcribe_backend();
-                managers::transcription::report_compute_devices();
                 managers::transcription::apply_accelerator_settings(&app_handle);
+                // Owl: `owl transcribe` imports through the meeting pipeline,
+                // without touching meetings the app may be recording.
+                if cli_args.command.is_some() {
+                    let meetings = managers::meeting::MeetingManager::open(&app_handle)
+                        .expect("Failed to open meetings");
+                    app_handle.manage(Arc::new(meetings));
+                }
 
                 let handle = app_handle.clone();
                 let args = cli_args.clone();
                 std::thread::spawn(move || {
                     let code = run_headless_guarded(|| run_headless_transcription(&handle, &args));
-                    // Drop the loaded engine before teardown: ggml-metal's global
-                    // device free asserts (SIGABRT) if a model's Metal resources
-                    // are still alive at C++ static-destructor time.
+                    // Drop the loaded engine before exit so its transcription
+                    // worker is told to shut down cleanly.
                     if let Some(tm) = handle.try_state::<Arc<TranscriptionManager>>() {
                         let _ = tm.unload_model();
                     }
@@ -1087,10 +1138,14 @@ pub fn run(cli_args: CliArgs) {
             // stays off the startup path. get_available_accelerators then enumerates
             // ORT execution providers and transcribe-cpp compute devices; without this
             // the cost is paid synchronously when the user first opens Advanced
-            // settings, freezing the UI. Result is cached in a OnceLock.
-            std::thread::spawn(|| {
-                crate::managers::transcription::report_compute_devices();
-                let _ = crate::managers::transcription::get_available_accelerators();
+            // settings, freezing the UI. The device list is kept by the
+            // transcription engine and refreshed by every worker it starts that may
+            // use the GPU (CPU-only workers can't see it).
+            let devices_app_handle = app_handle.clone();
+            std::thread::spawn(move || {
+                let tm = devices_app_handle.state::<Arc<TranscriptionManager>>();
+                crate::managers::transcription::report_compute_devices(&tm);
+                let _ = crate::managers::transcription::get_available_accelerators(&tm);
             });
 
             // Hide tray icon if --no-tray was passed
@@ -1155,6 +1210,8 @@ pub fn run(cli_args: CliArgs) {
     #[cfg(target_os = "macos")]
     apply_startup_activation_policy(&mut app, headless_mode);
 
+    // `app` is only used by the macOS arm.
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     app.run(|app, event| match &event {
         #[cfg(target_os = "macos")]
         tauri::RunEvent::Reopen { .. } => {
@@ -1173,12 +1230,10 @@ pub fn run(cli_args: CliArgs) {
             }
             show_main_window(app);
         }
-        // Teardown transcribe.cpp before exit
-        tauri::RunEvent::Exit => {
-            if let Some(tm) = app.try_state::<Arc<TranscriptionManager>>() {
-                let _ = tm.unload_model();
-            }
-        }
+        // No transcription teardown on exit: transcribe.cpp runs only in the
+        // worker process, which exits by itself as soon as this process's end
+        // of its stdin closes, even if it is hung. Waiting on an unload here
+        // could block quitting behind a hung model load.
         _ => {}
     });
 }

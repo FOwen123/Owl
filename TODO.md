@@ -39,9 +39,9 @@ Target: macOS on Apple Silicon. Upstream remote: `upstream` → cjpais/Handy.
 - [x] Summary with the Post Process AI provider: `src-tauri/src/commands/meetings.rs`
 - [x] Page: `src/components/owl/NotetakerPage.tsx` (start/stop, list, transcript, summary, copy, delete)
 - [ ] Real test in a built `Owl.app`: macOS only grants System Audio Recording to a bundled app, so system audio can't be verified from `tauri dev`. Mic recording is verified.
-- [ ] Start/stop from the tray and a shortcut
-- [ ] Optional: speaker labels within "Others" (reference: Felix `meetings/diarize.rs`; Muesli uses pyannote models through FluidAudio, which is Swift-only, so check sherpa-onnx for Rust)
-- [ ] Optional: calendar meeting detection: read macOS Calendar (EventKit), find Zoom/Meet/Teams links, offer "Join & record" (reference: Muesli `CalendarMonitor.swift`, `MeetingCandidateResolver.swift`)
+- [ ] Start/stop from the tray and a shortcut (the menu bar's Notetaker menu is done)
+- [x] Wispr Flow-style notes: own prompt from 25 Wispr summaries, written automatically when Post Process is on (`managers/meeting.rs`)
+- Speaker labels, calendar and the rest of the meeting work moved to Phase 4
 
 ## Phase 3: Design and polish ✅ (core)
 
@@ -105,6 +105,8 @@ After Owl pastes, it watches the text box for a short time. When I fix a mishear
   - Dictate into Notes and TextEdit
   - Fix one English word and one Chinese word
   - Check the card appears, X skips the fix, waiting adds it, and it works on the next dictation
+- [ ] Words work with every model (decided): passed as vocabulary hints to any model that supports them (transcribe.cpp `vocabulary`, `Feature::Vocabulary`: Whisper, Qwen3-ASR, FunASR-Nano, Granite, MOSS), replacing the Whisper-only prompt; for the rest (Nemotron 3.5) through the fix-up, which never rewrites a word the OS spell checker knows ("cloud" stays with "Claude" in Words)
+- [ ] **Bug:** dictated "just keep it simple", Owl wrote "just skip it simple"; fixing skip → keep offered a Dictionary entry "skip → keep". Two ordinary words count as "misheard" because their spelling similarity (0.667) passes the 0.64 bar. Spelling similarity can't separate "send → sent" (0.883, a rewrite) from "Owel → Owen" (0.883, a mishearing). Fix (decided): ask the OS spell checker (macOS `NSSpellChecker`, Windows Spell Checking API; built in, nothing to download). Misheard word is a real word ("skip") → no replacement rule, since it would rewrite that word everywhere. Misheard word isn't a word ("Owel") → offer the replacement. Fixed word is a name or term (capitals, acronym, or unknown to the spell checker, like "Depick") → also add it to Words. Chinese keeps its same-sound rule. Tests: skip→keep, send→sent, ship→shop (none), Owel→Owen, depict→depick (Words only)
 - [ ] **Later:** save accepted fixes and raw → cleaned pairs as training data for my own cleanup model (fine-tune Qwen 3.5 0.8B/2B with LoRA on MLX, English + Traditional Chinese)
 
 ### Clean out Handy-only files
@@ -122,28 +124,96 @@ Audit done 2026-10-08. One commit, on its own, separate from the edit-learning w
   - What's New: Handy's 0.9.0 and 0.9.7 notes (`src/content/release-notes/`, `public/release-notes/`). Delete the notes, keep the mechanism (`src/components/whats-new/`) for Owl's own notes later.
   - `src/components/SecureInputWarning.tsx` links to `handy.computer/docs/troubleshooting`. Point it at a troubleshooting section in Owl's `README.md`.
   - `tests/app.spec.ts`: rename "Handy App" to "Owl"
-  - Handy's contribution process: `.github/ISSUE_TEMPLATE/`, `.github/PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, `CONTRIBUTING_TRANSLATIONS.md`, and the "GitHub workflow" section of `AGENTS.md`. They describe Handy's feature freeze and Discussions. Delete now; write short Owl versions in Phase 4 if needed.
+  - Handy's contribution process: `.github/ISSUE_TEMPLATE/`, `.github/PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, `CONTRIBUTING_TRANSLATIONS.md`, and the "GitHub workflow" section of `AGENTS.md`. They describe Handy's feature freeze and Discussions. Delete now; write short Owl versions in Phase 6 if needed.
 - [x] **Keep:** Handy-related but needed
   - `README.handy.md`, `LICENSE`: the MIT licence requires keeping Handy's copyright and credit
   - Internal file names (`handy.png`, `handy_warning.png`, the `handy` crate): they already hold Owl art, and renaming makes upstream merges harder (renaming rule)
-  - Model downloads from `blob.handy.computer` (`src-tauri/src/catalog/catalog.json`, `managers/model.rs`): still needed until Phase 4 re-hosts them
-  - `scripts/gen_catalog.py` (builds `catalog.json`), `scripts/mirror_models.py` (useful for the Phase 4 re-host), `scripts/ci/`
+  - Model downloads from `blob.handy.computer` (`src-tauri/src/catalog/catalog.json`, `managers/model.rs`): still needed until Phase 6 re-hosts them
+  - `scripts/gen_catalog.py` (builds `catalog.json`), `scripts/mirror_models.py` (useful for the Phase 6 re-host), `scripts/ci/`
   - `src/components/update-checker/` (see AGENTS.md)
   - Windows/Linux code and config (`src-tauri/nsis/`, `tauri.windows.conf.json`, platform branches in `src/`): `build.rs` refers to them, and deleting them causes merge conflicts for no gain on macOS
   - `BUILD.md`: real build steps; trim it to macOS later
   - `src-tauri/icons/` Android, iOS and Windows Store sizes: these are Owl icons, written again by every `tauri icon` run
 - [x] **Check after cleanup:** `bun install` (no postinstall error), `bun run lint`, `bunx tsc --noEmit`, `bun run check:translations`, `cargo test`, and `git grep -i handy.computer` shows only the model download URLs
 
-## Phase 3c: Cleanup rules and levels
+## Phase 3c: Cleanup rules and levels ✅
 
-See [TODO-CLEANUP.md](TODO-CLEANUP.md): None / Light / Medium, checks on the AI's reply, Chinese and English rules, silence phrases, voice commands.
+None / Light / Medium, checks on the AI's reply, Chinese and English rules, silence phrases, voice commands (`cleanup_rules.rs`, `cleanup_guard.rs`). The plan file was removed when done; see git history for `TODO-CLEANUP.md`.
 
-## Phase 4: Before open-sourcing (later)
+- [ ] Later: "press enter" at the end of a dictation sends Return after pasting (Felix `apply_voice_triggers` in `scratchpad.rs`)
 
-- [ ] Re-host the 16 legacy models on my Hugging Face (Breeze ASR first; check each model's license); update URLs in `src-tauri/src/managers/model.rs`, keeping the SHA-256 values
-- [ ] Back up `breeze-asr-q5_k.bin` now in case Handy's link disappears
+## Phase 4: Full meeting pipeline
+
+What each item does and when it's done: [docs/prd-meeting-pipeline.md](docs/prd-meeting-pipeline.md). Build order: merge Handy → dictionary fixes → speaker labels → notes → live transcript and echo → import/export → outside access → edit by voice and auto dictionary, then one pull request; Nemotron 3 after that in its own worktree.
+
+Like Glimpse and Muesli, but local-first and in Owl's shape. **Platform rule:** Mac first, but pick parts that also run on Windows (transcribe.cpp or ONNX, not CoreML/FluidAudio); keep Mac-only code in small files. **Open** = how to build it hasn't been decided yet.
+
+**Speaker labels** (branch `feat/meeting-speakers`, worktree `../Owl-speakers`)
+
+- [ ] Merge Handy's latest `main` first (decided: merge, not rebuild; 10 commits since 2026-10-05): transcribe.cpp 0.4.0 (#2265; Owl has 16 compile errors on 0.4.0 without it), transcription in its own worker (#2208), model-loading status (#2227), mic capture moved to the `handy-recorder` crate (#2188), transcribe.cpp's own VAD (#2267). Trial merge: 33 conflicting files, 26 of them translations and 5 docs Owl changed; the real work is `audio_toolkit/audio/mod.rs`, `lib.rs`, and Owl's meeting recorder, which uses `cpal`, `rtrb` and `FrameResampler` that Handy removed. The meeting mic moves to `handy-recorder` (decided: reports lost audio and unplugged mics, gives 30 ms pieces for speech detection); system capture keeps `rtrb`
+- [ ] Meetings use transcribe.cpp's speech detection (Silero) instead of the loudness check, so quiet speakers aren't dropped (decided)
+- [ ] Engine first: Sortformer v2.1 on upstream transcribe.cpp 0.4.0 (4 speakers, 80% agreement on the 12 Oct meeting, 1 speaker correctly found on the call track), no fork (decided: build on it now, swap in Nemotron 3 later)
+- [ ] Split only the call-audio track into Speaker 1..N; the mic stays "You". Cut the audio where the speaker changes, so each line has one speaker
+- [ ] Store a speaker number per line (old meetings still open); click a speaker to rename them for the whole meeting. The summary uses placeholders (`<@speaker:2>`, like Wispr Flow) that Owl fills in, so a rename updates it without a new AI call
+- [ ] Speaker model download: one "Download speaker labels" button on the Notetaker page, no model picker. Sortformer v2.1 (139 MB) comes from the existing `handy-computer/diar_streaming_sortformer_4spk-v2.1-gguf` repo; the Nemotron 3 file Owl makes later goes on `owl-dictation`. Listed like Glimpse does: full `huggingface.co/<org>/<repo>/resolve/<revision>/<file>` URL, size and SHA-256
+- [ ] Later: the AI suggests names from the conversation ("thanks, Harry") and macOS Calendar attendees; I confirm
+- Not doing: remembering voices across meetings (privacy)
+
+**Nemotron 3 speaker model** (later, own worktree)
+
+- [ ] Nemotron 3 Diarization (8 speakers). Upstream status (2026-10-12): the maintainer's own port is open PR #175 (`handy-computer:nemotron3-diar`, +8,282 lines, model type `nemotron3_diar`, "stage 1-4", untouched since 2026-09-26, now conflicting with the 2026-10-05 diarization rework); issue #170 says "will come in #175". No model file published; its converter needs NVIDIA's NeMo toolkit. Glimpse's port (`glimpse-hq/transcribe.cpp`) works today but its model file doesn't load in #175 (missing `output_hop`), so the two have diverged. NVIDIA's own GGUF loads in neither. Path (decided): finish the maintainer's PR #175 ourselves on 0.4.0, in its own worktree (`../Owl-nemotron3`), after the speaker feature works on Sortformer v2.1:
+  - Ask on #175 whether he's still on it and offer help (public comment from my GitHub: ask me first)
+  - Rebase onto 0.4.0, finish the remaining porting stages (accuracy checks)
+  - Make the model file once with his converter (needs NVIDIA's NeMo toolkit), host it on `owl-dictation` on Hugging Face
+  - Offer the fixes back to #175; switch Owl to the official version when it merges
+  - Check: the 12 Oct meeting (Glimpse's build: 2 speakers, 88% agreement with Wispr Flow, 88 min in 6 s)
+
+**Notes**
+
+- [ ] Auto titles: the AI writes the title in the same call as the summary, saved in a new `title` column and shown in the meeting list. Without an AI the title stays the date. Titles can be edited by hand
+- [ ] Meeting page layout (decided): list rows show title, date, duration and the summary's first line; Import audio and Start meeting at the top. The meeting page has a back link, Export menu (Markdown, text, SRT, VTT), and a ⋯ menu (Re-transcribe, Delete); an editable title; date, duration and speaker chips (click to rename); Notes with the template dropdown and Summarize again; the transcript with Copy at the bottom. While recording, the live transcript fills the page with Stop
+- [ ] Templates: built-ins General (today's notes), 1:1, Interview, Stand-up, Lecture, plus my own, edited on the Notetaker page. Pick one from a dropdown next to "Summarize again"; a default in Notetaker settings. Keep the UI clean
+- [ ] After building the meeting pages, export the design to Paper, so later changes are made in Paper first and then implemented
+- [ ] Re-summarize with another template or AI model (the "Summarize again" button gets a picker)
+- [ ] Re-transcribe a saved meeting from its kept audio, so new dictionary words and a better model apply (Muesli has this)
+
+**Echo removal** (only matters without earphones)
+
+- [ ] Test first: record one call on laptop speakers, count "You" lines that repeat the other side
+- [ ] Remove the speakers' sound from the mic with **LocalVQE v1.4-AEC** (decided: echo only, 3 MB, Apache-2.0, model from `LocalAI-io/LocalVQE`; Muesli uses it), with the call audio as the reference. Also test v1.2 (echo + noise, Muesli's choice) on the same recording. It ships its own copy of ggml, so build it as a separate library to avoid clashing with transcribe.cpp's. Bundled inside the app (decided). Runs live, before each stretch of speech is transcribed, since live lines are final (decided); the raw `mic.wav` is kept so Re-transcribe can redo it
+
+**Live transcript**
+
+- [ ] Show the transcript while the meeting runs (decided): each stretch of speech is transcribed as soon as it ends, with the local model, and that text is final. After the meeting Owl only adds speaker labels and joins neighbouring lines from the same speaker. Wispr Flow instead shows Soniox's live lines and replaces them with a second, cloud pass; Owl would run the same model twice. The manual "Re-transcribe" covers switching to a better model
+
+**Import and export**
+
+- [ ] Import audio or video into the meeting list: one track, so all of it goes through speaker labels. Decoder: `symphonia` (decided; pure Rust, Mac and Windows, already in Owl through `rodio`): mp3, m4a/AAC, wav, flac, ogg/Vorbis, and the audio inside mp4/mov. It can't decode Opus (WebM, `.opus`, WhatsApp voice notes), so say so plainly for those files
+- [ ] Export a meeting as Markdown, plain text, SRT or VTT subtitles (decided: plain text formatting, no library). Subtitles need each line's end time, so store `end_ms` too. PDF later
+
+**Outside access**
+
+- [ ] CLI: `owl meetings`, `owl meeting <id> --notes|--transcript`, `owl transcribe <file>` (Handy already has CLI flags in `cli.rs`)
+- [ ] Local API: an OpenAI-compatible `/v1/audio/transcriptions`, off by default, only reachable from this Mac, needs a token
+- [ ] AI-agent access: `owl mcp`, a read-only MCP server so Claude Code and others can search and read meetings and dictations (Glimpse has this); no starting or deleting
+
+**Calendar** (later, after the rest of this phase)
+
+- [ ] Read macOS Calendar (EventKit), find Zoom/Meet/Teams links, offer "Join & record" (reference: Muesli `CalendarMonitor.swift`, `MeetingCandidateResolver.swift`)
+
+## Phase 5: Dictation extras
+
+- [ ] Edit by voice, like Wispr Flow's Command Mode (decided): its own shortcut, Option+Shift+Space (decided; Wispr's default is Fn + Ctrl). That key was Handy's "Transcribe with Post-Processing"; that action stays in Settings with no key assigned (decided). Select text, hold the shortcut, say what to change ("make this shorter", 「翻成英文」), release: the Post Process AI's answer replaces the selection. Esc cancels. With nothing selected, the answer is written at the cursor. Undo is the app's own Cmd+Z
+- [ ] Auto dictionary, like Glimpse's and Wispr Flow's: when I correct a pasted word into a name, brand or acronym, add that word to the Dictionary's **Words** list (decided), as well as the replacement pair Phase 3b learns, so the model spells it right however it mishears it next time. Asks with the existing card (decided). Note: Nemotron 3.5 takes no vocabulary hints (only Whisper, Qwen3-ASR, FunASR-Nano, Granite and MOSS do), so for it Words work through the fix-up after transcription and the summary's spelling list
+
+## Phase 6: Before open-sourcing (last)
+
+- [ ] Own model hosting: use the `owl-dictation` Hugging Face organization for models Owl converts or must host itself; use existing verified repositories for other downloads. Skip Cloudflare R2 for now. The public collection is for browsing; the bundled catalog controls the app.
+- [x] Replace 15 legacy download URLs with revision-pinned, checksum-matched Hugging Face sources; retain filenames and engines. Remove the unverified legacy GigaAM entry. No model copies uploaded; newer catalog GigaAM entries remain.
+- [ ] Update `AGENTS.md` "Target: macOS only" to the Phase 4 platform rule
+- [ ] Copy `breeze-asr-q5_k.bin` to `owl-dictation`: it no longer depends on Handy's server, but now comes from one person's Hugging Face repo (`alan314159/Breeze-ASR-25-whispercpp`)
 - [ ] Check the `vad-rs` license (cjpais copy has none; check `thewh1teagle/vad-rs`)
 - [ ] Scan git history for secrets
 - [ ] Own release feed: generate an updater key (`bun run tauri signer generate`), set `plugins.updater` to my GitHub releases, restore the `HANDY_DISABLE_UPDATER` check in `settings.rs`
-- [ ] Optional: Silero VAD v4 → v6.2 (needs `vad-rs` changes for v5+'s `state` tensor; see closed Handy PR #1790)
+- [ ] Optional: Silero VAD v4 → v6.2 (needs `vad-rs` changes for v5+'s `state` tensor; see closed Handy PR #1790). Re-check after Phase 4 step 1: Handy's merge brings transcribe.cpp's own Silero VAD (#2267), which may replace `vad-rs` and settle this and the license item above
 - [ ] Update `README.md`, screenshots, and make the repo public

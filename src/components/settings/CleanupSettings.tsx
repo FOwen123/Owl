@@ -8,7 +8,7 @@ import type { CleanupLevel } from "@/bindings";
 
 const LEVELS: CleanupLevel[] = ["none", "light", "medium"];
 
-// Owl: None / Light / Medium, as in Wispr Flow's Auto Cleanup (TODO-CLEANUP.md).
+// Owl: None / Light / Medium, as in Wispr Flow's Auto Cleanup.
 export const CleanupLevelSetting: React.FC = () => {
   const { t } = useTranslation();
   const { getSetting, updateSetting, refreshSettings } = useSettings();

@@ -1,5 +1,5 @@
 use crate::audio_toolkit::{
-    apply_custom_words, detect_output_language, normalize_transcription_output,
+    apply_custom_words_guarded, detect_output_language, normalize_transcription_output,
     remove_filler_words, OutputLanguageEvidence,
 };
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
@@ -17,6 +17,7 @@ use anyhow::Result;
 use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use specta::Type;
+use std::collections::HashSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Condvar, Mutex, MutexGuard};
@@ -24,7 +25,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_specta::Event;
-use transcribe_cpp::{Backend, RunExtension, RunOptions, StreamOptions, Task, WhisperRunOptions};
+use transcribe_cpp::{Backend, RunOptions, StreamOptions, Task};
 use transcribe_rs::{
     onnx::{
         canary::CanaryModel,
@@ -274,6 +275,16 @@ pub struct TranscriptionManager {
 }
 
 impl TranscriptionManager {
+    /// Owl: the words in `text` the OS spell checker knows, so the Words
+    /// fix-up leaves them alone. Empty without Words or a spell checker.
+    fn real_words(&self, settings: &AppSettings, text: &str) -> HashSet<String> {
+        if settings.custom_words.is_empty() {
+            return HashSet::new();
+        }
+        crate::spelling::known_words(&self.app_handle, &crate::spelling::words_in(&[text]))
+            .unwrap_or_default()
+    }
+
     pub fn new(app_handle: &AppHandle, model_manager: Arc<ModelManager>) -> Result<Self> {
         let manager = Self {
             engine: EngineSupervisor::new(!transcribe_gpu_disabled_for_host()),
@@ -1078,12 +1089,14 @@ impl TranscriptionManager {
         let settings = get_settings(&self.app_handle);
         // Streaming models do not receive a decode prompt, so custom words
         // always go through the shared fuzzy post-correction path.
-        let filtered = post_process_transcription_text(
+        let real_words = self.real_words(&settings, &finalized.text);
+        let filtered = post_process_transcription_text_with(
             finalized.text,
             &settings,
             false,
             &finalized.output_language,
             &finalized.supported_languages,
+            &real_words,
         );
 
         self.maybe_unload_immediately("streaming transcription");
@@ -1195,16 +1208,15 @@ impl TranscriptionManager {
         debug!("Output language evidence: {:?}", output_language);
 
         // Apply fuzzy word correction if custom words are configured — UNLESS the
-        // words were already handed to the model as an initial prompt (whisper
-        // family). We don't pass a prompt to non-whisper models (it requires the
-        // whisper-kind run extension), so they still get fuzzy correction here,
-        // same as the ONNX engines.
-        let filtered_result = post_process_transcription_text(
+        // words were already handed to the model as vocabulary hints.
+        let real_words = self.real_words(&settings, &run.text);
+        let filtered_result = post_process_transcription_text_with(
             run.text,
             &settings,
-            run.model_is_whisper,
+            run.words_prompted,
             &output_language,
             &run.languages,
+            &real_words,
         );
 
         let et = std::time::Instant::now();
@@ -1254,36 +1266,26 @@ impl TranscriptionManager {
         validated_language: &str,
         active_model: &str,
     ) -> Result<RunOutcome> {
-        // Whether the model advertises Feature::InitialPrompt. Informational
-        // (logged below); the whisper run extension and the fuzzy-correction
-        // skip are gated on `model_is_whisper` instead, since non-whisper
-        // archs can advertise the feature while rejecting the whisper-kind
-        // extension.
-        let model_takes_initial_prompt = info.supports_initial_prompt;
-        let model_is_whisper = info.arch == "whisper";
         let model_supports_translate = info.capabilities.supports_translate;
         let languages = info.capabilities.languages;
         debug!(
-            "transcribe-cpp model '{}' on '{}': initial_prompt={}, translate={}, languages={:?}",
+            "transcribe-cpp model '{}' on '{}': vocabulary={}, translate={}, languages={:?}",
             settings.selected_model,
             info.backend,
-            model_takes_initial_prompt,
+            info.supports_vocabulary,
             model_supports_translate,
             languages
         );
 
-        // Custom words become the initial prompt ONLY for models that accept
-        // one (whisper family). Attaching the whisper run extension to a
-        // non-whisper arch is rejected with INVALID_ARG, so skip it there and
-        // let the fuzzy post-correction handle custom words instead.
-        let family = if settings.custom_words.is_empty() || !model_is_whisper {
-            None
+        // Owl: Words go to every model that takes vocabulary hints (Whisper,
+        // Qwen3-ASR, FunASR-Nano, Granite, MOSS); transcribe.cpp formats them
+        // per model. The rest (Nemotron, Parakeet) get the fuzzy fix-up.
+        let vocabulary = if info.supports_vocabulary {
+            settings.custom_words.clone()
         } else {
-            Some(RunExtension::Whisper(WhisperRunOptions {
-                initial_prompt: Some(settings.custom_words.join(", ")),
-                ..Default::default()
-            }))
+            Vec::new()
         };
+        let words_prompted = !vocabulary.is_empty();
 
         let run_plan = transcribe_cpp_run_plan(
             settings.translate_to_english,
@@ -1298,15 +1300,15 @@ impl TranscriptionManager {
             task: run_plan.task,
             language: run_plan.language,
             target_language: run_plan.target_language,
-            family,
+            vocabulary,
             ..Default::default()
         };
 
         debug!(
-            "transcribe-cpp run: task={:?}, language={:?}, initial_prompt={}",
+            "transcribe-cpp run: task={:?}, language={:?}, vocabulary={}",
             run_options.task,
             run_options.language,
-            run_options.family.is_some()
+            run_options.vocabulary.len()
         );
 
         let transcript = match self.engine.transcribe(audio, run_options) {
@@ -1328,7 +1330,7 @@ impl TranscriptionManager {
             // Whisper's audio-based LID (auto mode only; `None` when a
             // language hint was passed).
             model_detected_language: transcript.language,
-            model_is_whisper,
+            words_prompted,
         })
     }
 
@@ -1489,7 +1491,7 @@ impl TranscriptionManager {
             applied_language_hint,
             output_was_translated,
             model_detected_language: None,
-            model_is_whisper: false,
+            words_prompted: false,
         })
     }
 }
@@ -1504,12 +1506,9 @@ struct RunOutcome {
     output_was_translated: bool,
     /// The language the model itself detected, if it reported one.
     model_detected_language: Option<String>,
-    /// Whether the loaded model is actually whisper-family (arch string).
-    /// Non-whisper archs (e.g. Voxtral Small) can advertise
-    /// Feature::InitialPrompt yet reject the whisper-kind run extension with
-    /// INVALID_ARG, so the whisper extension must be gated on the arch, not
-    /// on the feature (see #1601).
-    model_is_whisper: bool,
+    /// Owl: Words went to the model as vocabulary hints, so the fuzzy
+    /// fix-up is skipped.
+    words_prompted: bool,
 }
 
 fn emit_stream_text(app_handle: &AppHandle, committed: &str, tentative: &str) {
@@ -1742,12 +1741,33 @@ fn transcribe_cpp_run_plan(
     }
 }
 
+#[cfg(test)]
 fn post_process_transcription_text(
     raw: String,
     settings: &AppSettings,
     custom_words_already_prompted: bool,
     output_language: &OutputLanguageEvidence,
     supported_languages: &[String],
+) -> String {
+    post_process_transcription_text_with(
+        raw,
+        settings,
+        custom_words_already_prompted,
+        output_language,
+        supported_languages,
+        &HashSet::new(),
+    )
+}
+
+/// Owl: `real_words` (lowercased, from the OS spell checker) are words the
+/// Words fix-up must not rewrite.
+fn post_process_transcription_text_with(
+    raw: String,
+    settings: &AppSettings,
+    custom_words_already_prompted: bool,
+    output_language: &OutputLanguageEvidence,
+    supported_languages: &[String],
+    real_words: &HashSet<String>,
 ) -> String {
     let converts_script = settings.chinese_script != ChineseScript::AsTranscribed;
     fail_open_text_transform(raw, |raw| {
@@ -1788,10 +1808,11 @@ fn post_process_transcription_text(
         let raw = crate::dictionary::apply_replacements(&raw, &settings.replacements);
 
         let corrected = if !settings.custom_words.is_empty() && !custom_words_already_prompted {
-            apply_custom_words(
+            apply_custom_words_guarded(
                 &raw,
                 &settings.custom_words,
                 settings.word_correction_threshold,
+                &|w| real_words.contains(w),
             )
         } else {
             raw

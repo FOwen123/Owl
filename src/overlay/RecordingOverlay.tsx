@@ -350,8 +350,12 @@ const RecordingOverlay: React.FC = () => {
                 : t("overlay.addingToDictionary")}
             </span>
             <span className="ssug-pair">
-              <span className="ssug-from">{suggestion.from}</span>
-              <span className="ssug-arrow">→</span>
+              {suggestion.from && (
+                <>
+                  <span className="ssug-from">{suggestion.from}</span>
+                  <span className="ssug-arrow">→</span>
+                </>
+              )}
               <span className="ssug-to">{suggestion.to}</span>
             </span>
           </div>

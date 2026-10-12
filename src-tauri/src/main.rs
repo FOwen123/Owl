@@ -18,8 +18,11 @@ fn run_from_real_path() {
         return;
     };
     if real != exe {
+        let mut args = std::env::args_os();
+        // Keep the name it was run as, so `owl --help` still says "owl".
         let error = std::process::Command::new(&real)
-            .args(std::env::args_os().skip(1))
+            .arg0(args.next().unwrap_or_default())
+            .args(args)
             .exec();
         eprintln!("error: couldn't run {}: {error}", real.display());
         std::process::exit(1);

@@ -557,6 +557,29 @@ async cancelOperation() : Promise<void> {
 async isPortable() : Promise<boolean> {
     return await TAURI_INVOKE("is_portable");
 },
+/**
+ * Owl: turns the local transcription API on or off. Stays off when it
+ * can't start (its port is taken).
+ */
+async changeLocalApiSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_local_api_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Owl: puts `owl` on the command line; returns where.
+ */
+async installCommandLine() : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_command_line") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async isUpdateChecksLocked() : Promise<boolean> {
     return await TAURI_INVOKE("is_update_checks_locked");
 },
@@ -982,6 +1005,26 @@ async renameSpeaker(id: number, voice: number, name: string) : Promise<Result<nu
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Adds an audio or video file as a meeting; `unsupported_format` when Owl
+ * can't read it (the UI translates that).
+ */
+async importMeeting(path: string) : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("import_meeting", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async exportMeeting(id: number, format: ExportFormat, path: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_meeting", { id, format, path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getSummaryOptions() : Promise<SummaryOptions> {
     return await TAURI_INVOKE("get_summary_options");
 },
@@ -1139,6 +1182,14 @@ meeting_template?: string;
  */
 learn_from_edits?: boolean; 
 /**
+ * Owl: the local transcription API (`local_api.rs`), off by default.
+ */
+local_api_enabled?: boolean; 
+/**
+ * Owl: its bearer token, made the first time it's turned on.
+ */
+local_api_token?: Secret; 
+/**
  * Owl: None / Light / Medium (`cleanup_rules.rs`, AI cleanup in `actions.rs`).
  */
 cleanup_level?: CleanupLevel; 
@@ -1213,6 +1264,10 @@ export type EngineType =
  * the file, so this one variant covers the whole transcribe-cpp family.
  */
 "TranscribeCpp" | "Parakeet" | "Moonshine" | "MoonshineStreaming" | "SenseVoice" | "Canary" | "Cohere"
+/**
+ * How a meeting can be exported.
+ */
+export type ExportFormat = "markdown" | "text" | "srt" | "vtt"
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
 export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean }
 export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
@@ -1309,6 +1364,10 @@ export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "
  * Owl: dictionary replacement, "heard `from`, write `to`" (see `dictionary.rs`).
  */
 export type Replacement = { from: string; to: string }
+/**
+ * Owl: a secret string (the local API token), kept out of logs.
+ */
+export type Secret = string
 export type SecretMap = Partial<{ [key in string]: string }>
 export type SecureInputStatus = { 
 /**

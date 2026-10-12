@@ -279,11 +279,34 @@
         "output": "輸出",
         "transcription": "轉錄",
         "history": "歷史",
+        "outside": "其他 App",
         "experimental": "實驗性"
       },
       "experimentalToggle": {
         "label": "實驗性功能",
         "description": "啟用仍在開發中的實驗性功能"
+      },
+      "outside": {
+        "cli": {
+          "title": "命令列",
+          "description": "在終端機中使用 Owl。",
+          "install": "安裝",
+          "installed": "已安裝到 {{path}}",
+          "failed": "無法安裝命令列。"
+        },
+        "api": {
+          "title": "本機 API",
+          "description": "讓這台 Mac 上的其他 App 用 Owl 轉寫音訊。",
+          "busy": "無法啟動 API，它的連接埠已被其他 App 佔用。",
+          "address": "位址",
+          "addressDescription": "App 傳送音訊的位置。",
+          "token": "權杖",
+          "tokenDescription": "App 需附上它才能使用。"
+        },
+        "mcp": {
+          "title": "AI 代理",
+          "description": "讓 AI App 讀取你的會議和聽寫內容。請在終端機中執行。"
+        }
       },
       "lazyStreamClose": {
         "label": "在轉錄之間保持麥克風開啟",
@@ -824,6 +847,17 @@
       "retranscribe": "重新轉寫",
       "rename": "重新命名",
       "listening": "正在聆聽…",
+      "import": "匯入音訊",
+      "audioOrVideo": "音訊或影片",
+      "unsupportedFormat": "目前還不支援這種格式。",
+      "export": "匯出",
+      "exported": "已儲存",
+      "exportAs": {
+        "markdown": "Markdown",
+        "text": "純文字",
+        "srt": "SRT 字幕",
+        "vtt": "VTT 字幕"
+      },
       "templates": {
         "title": "筆記範本",
         "description": "會議筆記包含的內容。",

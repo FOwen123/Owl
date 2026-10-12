@@ -60,6 +60,12 @@ rtrb = "0.4.0"
 rubato = "0.16.2"
 # Owl: loads LocalVQE for meeting echo removal (echo.rs).
 libloading = "0.7"
+# Owl: decodes imported meeting audio and video (media.rs).
+symphonia = { version = "0.5", default-features = false, features = ["aac", "alac", "flac", "isomp4", "mp3", "ogg", "pcm", "vorbis", "wav"] }
+# Owl: command line data folder, local API token and server (owl_cli.rs, local_api.rs).
+dirs = "6"
+getrandom = "0.3"
+tiny_http = "0.12"
 reqwest = { version = "0.12", features = ["json", "stream", "gzip", "brotli", "deflate"] }
 futures-util = "0.3"
 rustfft = "6.4.0"

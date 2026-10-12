@@ -32,7 +32,21 @@ fn main() {
     if handy_app_lib::engine_supervisor::is_worker_invocation() {
         std::process::exit(handy_app_lib::engine_supervisor::run_worker());
     }
+    // Owl: the one-shot speaker-labelling process (see diarization.rs).
+    if std::env::args_os().nth(1).as_deref()
+        == Some(std::ffi::OsStr::new(
+            handy_app_lib::diarization::WORKER_FLAG,
+        ))
+    {
+        std::process::exit(handy_app_lib::diarization::run_worker());
+    }
 
     let cli_args = CliArgs::parse();
+    // Owl's read-only commands need no app at all.
+    if let Some(command) = &cli_args.command {
+        if let Some(code) = handy_app_lib::owl_cli::run_offline(command) {
+            std::process::exit(code);
+        }
+    }
     handy_app_lib::run(cli_args)
 }

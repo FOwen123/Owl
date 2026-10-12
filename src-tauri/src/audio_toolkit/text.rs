@@ -149,6 +149,19 @@ fn find_best_match<'a>(
 /// # Returns
 /// The corrected text with custom words applied
 pub fn apply_custom_words(text: &str, custom_words: &[String], threshold: f64) -> String {
+    apply_custom_words_guarded(text, custom_words, threshold, &|_| false)
+}
+
+/// Owl: `apply_custom_words` that leaves real words alone. `is_word` gets a
+/// lowercased word and says whether the OS spell checker knows it; an n-gram
+/// made only of known words is kept ("cloud" stays with "Claude" in Words),
+/// unless the only change is case or spacing ("claude" → "Claude").
+pub fn apply_custom_words_guarded(
+    text: &str,
+    custom_words: &[String],
+    threshold: f64,
+    is_word: &dyn Fn(&str) -> bool,
+) -> String {
     if custom_words.is_empty() {
         return text.to_string();
     }
@@ -199,7 +212,12 @@ pub fn apply_custom_words(text: &str, custom_words: &[String], threshold: f64) -
             }
         }
 
-        if let Some((n, replacement, _)) = best_match {
+        let ordinary = best_match.is_some_and(|(n, replacement, _)| {
+            let ngram_words = &words[i..i + n];
+            ngram_words.iter().all(|w| is_known(w, is_word))
+                && build_ngram(ngram_words) != build_match_key(replacement)
+        });
+        if let Some((n, replacement, _)) = best_match.filter(|_| !ordinary) {
             let ngram_words = &words[i..i + n];
             // Extract punctuation from first and last words of the n-gram.
             let (prefix, _) = extract_punctuation(ngram_words[0]);
@@ -217,6 +235,14 @@ pub fn apply_custom_words(text: &str, custom_words: &[String], threshold: f64) -
     }
 
     result.join(" ")
+}
+
+/// Whether a transcript word is a real word, looked up the way the spell
+/// checker's words were gathered: punctuation aside, apostrophes kept
+/// ("don't", not "dont").
+fn is_known(word: &str, is_word: &dyn Fn(&str) -> bool) -> bool {
+    let tokens = crate::spelling::words_in(&[word]);
+    !tokens.is_empty() && tokens.iter().all(|t| is_word(&t.to_lowercase()))
 }
 
 /// Preserves the case pattern of the original word when applying a replacement
@@ -491,6 +517,44 @@ mod tests {
         let language = OutputLanguageEvidence::UserSelected(language.to_string());
         let filtered = remove_filler_words(text, &language, custom_filler_words, true);
         normalize_transcription_output(&filtered)
+    }
+
+    #[test]
+    fn real_words_are_left_alone_by_the_words_fix_up() {
+        let words = vec![
+            "Claude".to_string(),
+            "Depick".to_string(),
+            "Dante".to_string(),
+        ];
+        let known = |w: &str| {
+            [
+                "cloud",
+                "computing",
+                "depict",
+                "claude",
+                "the",
+                "don't",
+                "send",
+                "it",
+            ]
+            .contains(&w)
+        };
+        let fix = |t: &str| apply_custom_words_guarded(t, &words, 0.18, &known);
+        assert_eq!(fix("cloud computing"), "cloud computing");
+        assert_eq!(fix("don't send it"), "don't send it");
+        assert_eq!(
+            apply_custom_words("don't send it", &words, 0.18),
+            "Dante send it"
+        );
+        assert_eq!(fix("depict the scene"), "depict the scene");
+        // Not a real word, or only the case differs: still corrected.
+        assert_eq!(fix("ask claud"), "ask Claude");
+        assert_eq!(fix("ask claude"), "ask Claude");
+        // Without a spell checker, Handy's behaviour.
+        assert_eq!(
+            apply_custom_words("cloud computing", &words, 0.18),
+            "Claude computing"
+        );
     }
 
     #[test]

@@ -2,8 +2,12 @@ use clap::Parser;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug, Clone, Default)]
-#[command(name = "handy", about = "Handy - Speech to Text")]
+#[command(name = "owl", about = "Owl - Speech to Text")]
 pub struct CliArgs {
+    /// Owl: meetings, transcribing files, and the MCP server (`owl_cli.rs`).
+    #[command(subcommand)]
+    pub command: Option<crate::owl_cli::OwlCommand>,
+
     /// Start with the main window hidden
     #[arg(long)]
     pub start_hidden: bool,

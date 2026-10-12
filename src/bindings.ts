@@ -557,6 +557,29 @@ async cancelOperation() : Promise<void> {
 async isPortable() : Promise<boolean> {
     return await TAURI_INVOKE("is_portable");
 },
+/**
+ * Owl: turns the local transcription API on or off. Stays off when it
+ * can't start (its port is taken).
+ */
+async changeLocalApiSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_local_api_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Owl: puts `owl` on the command line; returns where.
+ */
+async installCommandLine() : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("install_command_line") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async isUpdateChecksLocked() : Promise<boolean> {
     return await TAURI_INVOKE("is_update_checks_locked");
 },
@@ -966,9 +989,89 @@ async deleteMeeting(id: number) : Promise<Result<null, string>> {
 /**
  * Summarizes with the AI provider set up for post-processing.
  */
-async summarizeMeeting(id: number) : Promise<Result<string, string>> {
+async summarizeMeeting(id: number, template: string | null, provider: string | null) : Promise<Result<string, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("summarize_meeting", { id }) };
+    return { status: "ok", data: await TAURI_INVOKE("summarize_meeting", { id, template, provider }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async renameSpeaker(id: number, voice: number, name: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rename_speaker", { id, voice, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Adds an audio or video file as a meeting; `unsupported_format` when Owl
+ * can't read it (the UI translates that).
+ */
+async importMeeting(path: string) : Promise<Result<number, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("import_meeting", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async exportMeeting(id: number, format: ExportFormat, path: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("export_meeting", { id, format, path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getSummaryOptions() : Promise<SummaryOptions> {
+    return await TAURI_INVOKE("get_summary_options");
+},
+async renameMeeting(id: number, title: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("rename_meeting", { id, title }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async retranscribeMeeting(id: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("retranscribe_meeting", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async updateMeetingTemplates(templates: MeetingTemplate[]) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("update_meeting_templates", { templates }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeMeetingTemplateSetting(template: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_meeting_template_setting", { template }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Whether the speaker model is installed; meetings work without it.
+ */
+async speakerModelInstalled() : Promise<boolean> {
+    return await TAURI_INVOKE("speaker_model_installed");
+},
+/**
+ * Downloads the speaker model, sending `speaker-model-progress` events.
+ */
+async downloadSpeakerModel() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("download_speaker_model") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1066,9 +1169,26 @@ whats_new_last_seen_version?: string; selected_model?: string; onboarding_comple
  */
 selected_channel?: number | null; clamshell_microphone?: string | null; selected_output_device?: string | null; translate_to_english?: boolean; selected_language?: string; overlay_position?: OverlayPosition; debug_mode?: boolean; log_level?: LogLevel; custom_words?: string[]; snippets?: Snippet[]; replacements?: Replacement[]; 
 /**
+ * Owl: the user's meeting-notes templates.
+ */
+meeting_templates?: MeetingTemplate[]; 
+/**
+ * Owl: the template new meeting notes use (a built-in id or one of the
+ * user's).
+ */
+meeting_template?: string; 
+/**
  * Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
  */
 learn_from_edits?: boolean; 
+/**
+ * Owl: the local transcription API (`local_api.rs`), off by default.
+ */
+local_api_enabled?: boolean; 
+/**
+ * Owl: its bearer token, made the first time it's turned on.
+ */
+local_api_token?: Secret; 
 /**
  * Owl: None / Light / Medium (`cleanup_rules.rs`, AI cleanup in `actions.rs`).
  */
@@ -1088,7 +1208,7 @@ edit_suggestions?: Replacement[]; dismissed_suggestions?: Replacement[]; model_u
  */
 reliable_paste?: boolean; typing_tool?: TypingTool; external_script_path?: string | null; filler_word_removal_enabled?: boolean; custom_filler_words?: string[] | null; 
 /**
- * Fresh installs default from the OS locale; existing stores are migrated
+ * Fresh installs default from the OS locale, else Traditional; existing stores are migrated
  * in `apply_settings_migrations`.
  */
 chinese_script?: ChineseScript; transcribe_accelerator?: TranscribeAcceleratorSetting; ort_accelerator?: OrtAcceleratorSetting; 
@@ -1144,6 +1264,10 @@ export type EngineType =
  * the file, so this one variant covers the whole transcribe-cpp family.
  */
 "TranscribeCpp" | "Parakeet" | "Moonshine" | "MoonshineStreaming" | "SenseVoice" | "Canary" | "Cohere"
+/**
+ * How a meeting can be exported.
+ */
+export type ExportFormat = "markdown" | "text" | "srt" | "vtt"
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
 export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean }
 export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
@@ -1165,9 +1289,21 @@ export type LLMPrompt = { id: string; name: string; prompt: string }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type Meeting = { id: number; 
 /**
+ * Written by the AI with the first notes, or by the user.
+ */
+title: string | null; 
+/**
+ * The template the notes were written with.
+ */
+template: string | null; 
+/**
  * Unix milliseconds.
  */
 started_at: number; duration_ms: number; status: MeetingStatus; transcript: TranscriptLine[]; summary: string | null; 
+/**
+ * Names given to speakers, by speaker number.
+ */
+speaker_names: Partial<{ [key in number]: string }>; 
 /**
  * The AI is writing the summary right now.
  */
@@ -1178,6 +1314,11 @@ summarizing: boolean;
  */
 error: string | null }
 export type MeetingStatus = "recording" | "transcribing" | "ready" | "failed"
+/**
+ * Owl: a meeting-notes template the user wrote; the built-ins live in
+ * `managers/meeting.rs`. `prompt` says what the notes should contain.
+ */
+export type MeetingTemplate = { id: string; name: string; prompt: string }
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; is_directory: boolean; engine_type: EngineType; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
 /**
@@ -1186,7 +1327,7 @@ export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null
  */
 export type ModelSource = 
 /**
- * Direct HTTP download from a URL (current blob.handy.computer hosting).
+ * Direct HTTP download from an application-provided URL.
  */
 { Url: { url: string; 
 /**
@@ -1223,6 +1364,10 @@ export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "
  * Owl: dictionary replacement, "heard `from`, write `to`" (see `dictionary.rs`).
  */
 export type Replacement = { from: string; to: string }
+/**
+ * Owl: a secret string (the local API token), kept out of logs.
+ */
+export type Secret = string
 export type SecretMap = Partial<{ [key in string]: string }>
 export type SecureInputStatus = { 
 /**
@@ -1322,12 +1467,29 @@ export type StreamTextEvent = { committed: string; tentative: string }
  */
 export type StreamWorkKind = "transcribing" | "polishing"
 /**
+ * What the notes can be written with: the built-in template ids (named in
+ * the UI) and the AIs that are set up.
+ */
+export type SummaryOptions = { built_in_templates: string[]; providers: SummaryProvider[] }
+/**
+ * An AI that can write meeting notes: a Post Process provider with a model.
+ */
+export type SummaryProvider = { id: string; label: string; model: string }
+/**
  * UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
  * and `Dark` force one of the two palettes Handy already ships.
  */
 export type Theme = "system" | "light" | "dark"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
-export type TranscriptLine = { start_ms: number; speaker: Speaker; text: string }
+export type TranscriptLine = { start_ms: number; 
+/**
+ * 0 on meetings from before speaker labels.
+ */
+end_ms?: number; speaker: Speaker; 
+/**
+ * Which of the other people said it (1, 2, …), once speaker labels ran.
+ */
+voice?: number | null; text: string }
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }

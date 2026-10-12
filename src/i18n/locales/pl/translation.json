@@ -746,7 +746,8 @@
     "processing": "Przetwarzanie...",
     "addingToDictionary": "Adding to dictionary",
     "addedToDictionary": "Added to dictionary",
-    "dontAdd": "Don't add"
+    "dontAdd": "Don't add",
+    "loadingModel": "Wczytywanie modelu..."
   },
   "whatsNew": {
     "title": "Nowości w Owl v{{version}}"
@@ -809,6 +810,7 @@
       "copy": "Copy transcript",
       "copied": "Transcript copied",
       "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "micFailed": "The microphone stopped during the meeting, so part of it may be missing.",
       "speaker": {
         "you": "You",
         "others": "Others"

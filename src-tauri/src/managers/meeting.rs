@@ -7,7 +7,6 @@ use crate::audio_toolkit::audio::{read_wav_samples, FrameResampler};
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings::{get_settings, AppSettings, ChineseScript};
 use anyhow::{anyhow, Result};
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use rusqlite::{params, Connection};
 use rusqlite_migration::{Migrations, M};
 use serde::{Deserialize, Serialize};
@@ -141,7 +140,8 @@ struct Active {
     id: i64,
     started: Instant,
     stop: Arc<AtomicBool>,
-    recorder: JoinHandle<Result<()>>,
+    /// Records both tracks; returns a warning code for the meeting, if any.
+    recorder: JoinHandle<Result<Option<String>>>,
 }
 
 pub struct MeetingManager {
@@ -242,7 +242,10 @@ impl MeetingManager {
                 .join()
                 .map_err(|_| anyhow!("The recorder crashed"))
                 .and_then(|r| r)
-                .and_then(|_| this.transcribe(active.id));
+                .and_then(|mic_warning| {
+                    let (lines, warning) = this.transcribe(active.id)?;
+                    Ok((lines, mic_warning.or(warning)))
+                });
             let conn = this.conn();
             match (result, conn) {
                 (Ok((lines, warning)), Ok(conn)) => {
@@ -486,12 +489,16 @@ impl Track {
 }
 
 /// Records until `stop`: the microphone to `mic.wav` and, on macOS, the
-/// system audio to `system.wav`. Streams live on this thread because cpal
-/// streams can't move between threads.
-fn record(folder: &Path, mic_name: Option<String>, stop: &AtomicBool) -> Result<()> {
-    let (mic_stream, mic_rate, mic_consumer) = open_mic(mic_name)?;
-    mic_stream.play()?;
-    let mut tracks = vec![Track::new(mic_rate, mic_consumer, &folder.join("mic.wav"))?];
+/// system audio to `system.wav`. Returns `mic_failed` when the microphone
+/// stopped mid-meeting (unplugged, asleep), so the meeting says so instead of
+/// ending in silence.
+fn record(folder: &Path, mic_name: Option<String>, stop: &AtomicBool) -> Result<Option<String>> {
+    let (mic, mic_consumer) = open_mic(mic_name)?;
+    let mut tracks = vec![Track::new(
+        SAMPLE_RATE as u32,
+        mic_consumer,
+        &folder.join("mic.wav"),
+    )?];
 
     #[cfg(target_os = "macos")]
     let _tap = match crate::audio_toolkit::audio::system_capture::start() {
@@ -513,53 +520,56 @@ fn record(folder: &Path, mic_name: Option<String>, stop: &AtomicBool) -> Result<
         std::thread::sleep(Duration::from_millis(50));
         tracks.iter_mut().for_each(Track::drain);
     }
-    drop(mic_stream);
+    let stopped = mic.stop()?;
     for track in tracks {
         track.finish()?;
     }
-    Ok(())
+    if stopped.dropped_frames > 0 {
+        log::warn!(
+            "Meeting: the microphone dropped {} frames",
+            stopped.dropped_frames
+        );
+    }
+    Ok(match stopped.end_reason {
+        handy_recorder::EndReason::StopCalled => None,
+        reason => {
+            log::error!("Meeting: the microphone stopped early: {reason:?}");
+            Some("mic_failed".to_string())
+        }
+    })
 }
 
-fn open_mic(name: Option<String>) -> Result<(cpal::Stream, u32, rtrb::Consumer<f32>)> {
-    let host = crate::audio_toolkit::get_cpal_host();
-    let device = name
-        .and_then(|name| {
-            host.input_devices()
-                .ok()?
-                .find(|d| d.name().ok().as_deref() == Some(name.as_str()))
-        })
-        .or_else(|| host.default_input_device())
-        .ok_or_else(|| anyhow!("No microphone found"))?;
-    let config = device.default_input_config()?;
-    let rate = config.sample_rate().0;
-    let channels = config.channels() as usize;
-    let (mut producer, consumer) = rtrb::RingBuffer::new(rate as usize * 10);
-    let err = |e| log::error!("Meeting microphone error: {e}");
-    let stream = match config.sample_format() {
-        cpal::SampleFormat::F32 => device.build_input_stream(
-            &config.into(),
-            move |data: &[f32], _| {
-                for frame in data.chunks_exact(channels) {
-                    let _ = producer.push(frame.iter().sum::<f32>() / channels as f32);
-                }
-            },
-            err,
-            None,
-        )?,
-        cpal::SampleFormat::I16 => device.build_input_stream(
-            &config.into(),
-            move |data: &[i16], _| {
-                for frame in data.chunks_exact(channels) {
-                    let sum: f32 = frame.iter().map(|s| *s as f32 / i16::MAX as f32).sum();
-                    let _ = producer.push(sum / channels as f32);
-                }
-            },
-            err,
-            None,
-        )?,
-        other => return Err(anyhow!("Unsupported microphone format {other:?}")),
-    };
-    Ok((stream, rate, consumer))
+/// Hands the microphone's 16 kHz mono chunks to the recording loop.
+struct RingSink(rtrb::Producer<f32>);
+
+impl handy_recorder::Sink for RingSink {
+    fn process_chunk(&mut self, chunk: handy_recorder::AudioChunk<'_>) {
+        for s in &chunk.samples[..chunk.valid_frames] {
+            let _ = self.0.push(*s);
+        }
+    }
+}
+
+/// Opens the microphone chosen in Settings (by name), or the default one.
+fn open_mic(
+    name: Option<String>,
+) -> Result<(handy_recorder::Recorder<RingSink>, rtrb::Consumer<f32>)> {
+    let device = name.and_then(|name| {
+        handy_recorder::list_input_devices()
+            .ok()?
+            .into_iter()
+            .find(|d| d.name == name)
+            .map(|d| d.id)
+    });
+    let recorder = handy_recorder::Recorder::open(handy_recorder::RecorderConfig {
+        device,
+        ..handy_recorder::RecorderConfig::speech()
+    })?;
+    let (producer, consumer) = rtrb::RingBuffer::new(SAMPLE_RATE * 10);
+    recorder
+        .start(RingSink(producer))
+        .map_err(|e| anyhow!("The microphone didn't start: {}", e.error))?;
+    Ok((recorder, consumer))
 }
 
 /// Splits 16 kHz audio into `(start, end)` sample ranges that contain speech,

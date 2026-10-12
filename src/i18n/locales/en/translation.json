@@ -807,6 +807,7 @@
       "resummarize": "Summarize again",
       "summarizing": "Summarizing…",
       "summaryNeedsProvider": "Choose an AI provider and model on the Post Process page first.",
+      "setUpAi": "Set up AI",
       "transcript": "Transcript",
       "noSpeech": "No speech was found in this recording.",
       "copy": "Copy transcript",

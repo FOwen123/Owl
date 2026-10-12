@@ -889,6 +889,10 @@
         "ready": "Ready",
         "failed": "Failed"
       }
+    },
+    "editByVoice": {
+      "cantSeeText": "Owl can't see the text in this app, so it can't edit it by voice.",
+      "selectionChanged": "The selection changed while Owl was working, so the edit wasn't pasted."
     }
   }
 }

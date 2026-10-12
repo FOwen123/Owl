@@ -887,6 +887,10 @@
         "ready": "完成",
         "failed": "失敗"
       }
+    },
+    "editByVoice": {
+      "cantSeeText": "Owl 看不到這個 App 裡的文字，所以無法用語音編輯。",
+      "selectionChanged": "Owl 處理時選取的文字變了，所以沒有貼上修改。"
     }
   }
 }

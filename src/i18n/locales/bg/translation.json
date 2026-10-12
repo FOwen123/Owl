@@ -182,10 +182,15 @@
         "none": "Няма настроени бързи клавиши",
         "notFound": "Бързият клавиш не е намерен",
         "pressKeys": "Натиснете клавишите...",
+        "notSet": "Not set",
         "bindings": {
           "transcribe": {
             "name": "Бърз клавиш за транскрипция",
             "description": "Клавишната комбинация за запис и транскрибиране на гласа ви."
+          },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
           },
           "cancel": {
             "name": "Бърз клавиш за отказ",
@@ -279,11 +284,34 @@
         "output": "Изход",
         "transcription": "Транскрипция",
         "history": "История",
+        "outside": "Other apps",
         "experimental": "Експериментални"
       },
       "experimentalToggle": {
         "label": "Експериментални функции",
         "description": "Включване на експериментални функции, които са още в разработка."
+      },
+      "outside": {
+        "cli": {
+          "title": "Command line",
+          "description": "Use Owl from Terminal.",
+          "install": "Install",
+          "installed": "Installed at {{path}}",
+          "failed": "Couldn't install the command line."
+        },
+        "api": {
+          "title": "Local API",
+          "description": "Lets other apps on this Mac transcribe audio with Owl.",
+          "busy": "Couldn't start the API. Another app is using its port.",
+          "address": "Address",
+          "addressDescription": "Where apps send audio.",
+          "token": "Token",
+          "tokenDescription": "Apps send this to prove they're allowed."
+        },
+        "mcp": {
+          "title": "AI agents",
+          "description": "Lets AI apps read your meetings and dictations. Run this in Terminal."
+        }
       },
       "lazyStreamClose": {
         "label": "Държане на микрофона отворен между транскрипции",
@@ -746,7 +774,8 @@
     "processing": "Обработка...",
     "addingToDictionary": "Adding to dictionary",
     "addedToDictionary": "Added to dictionary",
-    "dontAdd": "Don't add"
+    "dontAdd": "Don't add",
+    "loadingModel": "Зареждане на модела..."
   },
   "whatsNew": {
     "title": "Ново в Owl v{{version}}"
@@ -809,6 +838,47 @@
       "copy": "Copy transcript",
       "copied": "Transcript copied",
       "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
+      "micFailed": "The microphone stopped during the meeting, so part of it may be missing.",
+      "speakerNumbered": "Speaker {{n}}",
+      "speakerName": "Name",
+      "speakerModel": {
+        "title": "Speaker labels",
+        "description": "Tells the people on a call apart.",
+        "download": "Download (139 MB)",
+        "downloading": "Downloading… {{percent}}%"
+      },
+      "notes": "Notes",
+      "more": "More",
+      "retranscribe": "Transcribe again",
+      "rename": "Rename",
+      "listening": "Listening…",
+      "import": "Import audio",
+      "audioOrVideo": "Audio or video",
+      "unsupportedFormat": "This format isn't supported yet.",
+      "importTooLong": "This file is longer than 4 hours, so Owl can't import it.",
+      "export": "Export",
+      "exported": "Saved",
+      "exportAs": {
+        "markdown": "Markdown",
+        "text": "Plain text",
+        "srt": "SRT subtitles",
+        "vtt": "VTT subtitles"
+      },
+      "templates": {
+        "title": "Note templates",
+        "description": "What meeting notes contain.",
+        "default": "Default template",
+        "general": "General",
+        "one_on_one": "1:1",
+        "interview": "Interview",
+        "standup": "Stand-up",
+        "lecture": "Lecture",
+        "add": "Add template",
+        "name": "Name",
+        "prompt": "What the notes should contain",
+        "remove": "Remove",
+        "untitled": "My template"
+      },
       "speaker": {
         "you": "You",
         "others": "Others"
@@ -819,6 +889,10 @@
         "ready": "Ready",
         "failed": "Failed"
       }
+    },
+    "editByVoice": {
+      "cantSeeText": "Owl can't see the text in this app, so it can't edit it by voice.",
+      "selectionChanged": "The selection changed while Owl was working, so the edit wasn't pasted."
     }
   }
 }

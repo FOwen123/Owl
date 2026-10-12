@@ -22,6 +22,11 @@ const settings: Record<string, unknown> = {
   push_to_talk: true,
   bindings: {
     transcribe: binding("transcribe", "Transcribe", "option+space"),
+    edit_by_voice: binding(
+      "edit_by_voice",
+      "Edit by voice",
+      "option+shift+space",
+    ),
     cancel: binding("cancel", "Cancel", "escape"),
   },
   custom_words: ["Owl", "Tauri", "Breeze"],
@@ -30,7 +35,17 @@ const settings: Record<string, unknown> = {
     { trigger: "我的地址", text: "台北市信義區市府路 1 號" },
   ],
   replacements: [{ from: "cloud code", to: "Claude Code" }],
+  meeting_template: "general",
+  meeting_templates: [
+    {
+      id: "own-1",
+      name: "Sales call",
+      prompt: "### Customer needs, ### Objections, ### Next Steps",
+    },
+  ],
   learn_from_edits: true,
+  local_api_enabled: false,
+  local_api_token: "",
   cleanup_level: "light",
   post_process_enabled: true,
   voice_commands_enabled: false,
@@ -85,15 +100,26 @@ const responses: Record<string, unknown> = {
       started_at: Date.now() - 86_400_000,
       duration_ms: 1_520_000,
       status: "ready",
-      summary: null,
+      summary:
+        "<@speaker:1> and you agreed to ship the beta on Friday.\n\n### Launch\n- <@speaker:2> says QA has 12 open bugs.",
+      title: "Beta launch plan",
+      template: "general",
+      speaker_names: { 1: "Harry" },
       summarizing: false,
-      error: "system_audio_missing",
+      error: null,
       transcript: [
         { start_ms: 2_000, speaker: "you", text: "好，我們開始今天的週會。" },
         {
           start_ms: 6_500,
           speaker: "others",
+          voice: 1,
           text: "Sure. The beta build is ready for testing.",
+        },
+        {
+          start_ms: 9_000,
+          speaker: "others",
+          voice: 2,
+          text: "QA still has twelve open bugs.",
         },
         {
           start_ms: 12_000,
@@ -103,9 +129,23 @@ const responses: Record<string, unknown> = {
       ],
     },
   ],
+  speaker_model_installed: false,
+  get_summary_options: {
+    built_in_templates: [
+      "general",
+      "one_on_one",
+      "interview",
+      "standup",
+      "lecture",
+    ],
+    providers: [
+      { id: "openrouter", label: "OpenRouter", model: "deepseek-v4-flash" },
+    ],
+  },
   get_secure_input_status: { active: false },
   is_update_checks_locked: true,
   is_portable: false,
+  install_command_line: "/Users/you/.local/bin/owl",
   is_laptop: true,
   is_recording: false,
   get_app_dir_path: "~/Library/Application Support/com.hao.owl",
@@ -120,6 +160,12 @@ export function installMockBackend() {
   mockIPC(
     (cmd, payload) => {
       if (cmd in responses) return responses[cmd];
+      if (cmd === "change_local_api_setting") {
+        settings.local_api_enabled = (payload as { enabled: boolean }).enabled;
+        settings.local_api_token ||=
+          "owl_3f9c1a7e5b2d4c6f8a0e1b3d5f7a9c2e4b6d8f0a1c3e5a7b";
+        return null;
+      }
       if (cmd === "change_cleanup_level_setting") {
         settings.cleanup_level = (payload as { level: string }).level;
         return null;

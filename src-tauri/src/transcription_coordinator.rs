@@ -302,6 +302,12 @@ impl CoordinatorState {
         // input against any already-remembered press instead of dropping it
         // silently.
         if let Stage::Processing = self.stage {
+            // Owl: an edit is aimed at what's selected when its key goes
+            // down, so it never waits: a later start would aim it elsewhere.
+            if input.binding_id == "edit_by_voice" {
+                debug!("Ignoring edit by voice: pipeline busy");
+                return None;
+            }
             // Only one press can be remembered. Once a binding has claimed it,
             // inputs for a different binding are ignored — the same rule as a
             // different binding pressed while recording — rather than silently
@@ -535,7 +541,7 @@ pub struct TranscriptionCoordinator {
 }
 
 pub fn is_transcribe_binding(id: &str) -> bool {
-    id == "transcribe" || id == "transcribe_with_post_process"
+    id == "transcribe" || id == "transcribe_with_post_process" || id == "edit_by_voice"
 }
 
 impl TranscriptionCoordinator {
@@ -1009,6 +1015,32 @@ mod tests {
             matches!(effect, Some(Effect::Start { .. })),
             "remembered press should start once the pipeline drains"
         );
+    }
+
+    /// Edit by voice pressed while busy is dropped, not started later on
+    /// whatever is selected by then.
+    #[test]
+    fn edit_by_voice_press_during_processing_is_dropped() {
+        let mut state = CoordinatorState::new();
+        let now = Instant::now();
+        assert!(matches!(
+            state.on_input(ptt_input(true), now),
+            Some(Effect::Start { .. })
+        ));
+        state.on_input(ptt_input(false), now + Duration::from_millis(100));
+        assert!(matches!(
+            state.on_grace_expired(),
+            Some(Effect::Stop { .. })
+        ));
+
+        let edit = InputEvent {
+            binding_id: "edit_by_voice".to_string(),
+            ..ptt_input(true)
+        };
+        assert!(state
+            .on_input(edit, now + Duration::from_millis(200))
+            .is_none());
+        assert!(state.on_processing_finished().is_none());
     }
 
     /// Two toggle presses inside one busy window net to no-op: nothing starts

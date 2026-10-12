@@ -75,7 +75,8 @@ pub fn validate_shortcut(raw: &str) -> Result<(), String> {
 
 /// Register a shortcut using Tauri's global-shortcut plugin
 pub fn register_shortcut(app: &AppHandle, binding: ShortcutBinding) -> Result<(), String> {
-    if super::is_retired_binding(&binding.id) {
+    // Owl: a binding without a key (retired, or left unassigned) isn't registered.
+    if super::is_retired_binding(&binding.id) || binding.current_binding.trim().is_empty() {
         return Ok(());
     }
     // Validate for Tauri requirements

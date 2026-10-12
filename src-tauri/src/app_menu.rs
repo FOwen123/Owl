@@ -5,7 +5,6 @@
 //! lang:*) work here unchanged and `handle` takes the rest. The menu is
 //! rebuilt whenever settings are written, so its ticks stay current.
 
-use crate::audio_toolkit::audio::list_input_devices;
 use crate::managers::meeting::MeetingManager;
 use crate::settings::{self, AppSettings, CleanupLevel};
 use crate::tray_i18n::get_tray_translations;
@@ -22,7 +21,7 @@ static MICROPHONES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 pub fn refresh_microphones(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
-        match list_input_devices() {
+        match handy_recorder::list_input_devices() {
             Ok(devices) => {
                 *MICROPHONES.lock().unwrap() = devices.into_iter().map(|d| d.name).collect()
             }

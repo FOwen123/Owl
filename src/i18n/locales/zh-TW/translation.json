@@ -182,10 +182,15 @@
         "none": "未設定快捷鍵",
         "notFound": "未找到快捷鍵",
         "pressKeys": "請按鍵...",
+        "notSet": "未設定",
         "bindings": {
           "transcribe": {
             "name": "轉錄快捷鍵",
             "description": "用於錄製和轉錄語音的鍵盤快捷鍵"
+          },
+          "edit_by_voice": {
+            "name": "語音編輯",
+            "description": "改寫選取的文字，或寫出你要的內容。"
           },
           "cancel": {
             "name": "取消快捷鍵",
@@ -279,11 +284,34 @@
         "output": "輸出",
         "transcription": "轉錄",
         "history": "歷史",
+        "outside": "其他 App",
         "experimental": "實驗性"
       },
       "experimentalToggle": {
         "label": "實驗性功能",
         "description": "啟用仍在開發中的實驗性功能"
+      },
+      "outside": {
+        "cli": {
+          "title": "命令列",
+          "description": "在終端機中使用 Owl。",
+          "install": "安裝",
+          "installed": "已安裝到 {{path}}",
+          "failed": "無法安裝命令列。"
+        },
+        "api": {
+          "title": "本機 API",
+          "description": "讓這台 Mac 上的其他 App 用 Owl 轉寫音訊。",
+          "busy": "無法啟動 API，它的連接埠已被其他 App 佔用。",
+          "address": "位址",
+          "addressDescription": "App 傳送音訊的位置。",
+          "token": "權杖",
+          "tokenDescription": "App 需附上它才能使用。"
+        },
+        "mcp": {
+          "title": "AI 代理",
+          "description": "讓 AI App 讀取你的會議和聽寫內容。請在終端機中執行。"
+        }
       },
       "lazyStreamClose": {
         "label": "在轉錄之間保持麥克風開啟",
@@ -746,7 +774,8 @@
     "processing": "處理中...",
     "addingToDictionary": "正在加入字典",
     "addedToDictionary": "已加入字典",
-    "dontAdd": "不要加入"
+    "dontAdd": "不要加入",
+    "loadingModel": "正在載入模型..."
   },
   "whatsNew": {
     "title": "Owl v{{version}} 新功能"
@@ -809,6 +838,47 @@
       "copy": "複製逐字稿",
       "copied": "已複製逐字稿",
       "systemAudioMissing": "Owl 無法收到系統音訊，所以這份逐字稿只有你的麥克風。請到「系統設定 → 隱私權與安全性 → 螢幕與系統音訊錄製」允許 Owl。",
+      "micFailed": "會議中麥克風中斷了，部分內容可能遺失。",
+      "speakerNumbered": "說話者 {{n}}",
+      "speakerName": "名字",
+      "speakerModel": {
+        "title": "說話者標籤",
+        "description": "區分通話中的每個人。",
+        "download": "下載（139 MB）",
+        "downloading": "正在下載… {{percent}}%"
+      },
+      "notes": "筆記",
+      "more": "更多",
+      "retranscribe": "重新轉寫",
+      "rename": "重新命名",
+      "listening": "正在聆聽…",
+      "import": "匯入音訊",
+      "audioOrVideo": "音訊或影片",
+      "unsupportedFormat": "目前還不支援這種格式。",
+      "importTooLong": "這個檔案超過 4 小時，Owl 無法匯入。",
+      "export": "匯出",
+      "exported": "已儲存",
+      "exportAs": {
+        "markdown": "Markdown",
+        "text": "純文字",
+        "srt": "SRT 字幕",
+        "vtt": "VTT 字幕"
+      },
+      "templates": {
+        "title": "筆記範本",
+        "description": "會議筆記包含的內容。",
+        "default": "預設範本",
+        "general": "一般",
+        "one_on_one": "一對一",
+        "interview": "面試",
+        "standup": "站會",
+        "lecture": "講座",
+        "add": "新增範本",
+        "name": "名稱",
+        "prompt": "筆記應包含的內容",
+        "remove": "刪除",
+        "untitled": "我的範本"
+      },
       "speaker": {
         "you": "你",
         "others": "其他人"
@@ -819,6 +889,10 @@
         "ready": "完成",
         "failed": "失敗"
       }
+    },
+    "editByVoice": {
+      "cantSeeText": "Owl 看不到這個 App 裡的文字，所以無法用語音編輯。",
+      "selectionChanged": "Owl 處理時選取的文字變了，所以沒有貼上修改。"
     }
   }
 }

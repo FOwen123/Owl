@@ -100,6 +100,15 @@ pub struct Replacement {
     pub to: String,
 }
 
+/// Owl: a meeting-notes template the user wrote; the built-ins live in
+/// `managers/meeting.rs`. `prompt` says what the notes should contain.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Type)]
+pub struct MeetingTemplate {
+    pub id: String,
+    pub name: String,
+    pub prompt: String,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
 pub struct LLMPrompt {
     pub id: String,
@@ -378,6 +387,21 @@ impl fmt::Debug for SecretMap {
     }
 }
 
+/// Owl: a secret string (the local API token), kept out of logs.
+#[derive(Clone, Default, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+pub(crate) struct Secret(pub String);
+
+impl fmt::Debug for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(if self.0.is_empty() {
+            "\"\""
+        } else {
+            "[REDACTED]"
+        })
+    }
+}
+
 impl std::ops::Deref for SecretMap {
     type Target = HashMap<String, String>;
     fn deref(&self) -> &Self::Target {
@@ -469,9 +493,22 @@ pub struct AppSettings {
     pub snippets: Vec<Snippet>,
     #[serde(default)]
     pub replacements: Vec<Replacement>,
+    /// Owl: the user's meeting-notes templates.
+    #[serde(default)]
+    pub meeting_templates: Vec<MeetingTemplate>,
+    /// Owl: the template new meeting notes use (a built-in id or one of the
+    /// user's).
+    #[serde(default = "default_meeting_template")]
+    pub meeting_template: String,
     /// Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
     #[serde(default = "default_learn_from_edits")]
     pub learn_from_edits: bool,
+    /// Owl: the local transcription API (`local_api.rs`), off by default.
+    #[serde(default)]
+    pub local_api_enabled: bool,
+    /// Owl: its bearer token, made the first time it's turned on.
+    #[serde(default)]
+    pub local_api_token: Secret,
     /// Owl: None / Light / Medium (`cleanup_rules.rs`, AI cleanup in `actions.rs`).
     #[serde(default)]
     pub cleanup_level: CleanupLevel,
@@ -692,6 +729,10 @@ fn default_sound_theme() -> SoundTheme {
 }
 
 /// Owl: dark by default. A theme the user already saved is kept.
+fn default_meeting_template() -> String {
+    "general".to_string()
+}
+
 fn default_learn_from_edits() -> bool {
     true
 }
@@ -948,14 +989,16 @@ pub fn get_default_settings() -> AppSettings {
         },
     );
     #[cfg(target_os = "windows")]
-    let default_post_process_shortcut = "ctrl+shift+space";
+    let default_edit_shortcut = "ctrl+shift+space";
     #[cfg(target_os = "macos")]
-    let default_post_process_shortcut = "option+shift+space";
+    let default_edit_shortcut = "option+shift+space";
     #[cfg(target_os = "linux")]
-    let default_post_process_shortcut = "ctrl+shift+space";
+    let default_edit_shortcut = "ctrl+shift+space";
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let default_post_process_shortcut = "alt+shift+space";
+    let default_edit_shortcut = "alt+shift+space";
 
+    // Owl: Post Process runs on the normal shortcut, so Handy's
+    // post-processing binding has no key; its key edits by voice.
     bindings.insert(
         "transcribe_with_post_process".to_string(),
         ShortcutBinding {
@@ -963,8 +1006,18 @@ pub fn get_default_settings() -> AppSettings {
             name: "Transcribe with Post-Processing".to_string(),
             description: "Converts your speech into text and applies AI post-processing."
                 .to_string(),
-            default_binding: default_post_process_shortcut.to_string(),
-            current_binding: default_post_process_shortcut.to_string(),
+            default_binding: String::new(),
+            current_binding: String::new(),
+        },
+    );
+    bindings.insert(
+        "edit_by_voice".to_string(),
+        ShortcutBinding {
+            id: "edit_by_voice".to_string(),
+            name: "Edit by voice".to_string(),
+            description: "Changes the selected text, or writes what you ask for.".to_string(),
+            default_binding: default_edit_shortcut.to_string(),
+            current_binding: default_edit_shortcut.to_string(),
         },
     );
     bindings.insert(
@@ -1006,7 +1059,11 @@ pub fn get_default_settings() -> AppSettings {
         custom_words: Vec::new(),
         snippets: Vec::new(),
         replacements: Vec::new(),
+        meeting_templates: Vec::new(),
+        meeting_template: default_meeting_template(),
         learn_from_edits: default_learn_from_edits(),
+        local_api_enabled: false,
+        local_api_token: Secret::default(),
         cleanup_level: CleanupLevel::default(),
         voice_commands_enabled: false,
         edit_suggestions: Vec::new(),
@@ -1111,13 +1168,8 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
             updated = true;
         }
 
-        // Merge in any bindings added since this store was written.
-        for (key, value) in get_default_settings().bindings {
-            if let std::collections::hash_map::Entry::Vacant(entry) = settings.bindings.entry(key) {
-                debug!("Adding missing binding: {}", entry.key());
-                entry.insert(value);
-                updated = true;
-            }
+        if add_missing_bindings(&mut settings) {
+            updated = true;
         }
 
         if updated {
@@ -1136,6 +1188,56 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
     }
 
     settings
+}
+
+/// Merges in bindings added since the store was written. Owl: one whose key
+/// is already taken starts with no key, so an upgrade never puts Edit by
+/// voice on a key the user already dictates with.
+fn add_missing_bindings(settings: &mut AppSettings) -> bool {
+    let mut added = false;
+    for (key, mut value) in get_default_settings().bindings {
+        if settings.bindings.contains_key(&key) {
+            continue;
+        }
+        let taken = !value.current_binding.is_empty()
+            && settings
+                .bindings
+                .values()
+                .any(|b| shortcuts_overlap(&b.current_binding, &value.current_binding));
+        if taken {
+            value.current_binding.clear();
+        }
+        debug!("Adding missing binding: {}", key);
+        settings.bindings.insert(key, value);
+        added = true;
+    }
+    added
+}
+
+/// Whether two shortcuts fire on the same press: the same key and modifiers,
+/// whatever their order, spelling or side ("option_left+shift+space" and
+/// "shift+option+space").
+fn shortcuts_overlap(a: &str, b: &str) -> bool {
+    use handy_keys::{Hotkey, Modifiers};
+    let keys = |s: &str| {
+        let hotkey: Hotkey = s.parse().ok()?;
+        let mut modifiers = hotkey.modifiers;
+        for group in [
+            Modifiers::CMD,
+            Modifiers::SHIFT,
+            Modifiers::CTRL,
+            Modifiers::OPT,
+        ] {
+            if modifiers.intersects(group) {
+                modifiers |= group;
+            }
+        }
+        Some((modifiers, hotkey.key))
+    };
+    match (keys(a), keys(b)) {
+        (Some(a), Some(b)) => a == b,
+        _ => !a.is_empty() && a.eq_ignore_ascii_case(b),
+    }
 }
 
 /// Rebuilds settings from a store value that failed to deserialize as a whole.
@@ -1181,6 +1283,16 @@ fn apply_settings_migrations(
     settings_value: &serde_json::Value,
 ) -> bool {
     let mut updated = false;
+
+    // Owl: Option+Shift+Space moved from Handy's post-processing binding
+    // (never registered in Owl) to Edit by voice.
+    if let Some(old) = settings.bindings.get_mut("transcribe_with_post_process") {
+        if !old.current_binding.is_empty() || !old.default_binding.is_empty() {
+            old.current_binding.clear();
+            old.default_binding.clear();
+            updated = true;
+        }
+    }
 
     // One-time onboarding migration: users with an explicit selected model have
     // already made it through model selection. Users who merely have compatible
@@ -1345,14 +1457,16 @@ pub fn set_cleanup_level(settings: &mut AppSettings, level: CleanupLevel) {
 }
 
 /// Queues new edit suggestions, skipping ones already in the Dictionary,
-/// already waiting, or dismissed before. Returns the ones added.
+/// already waiting, or dismissed before. Returns the ones added. A suggestion
+/// with an empty `from` is a Words entry (see `correction::suggest`).
 pub fn add_edit_suggestions(
     settings: &mut AppSettings,
     found: Vec<Replacement>,
 ) -> Vec<Replacement> {
     let mut added = Vec::new();
     for r in found {
-        let known = settings.replacements.iter().any(|x| x.from == r.from)
+        let known = has_word(settings, &r)
+            || (!r.from.is_empty() && settings.replacements.iter().any(|x| x.from == r.from))
             || settings.edit_suggestions.contains(&r)
             || settings.dismissed_suggestions.contains(&r)
             || added.contains(&r);
@@ -1364,9 +1478,21 @@ pub fn add_edit_suggestions(
     added
 }
 
+fn has_word(settings: &AppSettings, suggestion: &Replacement) -> bool {
+    suggestion.from.is_empty()
+        && settings
+            .custom_words
+            .iter()
+            .any(|w| w.eq_ignore_ascii_case(&suggestion.to))
+}
+
 pub fn accept_edit_suggestion(settings: &mut AppSettings, suggestion: &Replacement) {
     settings.edit_suggestions.retain(|r| r != suggestion);
-    if !settings
+    if suggestion.from.is_empty() {
+        if !has_word(settings, suggestion) {
+            settings.custom_words.push(suggestion.to.clone());
+        }
+    } else if !settings
         .replacements
         .iter()
         .any(|r| r.from == suggestion.from)
@@ -1472,6 +1598,20 @@ mod tests {
         accept_edit_suggestion(&mut settings, &rep("Owel", "Owen"));
         assert_eq!(settings.edit_suggestions, vec![rep("公事", "公式")]);
         assert_eq!(settings.replacements, vec![rep("Owel", "Owen")]);
+    }
+
+    #[test]
+    fn accepting_a_word_suggestion_adds_it_to_words_once() {
+        let mut settings = get_default_settings();
+        let word = rep("", "Depick");
+        assert_eq!(
+            add_edit_suggestions(&mut settings, vec![word.clone()]),
+            vec![word.clone()]
+        );
+        accept_edit_suggestion(&mut settings, &word);
+        assert_eq!(settings.custom_words, vec!["Depick".to_string()]);
+        assert!(settings.replacements.is_empty());
+        assert!(add_edit_suggestions(&mut settings, vec![rep("", "depick")]).is_empty());
     }
 
     #[test]
@@ -1812,6 +1952,67 @@ mod tests {
     }
 
     #[test]
+    fn option_shift_space_moves_from_post_processing_to_edit_by_voice() {
+        let mut settings = get_default_settings();
+        let old = settings
+            .bindings
+            .get_mut("transcribe_with_post_process")
+            .unwrap();
+        old.current_binding = "option+shift+space".into();
+        old.default_binding = "option+shift+space".into();
+
+        assert!(apply_settings_migrations(
+            &mut settings,
+            &serde_json::json!({})
+        ));
+        assert!(settings.bindings["transcribe_with_post_process"]
+            .current_binding
+            .is_empty());
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            settings.bindings["edit_by_voice"].current_binding,
+            "option+shift+space"
+        );
+    }
+
+    #[test]
+    fn a_new_binding_on_a_key_already_in_use_starts_with_no_key() {
+        let mut settings = get_default_settings();
+        settings.bindings.remove("edit_by_voice");
+        let mine = "option+shift+space";
+        settings
+            .bindings
+            .get_mut("transcribe")
+            .unwrap()
+            .current_binding = mine.into();
+
+        assert!(add_missing_bindings(&mut settings));
+        assert_eq!(settings.bindings["transcribe"].current_binding, mine);
+        assert!(settings.bindings["edit_by_voice"]
+            .current_binding
+            .is_empty());
+
+        // The same keys spelled another way, or on one side, clash too.
+        assert!(shortcuts_overlap(
+            "option_left+shift_left+space",
+            "option+shift+space"
+        ));
+        assert!(shortcuts_overlap("shift+alt+space", "option+shift+space"));
+        assert!(!shortcuts_overlap("option+space", "option+shift+space"));
+        assert!(!shortcuts_overlap("", ""));
+
+        // Without a clash it gets its default key.
+        let mut fresh = get_default_settings();
+        let default = fresh
+            .bindings
+            .remove("edit_by_voice")
+            .unwrap()
+            .current_binding;
+        assert!(add_missing_bindings(&mut fresh));
+        assert_eq!(fresh.bindings["edit_by_voice"].current_binding, default);
+    }
+
+    #[test]
     fn legacy_none_overlay_position_deserializes_to_bottom() {
         // A persisted "none" must not fail the whole settings load; the serde
         // alias folds it onto Bottom (visibility is owned by overlay_style).
@@ -2048,8 +2249,11 @@ mod tests {
             .post_process_api_keys
             .insert("empty_provider".to_string(), "".to_string());
 
+        settings.local_api_token = Secret("owl_secret_token".to_string());
+
         let debug_output = format!("{:?}", settings);
 
+        assert!(!debug_output.contains("owl_secret_token"));
         assert!(!debug_output.contains("sk-proj-secret-key-12345"));
         assert!(!debug_output.contains("sk-ant-secret-key-67890"));
         assert!(debug_output.contains("[REDACTED]"));

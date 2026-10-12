@@ -8,6 +8,7 @@ import type {
   CleanupLevel,
   TranscribeAcceleratorSetting,
   OrtAcceleratorSetting,
+  MeetingTemplate,
   Replacement,
   ShortcutActivation,
   Snippet,
@@ -142,6 +143,10 @@ const settingUpdaters: {
   custom_words: (value) => commands.updateCustomWords(value as string[]),
   snippets: (value) => commands.updateSnippets(value as Snippet[]),
   replacements: (value) => commands.updateReplacements(value as Replacement[]),
+  meeting_templates: (value) =>
+    commands.updateMeetingTemplates(value as MeetingTemplate[]),
+  meeting_template: (value) =>
+    commands.changeMeetingTemplateSetting(value as string),
   cleanup_level: (value) =>
     commands.changeCleanupLevelSetting(value as CleanupLevel),
   voice_commands_enabled: (value) =>

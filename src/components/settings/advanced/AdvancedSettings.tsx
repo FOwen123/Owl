@@ -21,6 +21,7 @@ import { AccelerationSelector } from "../AccelerationSelector";
 import { LazyStreamClose } from "../LazyStreamClose";
 import { ChineseScriptSetting } from "../ChineseScript";
 import { VadBackendSelector } from "../VadBackendSelector";
+import { OutsideAccess } from "../OutsideAccess";
 
 export const AdvancedSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -57,6 +58,10 @@ export const AdvancedSettings: React.FC = () => {
           descriptionMode="tooltip"
           grouped={true}
         />
+      </SettingsGroup>
+
+      <SettingsGroup title={t("settings.advanced.groups.outside")}>
+        <OutsideAccess />
       </SettingsGroup>
 
       {experimentalEnabled && (

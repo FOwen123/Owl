@@ -29,6 +29,13 @@ pub fn start(app: AppHandle, pasted: String) {
 #[cfg(not(target_os = "macos"))]
 pub fn start(_app: AppHandle, _pasted: String) {}
 
+/// Stops the watcher of the last dictation, so text Owl itself changes next
+/// (Edit by voice) isn't learned as the user's fix.
+pub fn stop() {
+    #[cfg(target_os = "macos")]
+    PASTES.fetch_add(1, Ordering::SeqCst);
+}
+
 /// The character just before the cursor in the focused text box, for the
 /// space before a dictation. None for password fields and apps that hide
 /// their text.
@@ -42,6 +49,29 @@ pub fn char_before_cursor() -> Option<char> {
     None
 }
 
+/// Where Edit by voice works: the focused text box (as a hash), the
+/// selected range and the selected text ("" when nothing is selected). None
+/// for password fields and apps that hide their text.
+#[cfg(target_os = "macos")]
+pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {
+    mac::selection_spot()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {
+    None
+}
+
+/// Asks an Electron app (Slack, VS Code, …) to expose its text, as screen
+/// readers do. Other apps ignore it.
+#[cfg(target_os = "macos")]
+pub fn expose_text(pid: i32) {
+    mac::expose_text(pid)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn expose_text(_pid: i32) {}
+
 #[cfg(target_os = "macos")]
 mod mac {
     use crate::correction::{edited_span, suggest};
@@ -49,7 +79,7 @@ mod mac {
     use crate::settings::{self, Replacement};
     use log::debug;
     use objc2_application_services::{AXError, AXUIElement, AXValue, AXValueType};
-    use objc2_core_foundation::{CFRange, CFRetained, CFString, CFType};
+    use objc2_core_foundation::{CFBoolean, CFRange, CFRetained, CFString, CFType};
     use std::ptr::NonNull;
     use std::sync::atomic::Ordering;
     use std::thread::sleep;
@@ -99,7 +129,15 @@ mod mac {
             } else if last != checked && changed_at.elapsed() >= QUIET_FOR {
                 checked = last.clone();
                 if let Some(edited) = edited_span(&baseline, &last, &pasted) {
-                    record(&app, suggest(&pasted, &edited));
+                    let words = crate::spelling::words_in(&[&pasted, &edited]);
+                    let known = crate::spelling::known_words(&app, &words);
+                    // No spell checker: Handy's rules, which treat no word as known.
+                    let is_word = |w: &str| {
+                        known
+                            .as_ref()
+                            .is_some_and(|k| k.contains(&w.to_lowercase()))
+                    };
+                    record(&app, suggest(&pasted, &edited, &is_word));
                 }
             }
         }
@@ -166,9 +204,8 @@ mod mac {
         );
     }
 
-    /// The focused text box and its text, unless it's a password field or
-    /// doesn't expose its text.
-    fn focused_text() -> Option<(CFRetained<AXUIElement>, String)> {
+    /// The focused element, unless it's a password field.
+    fn focused_field() -> Option<CFRetained<AXUIElement>> {
         unsafe {
             let system = AXUIElement::new_system_wide();
             // A hung app must not stall the watcher.
@@ -179,25 +216,57 @@ mod mac {
             if string_attribute(&focused, "AXSubrole").as_deref() == Some("AXSecureTextField") {
                 return None;
             }
-            let text = string_attribute(&focused, "AXValue")?;
-            Some((focused, text))
+            Some(focused)
         }
     }
 
-    pub fn char_before_cursor() -> Option<char> {
-        let (field, text) = focused_text()?;
+    /// The focused text box and its text, unless it's a password field or
+    /// doesn't expose its text.
+    fn focused_text() -> Option<(CFRetained<AXUIElement>, String)> {
+        let focused = focused_field()?;
+        let text = unsafe { string_attribute(&focused, "AXValue")? };
+        Some((focused, text))
+    }
+
+    pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {
+        use std::hash::{Hash, Hasher};
+        let field = focused_field()?;
+        let text = unsafe { string_attribute(&field, "AXSelectedText")? };
+        let range = selected_range(&field)?;
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        field.hash(&mut hasher); // CFHash: the same element hashes the same
+        Some((hasher.finish(), (range.location, range.length), text))
+    }
+
+    pub fn expose_text(pid: i32) {
+        unsafe {
+            let app = AXUIElement::new_application(pid);
+            app.set_attribute_value(
+                &CFString::from_str("AXManualAccessibility"),
+                CFBoolean::new(true),
+            );
+        }
+    }
+
+    /// The selection (or cursor, at length 0), in UTF-16 units.
+    fn selected_range(field: &AXUIElement) -> Option<CFRange> {
         let mut range = CFRange {
             location: 0,
             length: 0,
         };
         unsafe {
-            let value = attribute(&field, "AXSelectedTextRange")?
+            let value = attribute(field, "AXSelectedTextRange")?
                 .downcast::<AXValue>()
                 .ok()?;
-            if !value.value(AXValueType::CFRange, NonNull::from(&mut range).cast()) {
-                return None;
-            }
+            value
+                .value(AXValueType::CFRange, NonNull::from(&mut range).cast())
+                .then_some(range)
         }
+    }
+
+    pub fn char_before_cursor() -> Option<char> {
+        let (field, text) = focused_text()?;
+        let range = selected_range(&field)?;
         // The range counts UTF-16 units, as macOS strings do.
         let before: Vec<u16> = text
             .encode_utf16()

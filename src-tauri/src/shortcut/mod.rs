@@ -514,6 +514,11 @@ fn register_all_shortcuts_for_implementation(
             .cloned()
             .unwrap_or_else(|| default_binding.clone());
 
+        // Owl: no key is a choice, not an invalid key to reset to the default.
+        if binding.current_binding.trim().is_empty() {
+            continue;
+        }
+
         // Validate the shortcut for the target implementation
         if let Err(e) =
             validate_shortcut_for_implementation(&binding.current_binding, implementation)

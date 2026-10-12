@@ -202,6 +202,7 @@
         "none": "未配置快捷键",
         "notFound": "未找到快捷键",
         "pressKeys": "请按键...",
+        "notSet": "未设置",
         "bindings": {
           "transcribe": {
             "name": "转录快捷键",
@@ -854,6 +855,7 @@
       "import": "导入音频",
       "audioOrVideo": "音频或视频",
       "unsupportedFormat": "暂不支持这种格式。",
+      "importTooLong": "这个文件超过 4 小时，Owl 无法导入。",
       "export": "导出",
       "exported": "已保存",
       "exportAs": {

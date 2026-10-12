@@ -202,6 +202,7 @@
         "none": "ショートカットが設定されていません",
         "notFound": "ショートカットが見つかりません",
         "pressKeys": "キーを押してください…",
+        "notSet": "Not set",
         "bindings": {
           "transcribe": {
             "name": "文字起こしのショートカット",
@@ -854,6 +855,7 @@
       "import": "Import audio",
       "audioOrVideo": "Audio or video",
       "unsupportedFormat": "This format isn't supported yet.",
+      "importTooLong": "This file is longer than 4 hours, so Owl can't import it.",
       "export": "Export",
       "exported": "Saved",
       "exportAs": {

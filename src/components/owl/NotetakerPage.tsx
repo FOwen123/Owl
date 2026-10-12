@@ -503,7 +503,11 @@ const MeetingDetail: React.FC<{
       </div>
 
       {meeting.status === "failed" && (
-        <Alert variant="error">{meeting.error}</Alert>
+        <Alert variant="error">
+          {meeting.error === "too_long"
+            ? t("owl.notetaker.importTooLong")
+            : meeting.error}
+        </Alert>
       )}
       {meeting.error === "system_audio_missing" && (
         <Alert variant="warning">{t("owl.notetaker.systemAudioMissing")}</Alert>

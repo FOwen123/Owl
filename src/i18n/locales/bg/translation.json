@@ -182,6 +182,7 @@
         "none": "Няма настроени бързи клавиши",
         "notFound": "Бързият клавиш не е намерен",
         "pressKeys": "Натиснете клавишите...",
+        "notSet": "Not set",
         "bindings": {
           "transcribe": {
             "name": "Бърз клавиш за транскрипция",
@@ -854,6 +855,7 @@
       "import": "Import audio",
       "audioOrVideo": "Audio or video",
       "unsupportedFormat": "This format isn't supported yet.",
+      "importTooLong": "This file is longer than 4 hours, so Owl can't import it.",
       "export": "Export",
       "exported": "Saved",
       "exportAs": {

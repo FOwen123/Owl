@@ -1,5 +1,5 @@
 //! Owl: fixed cleanup rules for the Light and Medium levels. They are instant,
-//! offline and run before any AI cleanup (`TODO-CLEANUP.md`).
+//! offline and run before any AI cleanup.
 //!
 //! `format_lists` is the exception: it lays out the AI's numbered lists, so
 //! it runs on the AI's reply.

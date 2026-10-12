@@ -1041,14 +1041,19 @@ impl Track {
             .saved
             .is_some_and(|t| t.elapsed() >= Duration::from_secs(5))
         {
-            // A failed one can leave the file positioned inside its header,
-            // so there are no more after that.
+            // A failed one can leave the file positioned inside its header;
+            // then nothing more is written (see `write`).
             self.saved = self.writer.flush().ok().map(|_| Instant::now());
         }
         out
     }
 
     fn write(&mut self, samples: &[f32]) {
+        // After a failed checkpoint the file sits inside its header: writing
+        // on would overwrite it, so the file keeps what it had.
+        if self.saved.is_none() {
+            return;
+        }
         for s in samples {
             let _ = self
                 .writer

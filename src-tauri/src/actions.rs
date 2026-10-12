@@ -993,7 +993,10 @@ impl ShortcutAction for TranscribeAction {
                                 let paste_time = Instant::now();
                                 let final_text = processed.final_text;
                                 let rm_for_paste = Arc::clone(&rm);
+                                // Owl: dropped when the paste is over, however it ends.
+                                let (pasting, pasted) = std::sync::mpsc::channel::<()>();
                                 ah.run_on_main_thread(move || {
+                                    let _pasting = pasting;
                                     if rm_for_paste.was_cancelled_since(cancel_generation) {
                                         debug!("Transcription operation cancelled before paste");
                                         utils::hide_recording_overlay(&ah_clone);
@@ -1034,6 +1037,13 @@ impl ShortcutAction for TranscribeAction {
                                     utils::hide_recording_overlay(&ah);
                                     set_tray_state(&ah, TrayIconState::Idle);
                                 });
+                                // Owl: stay busy until the paste has happened, so an
+                                // edit started meanwhile can't have its selection
+                                // pasted over by this dictation.
+                                let _ = tauri::async_runtime::spawn_blocking(move || {
+                                    let _ = pasted.recv();
+                                })
+                                .await;
                             }
                         }
                         Err(err) => {

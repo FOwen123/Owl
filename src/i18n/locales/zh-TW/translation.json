@@ -182,6 +182,7 @@
         "none": "未設定快捷鍵",
         "notFound": "未找到快捷鍵",
         "pressKeys": "請按鍵...",
+        "notSet": "未設定",
         "bindings": {
           "transcribe": {
             "name": "轉錄快捷鍵",
@@ -854,6 +855,7 @@
       "import": "匯入音訊",
       "audioOrVideo": "音訊或影片",
       "unsupportedFormat": "目前還不支援這種格式。",
+      "importTooLong": "這個檔案超過 4 小時，Owl 無法匯入。",
       "export": "匯出",
       "exported": "已儲存",
       "exportAs": {

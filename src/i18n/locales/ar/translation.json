@@ -179,6 +179,7 @@
         "none": "لا توجد اختصارات مجهزة",
         "notFound": "الاختصار غير موجود",
         "pressKeys": "اضغط على المفاتيح...",
+        "notSet": "Not set",
         "bindings": {
           "transcribe": {
             "name": "اختصار التفريغ الصوتي",
@@ -856,6 +857,7 @@
       "import": "Import audio",
       "audioOrVideo": "Audio or video",
       "unsupportedFormat": "This format isn't supported yet.",
+      "importTooLong": "This file is longer than 4 hours, so Owl can't import it.",
       "export": "Export",
       "exported": "Saved",
       "exportAs": {

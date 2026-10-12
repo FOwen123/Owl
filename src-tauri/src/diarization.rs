@@ -61,16 +61,36 @@ pub async fn download(app: &AppHandle) -> Result<()> {
     let path = model_path(app)?;
     std::fs::create_dir_all(path.parent().expect("model path has a folder"))?;
     let partial = path.with_extension("part");
-    let response = reqwest::get(URL).await?.error_for_status()?;
-    let mut file = std::fs::File::create(&partial)?;
+    let fetched = fetch(app, &partial).await;
+    if fetched.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    fetched?;
+    std::fs::rename(&partial, &path)?;
+    Ok(())
+}
+
+/// Downloads the model to `partial`: never more than its known size, giving
+/// up when the server stalls for a minute, and checked against its hash.
+async fn fetch(app: &AppHandle, partial: &Path) -> Result<()> {
+    let damaged = || anyhow!("The speaker model download was damaged; try again.");
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(20))
+        .read_timeout(Duration::from_secs(60))
+        .build()?;
+    let response = client.get(URL).send().await?.error_for_status()?;
+    let mut file = std::fs::File::create(partial)?;
     let mut hasher = Sha256::new();
     let mut downloaded = 0u64;
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
+        downloaded += chunk.len() as u64;
+        if downloaded > SIZE {
+            return Err(damaged());
+        }
         file.write_all(&chunk)?;
         hasher.update(&chunk);
-        downloaded += chunk.len() as u64;
         let _ = app.emit(
             "speaker-model-progress",
             SpeakerModelProgress {
@@ -80,15 +100,9 @@ pub async fn download(app: &AppHandle) -> Result<()> {
         );
     }
     file.flush()?;
-    drop(file);
-    let digest = format!("{:x}", hasher.finalize());
-    if digest != SHA256 {
-        let _ = std::fs::remove_file(&partial);
-        return Err(anyhow!(
-            "The speaker model download was damaged; try again."
-        ));
+    if downloaded != SIZE || format!("{:x}", hasher.finalize()) != SHA256 {
+        return Err(damaged());
     }
-    std::fs::rename(&partial, &path)?;
     Ok(())
 }
 

@@ -1200,10 +1200,10 @@ fn add_missing_bindings(settings: &mut AppSettings) -> bool {
             continue;
         }
         let taken = !value.current_binding.is_empty()
-            && settings.bindings.values().any(|b| {
-                b.current_binding
-                    .eq_ignore_ascii_case(&value.current_binding)
-            });
+            && settings
+                .bindings
+                .values()
+                .any(|b| shortcuts_overlap(&b.current_binding, &value.current_binding));
         if taken {
             value.current_binding.clear();
         }
@@ -1212,6 +1212,32 @@ fn add_missing_bindings(settings: &mut AppSettings) -> bool {
         added = true;
     }
     added
+}
+
+/// Whether two shortcuts fire on the same press: the same key and modifiers,
+/// whatever their order, spelling or side ("option_left+shift+space" and
+/// "shift+option+space").
+fn shortcuts_overlap(a: &str, b: &str) -> bool {
+    use handy_keys::{Hotkey, Modifiers};
+    let keys = |s: &str| {
+        let hotkey: Hotkey = s.parse().ok()?;
+        let mut modifiers = hotkey.modifiers;
+        for group in [
+            Modifiers::CMD,
+            Modifiers::SHIFT,
+            Modifiers::CTRL,
+            Modifiers::OPT,
+        ] {
+            if modifiers.intersects(group) {
+                modifiers |= group;
+            }
+        }
+        Some((modifiers, hotkey.key))
+    };
+    match (keys(a), keys(b)) {
+        (Some(a), Some(b)) => a == b,
+        _ => !a.is_empty() && a.eq_ignore_ascii_case(b),
+    }
 }
 
 /// Rebuilds settings from a store value that failed to deserialize as a whole.
@@ -1965,6 +1991,15 @@ mod tests {
         assert!(settings.bindings["edit_by_voice"]
             .current_binding
             .is_empty());
+
+        // The same keys spelled another way, or on one side, clash too.
+        assert!(shortcuts_overlap(
+            "option_left+shift_left+space",
+            "option+shift+space"
+        ));
+        assert!(shortcuts_overlap("shift+alt+space", "option+shift+space"));
+        assert!(!shortcuts_overlap("option+space", "option+shift+space"));
+        assert!(!shortcuts_overlap("", ""));
 
         // Without a clash it gets its default key.
         let mut fresh = get_default_settings();

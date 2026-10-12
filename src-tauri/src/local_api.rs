@@ -21,7 +21,7 @@ pub const PORT: u16 = 8723;
 const MAX_UPLOAD: usize = 25 * 1024 * 1024;
 const MAX_HEADERS: usize = 16 * 1024;
 /// A request must arrive within this, so a slow client can't hold the server.
-const DEADLINE: Duration = Duration::from_secs(60);
+const DEADLINE: Duration = Duration::from_secs(20);
 /// Longer audio is refused while it's decoded.
 const MAX_SECONDS: usize = 60 * 60;
 
@@ -107,16 +107,23 @@ fn serve(mut stream: TcpStream, token: &str, transcribe: &dyn Fn(&Path) -> Resul
         431 => "Request Header Fields Too Large",
         _ => "Internal Server Error",
     };
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
     let _ = write!(
         stream,
         "HTTP/1.1 {status} {reason}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
-    // Let the client read the reply before the connection closes: skip a
-    // little of any body it's still sending, in small reads.
+    // Let the client read the reply before the connection closes: skip what
+    // it's still sending, for at most a second.
     let _ = stream.shutdown(Shutdown::Write);
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
-    let _ = std::io::copy(&mut (&stream).take(1 << 20), &mut std::io::sink());
+    let until = Instant::now() + Duration::from_secs(1);
+    let mut chunk = [0u8; 8192];
+    while let Some(left) = until.checked_duration_since(Instant::now()) {
+        let _ = stream.set_read_timeout(Some(left.max(Duration::from_millis(1))));
+        if !matches!(stream.read(&mut chunk), Ok(n) if n > 0) {
+            break;
+        }
+    }
 }
 
 /// The text, and whether it was asked for as plain text.
@@ -398,6 +405,32 @@ Content-Type: multipart/form-data; boundary=b\r\nContent-Length: 999999999999\r\
         let mut reply = String::new();
         stream.read_to_string(&mut reply).unwrap();
         assert!(reply.starts_with("HTTP/1.1 413"), "{reply}");
+
+        // A refused client that keeps trickling bytes is cut off after a second.
+        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream
+            .write_all(b"GET / HTTP/1.1\r\nContent-Length: 100000\r\n\r\n")
+            .unwrap();
+        let started = Instant::now();
+        let trickle = std::thread::spawn(move || {
+            for _ in 0..40 {
+                if stream.write_all(b"x").is_err() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        });
+        let mut next = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        next.write_all(b"GET / HTTP/1.1\r\n\r\n").unwrap();
+        let mut reply = String::new();
+        next.read_to_string(&mut reply).unwrap();
+        assert!(reply.starts_with("HTTP/1.1 404"));
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "{:?}",
+            started.elapsed()
+        );
+        trickle.join().unwrap();
     }
 
     #[test]

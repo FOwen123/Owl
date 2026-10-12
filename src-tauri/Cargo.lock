@@ -2558,6 +2558,7 @@ dependencies = [
  "hound",
  "isolang",
  "libc",
+ "libloading",
  "log",
  "natural",
  "objc2",

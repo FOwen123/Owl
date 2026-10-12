@@ -14,7 +14,7 @@ use specta::Type;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
@@ -262,6 +262,15 @@ struct Active {
     stop: Arc<AtomicBool>,
     /// Records both tracks; returns a warning code for the meeting, if any.
     recorder: JoinHandle<Result<Option<String>>>,
+    /// Turns each stretch of speech into a line while the meeting runs.
+    transcriber: JoinHandle<Result<Vec<TranscriptLine>>>,
+}
+
+/// Where a meeting's speech detection and echo removal come from.
+#[derive(Clone)]
+struct Stages {
+    vad: Option<PathBuf>,
+    echo: Option<PathBuf>,
 }
 
 pub struct MeetingManager {
@@ -307,7 +316,7 @@ impl MeetingManager {
         self.active.lock().unwrap().as_ref().map(|a| a.id)
     }
 
-    pub fn start(&self) -> Result<i64> {
+    pub fn start(self: &Arc<Self>) -> Result<i64> {
         let mut active = self.active.lock().unwrap();
         if active.is_some() {
             return Err(anyhow!("A meeting is already being recorded"));
@@ -324,19 +333,99 @@ impl MeetingManager {
 
         let stop = Arc::new(AtomicBool::new(false));
         let mic_name = get_settings(&self.app).selected_microphone;
+        let stages = self.stages();
+        let (segments, queue) = mpsc::channel();
         let recorder = {
             let stop = stop.clone();
-            std::thread::spawn(move || record(&folder, mic_name, &stop))
+            std::thread::spawn(move || record(&folder, mic_name, &stop, &stages, &segments))
+        };
+        let transcriber = {
+            let this = self.clone();
+            std::thread::spawn(move || this.transcribe_live(id, queue))
         };
         *active = Some(Active {
             id,
             started: Instant::now(),
             stop,
             recorder,
+            transcriber,
         });
         drop(active);
         self.changed();
         Ok(id)
+    }
+
+    /// Silero (as for dictation) and LocalVQE, from the app's resources.
+    fn stages(&self) -> Stages {
+        let resource = |path: &str| {
+            self.app
+                .path()
+                .resolve(path, tauri::path::BaseDirectory::Resource)
+                .ok()
+        };
+        Stages {
+            vad: resource("resources/models/silero-vad-v6.2-F32.gguf"),
+            echo: resource("resources/localvqe"),
+        }
+    }
+
+    /// Transcribes each stretch of speech as it arrives and saves the lines,
+    /// so the meeting page shows them live. Ends when the recorder does.
+    fn transcribe_live(
+        &self,
+        id: i64,
+        queue: mpsc::Receiver<(Speaker, Segment)>,
+    ) -> Result<Vec<TranscriptLine>> {
+        let mut lines: Vec<TranscriptLine> = Vec::new();
+        let mut failed = None;
+        for (speaker, segment) in queue {
+            match self.transcribe_segment(speaker, &segment) {
+                Ok(Some(line)) => {
+                    let at = lines.partition_point(|l| l.start_ms <= line.start_ms);
+                    lines.insert(at, line);
+                    let json = serde_json::to_string(&lines)?;
+                    self.conn()?.execute(
+                        "UPDATE meetings SET transcript = ?1 WHERE id = ?2",
+                        params![json, id],
+                    )?;
+                    self.changed();
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    log::error!("Meeting {id}: a line failed: {e:#}");
+                    failed.get_or_insert(e);
+                }
+            }
+        }
+        match failed {
+            Some(e) if lines.is_empty() => Err(e),
+            _ => Ok(lines),
+        }
+    }
+
+    /// One stretch of speech as a line; `None` when the model heard nothing.
+    fn transcribe_segment(
+        &self,
+        speaker: Speaker,
+        segment: &Segment,
+    ) -> Result<Option<TranscriptLine>> {
+        let tm = self.app.state::<Arc<TranscriptionManager>>();
+        if !tm.is_model_loaded() {
+            let model = get_settings(&self.app).selected_model;
+            if model.is_empty() {
+                return Err(anyhow!("Choose a speech model on the Models page first"));
+            }
+            tm.load_model(&model)?;
+        }
+        let text = tm.transcribe(segment.samples.clone())?;
+        let text = text.trim();
+        Ok((!text.is_empty()).then(|| TranscriptLine {
+            start_ms: (segment.start * 1000 / SAMPLE_RATE) as i64,
+            end_ms: ((segment.start + segment.samples.len()) * 1000 / SAMPLE_RATE) as i64,
+            speaker,
+            voice: None,
+            text: text.to_string(),
+        }))
     }
 
     /// Stops recording and transcribes in the background.
@@ -357,15 +446,23 @@ impl MeetingManager {
 
         let this = self.clone();
         std::thread::spawn(move || {
-            let result = active
+            let folder = this.dir.join(active.id.to_string());
+            let recorded = active
                 .recorder
                 .join()
                 .map_err(|_| anyhow!("The recorder crashed"))
-                .and_then(|r| r)
-                .and_then(|mic_warning| {
-                    let (lines, warning) = this.transcribe(active.id)?;
-                    Ok((lines, mic_warning.or(warning)))
-                });
+                .and_then(|r| r);
+            // The recorder has dropped its queue, so this ends once the last
+            // stretches of speech are transcribed.
+            let lines = active
+                .transcriber
+                .join()
+                .map_err(|_| anyhow!("The transcriber crashed"))
+                .and_then(|r| r);
+            let result = recorded.and_then(|mic_warning| {
+                let lines = this.with_speakers(active.id, &folder, lines?);
+                Ok((lines, mic_warning.or(system_audio_warning(&folder))))
+            });
             this.finish(active.id, result);
         });
         Ok(())
@@ -444,51 +541,43 @@ impl MeetingManager {
         Ok(())
     }
 
-    /// The transcript, plus a warning when the system audio came through empty.
+    /// Transcribes a meeting from its saved audio (Transcribe again, imports):
+    /// the same echo removal and speech detection as live, then speaker
+    /// labels. Returns the lines and a warning when the call audio was empty.
     fn transcribe(&self, id: i64) -> Result<(Vec<TranscriptLine>, Option<String>)> {
-        let tm = self.app.state::<Arc<TranscriptionManager>>();
-        if !tm.is_model_loaded() {
-            let model = get_settings(&self.app).selected_model;
-            if model.is_empty() {
-                return Err(anyhow!("Choose a speech model on the Models page first"));
-            }
-            tm.load_model(&model)?;
-        }
         let folder = self.dir.join(id.to_string());
-        let mut lines = Vec::new();
-        let mut warning = None;
-        for (file, speaker) in [("mic.wav", Speaker::You), ("system.wav", Speaker::Others)] {
+        let read = |file: &str| {
             let path = folder.join(file);
-            if !path.exists() {
-                continue;
-            }
-            let samples = read_wav_samples(&path)?;
-            if speaker == Speaker::Others && samples.len() < SAMPLE_RATE {
-                warning = Some("system_audio_missing".to_string());
-            }
-            for (start, end) in speech_chunks(&samples) {
-                let text = tm.transcribe(samples[start..end].to_vec())?;
-                let text = text.trim();
-                if !text.is_empty() {
-                    lines.push(TranscriptLine {
-                        start_ms: (start * 1000 / SAMPLE_RATE) as i64,
-                        end_ms: (end * 1000 / SAMPLE_RATE) as i64,
-                        speaker,
-                        voice: None,
-                        text: text.to_string(),
-                    });
-                }
-            }
+            path.exists().then(|| read_wav_samples(&path)).transpose()
+        };
+        let (mic, system) = (read("mic.wav")?.unwrap_or_default(), read("system.wav")?);
+        let stages = self.stages();
+        let mut lines = Vec::new();
+        for (speaker, segment) in split_tracks(&stages, &mic, system.as_deref()) {
+            lines.extend(self.transcribe_segment(speaker, &segment)?);
         }
         lines.sort_by_key(|l| l.start_ms);
-        let lines = match self.label_speakers(&folder, lines.clone()) {
+        Ok((
+            self.with_speakers(id, &folder, lines),
+            system_audio_warning(&folder),
+        ))
+    }
+
+    /// Speaker labels when they can run, then neighbouring lines joined.
+    fn with_speakers(
+        &self,
+        id: i64,
+        folder: &Path,
+        lines: Vec<TranscriptLine>,
+    ) -> Vec<TranscriptLine> {
+        let lines = match self.label_speakers(folder, lines.clone()) {
             Ok(labelled) => labelled,
             Err(e) => {
                 log::warn!("Meeting {id}: no speaker labels: {e:#}");
                 lines
             }
         };
-        Ok((lines, warning))
+        join_lines(lines)
     }
 
     /// Splits "Others" into Speaker 1, 2, … when the speaker model is
@@ -731,49 +820,60 @@ impl Track {
         })
     }
 
-    fn drain(&mut self) {
+    /// Saves what arrived since the last call; returns it at 16 kHz.
+    fn drain(&mut self) -> Vec<f32> {
         let available = self.consumer.slots();
         let Ok(chunk) = self.consumer.read_chunk(available) else {
-            return;
+            return Vec::new();
         };
         let samples: Vec<f32> = chunk.into_iter().collect();
-        let writer = &mut self.writer;
-        self.resampler.push(&samples, |frame| {
-            for s in frame {
-                let _ = writer.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16);
-            }
-        });
+        let mut out = Vec::new();
+        self.resampler
+            .push(&samples, |frame| out.extend_from_slice(frame));
+        self.write(&out);
+        out
     }
 
-    fn finish(mut self) -> Result<()> {
-        self.drain();
-        let writer = &mut self.writer;
-        self.resampler.finish(|frame| {
-            for s in frame {
-                let _ = writer.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16);
-            }
-        });
+    fn write(&mut self, samples: &[f32]) {
+        for s in samples {
+            let _ = self
+                .writer
+                .write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16);
+        }
+    }
+
+    /// Saves the rest and closes the file; returns the rest at 16 kHz.
+    fn finish(mut self) -> Result<Vec<f32>> {
+        let mut out = self.drain();
+        let mut tail = Vec::new();
+        self.resampler.finish(|frame| tail.extend_from_slice(frame));
+        self.write(&tail);
+        out.extend(tail);
         self.writer.finalize()?;
-        Ok(())
+        Ok(out)
     }
 }
 
 /// Records until `stop`: the microphone to `mic.wav` and, on macOS, the
-/// system audio to `system.wav`. Returns `mic_failed` when the microphone
-/// stopped mid-meeting (unplugged, asleep), so the meeting says so instead of
-/// ending in silence.
-fn record(folder: &Path, mic_name: Option<String>, stop: &AtomicBool) -> Result<Option<String>> {
+/// system audio to `system.wav`, sending each finished stretch of speech to
+/// `segments` (the microphone after echo removal). Returns `mic_failed` when
+/// the microphone stopped mid-meeting (unplugged, asleep), so the meeting
+/// says so instead of ending in silence.
+fn record(
+    folder: &Path,
+    mic_name: Option<String>,
+    stop: &AtomicBool,
+    stages: &Stages,
+    segments: &mpsc::Sender<(Speaker, Segment)>,
+) -> Result<Option<String>> {
     let (mic, mic_consumer) = open_mic(mic_name)?;
-    let mut tracks = vec![Track::new(
-        SAMPLE_RATE as u32,
-        mic_consumer,
-        &folder.join("mic.wav"),
-    )?];
+    let mut mic_track = Track::new(SAMPLE_RATE as u32, mic_consumer, &folder.join("mic.wav"))?;
+    let mut system_track = None;
 
     #[cfg(target_os = "macos")]
     let _tap = match crate::audio_toolkit::audio::system_capture::start() {
         Ok((source, tap)) => {
-            tracks.push(Track::new(
+            system_track = Some(Track::new(
                 source.rate,
                 source.consumer,
                 &folder.join("system.wav"),
@@ -786,14 +886,26 @@ fn record(folder: &Path, mic_name: Option<String>, stop: &AtomicBool) -> Result<
         }
     };
 
+    let mut split = Splitter::new(stages, system_track.is_some());
+    let send = |found: Vec<(Speaker, Segment)>| {
+        for s in found {
+            let _ = segments.send(s);
+        }
+    };
     while !stop.load(Ordering::Relaxed) {
         std::thread::sleep(Duration::from_millis(50));
-        tracks.iter_mut().for_each(Track::drain);
+        let mic_audio = mic_track.drain();
+        let system_audio = system_track.as_mut().map(Track::drain).unwrap_or_default();
+        send(split.push(&mic_audio, &system_audio));
     }
     let stopped = mic.stop()?;
-    for track in tracks {
-        track.finish()?;
-    }
+    let mic_audio = mic_track.finish()?;
+    let system_audio = match system_track {
+        Some(track) => track.finish()?,
+        None => Vec::new(),
+    };
+    send(split.push(&mic_audio, &system_audio));
+    send(split.finish());
     if stopped.dropped_frames > 0 {
         log::warn!(
             "Meeting: the microphone dropped {} frames",
@@ -807,6 +919,100 @@ fn record(folder: &Path, mic_name: Option<String>, stop: &AtomicBool) -> Result<
             Some("mic_failed".to_string())
         }
     })
+}
+
+/// A meeting's audio, cut into stretches of speech: the microphone (after
+/// echo removal) and the call audio, each with its own speech detection.
+struct Splitter {
+    echo: crate::echo::EchoStage,
+    mic: Segmenter,
+    system: Segmenter,
+}
+
+impl Splitter {
+    /// Echo removal only runs when there is call audio to remove.
+    fn new(stages: &Stages, with_system: bool) -> Self {
+        let echo_dir = stages.echo.as_deref().filter(|_| with_system);
+        Self {
+            echo: crate::echo::EchoStage::new(echo_dir),
+            mic: Segmenter::new(stages.vad.as_deref()),
+            system: Segmenter::new(stages.vad.as_deref()),
+        }
+    }
+
+    fn push(&mut self, mic: &[f32], system: &[f32]) -> Vec<(Speaker, Segment)> {
+        let clean = self.echo.push(mic, system);
+        let you = self.mic.push(&clean).into_iter().map(|s| (Speaker::You, s));
+        let others = self
+            .system
+            .push(system)
+            .into_iter()
+            .map(|s| (Speaker::Others, s));
+        you.chain(others).collect()
+    }
+
+    fn finish(&mut self) -> Vec<(Speaker, Segment)> {
+        let rest = self.echo.finish();
+        let mut out: Vec<(Speaker, Segment)> = self
+            .mic
+            .push(&rest)
+            .into_iter()
+            .map(|s| (Speaker::You, s))
+            .collect();
+        out.extend(self.mic.finish().map(|s| (Speaker::You, s)));
+        out.extend(self.system.finish().map(|s| (Speaker::Others, s)));
+        out
+    }
+}
+
+/// Saved tracks, cut the same way as live.
+fn split_tracks(stages: &Stages, mic: &[f32], system: Option<&[f32]>) -> Vec<(Speaker, Segment)> {
+    let mut split = Splitter::new(stages, system.is_some());
+    let system = system.unwrap_or_default();
+    let step = SAMPLE_RATE; // a second at a time, like the live recorder
+    let mut out = Vec::new();
+    for i in (0..mic.len().max(system.len())).step_by(step) {
+        let part = |x: &[f32]| {
+            x.get(i..(i + step).min(x.len()))
+                .unwrap_or_default()
+                .to_vec()
+        };
+        out.extend(split.push(&part(mic), &part(system)));
+    }
+    out.extend(split.finish());
+    out
+}
+
+/// `system_audio_missing` when the call audio came through empty.
+fn system_audio_warning(folder: &Path) -> Option<String> {
+    let seconds = hound::WavReader::open(folder.join("system.wav"))
+        .map(|r| r.duration() as usize / SAMPLE_RATE)
+        .unwrap_or(0);
+    (seconds < 1).then(|| "system_audio_missing".to_string())
+}
+
+/// Lines from the same person a moment apart become one line.
+fn join_lines(lines: Vec<TranscriptLine>) -> Vec<TranscriptLine> {
+    const GAP_MS: i64 = 1_000;
+    let mut out: Vec<TranscriptLine> = Vec::with_capacity(lines.len());
+    for line in lines {
+        match out.last_mut() {
+            Some(last)
+                if last.speaker == line.speaker
+                    && last.voice == line.voice
+                    && line.start_ms - last.end_ms <= GAP_MS =>
+            {
+                let cjk = |c: Option<char>| c.is_some_and(crate::correction::is_cjk);
+                if !(cjk(last.text.chars().last()) && cjk(line.text.chars().next())) {
+                    last.text.push(' ');
+                }
+                last.text.push_str(&line.text);
+                last.end_ms = line.end_ms.max(last.end_ms);
+            }
+            _ => out.push(line),
+        }
+    }
+    out
 }
 
 /// Hands the microphone's 16 kHz mono chunks to the recording loop.
@@ -842,52 +1048,128 @@ fn open_mic(
     Ok((recorder, consumer))
 }
 
-/// Splits 16 kHz audio into `(start, end)` sample ranges that contain speech,
-/// each short enough for one model pass. Silent stretches are skipped, so the
-/// model never sees long silence (where Whisper invents "Thank you.").
-// ponytail: plain RMS threshold, not a VAD model; good enough for meeting
-// audio, swap in Silero if quiet speakers get dropped.
-pub fn speech_chunks(samples: &[f32]) -> Vec<(usize, usize)> {
-    const FRAME: usize = SAMPLE_RATE * 30 / 1000;
-    const VOICE_RMS: f32 = 0.01; // about -40 dBFS
-    const PAD: usize = 7; // ~0.2 s kept around speech
-    const CUT_AFTER_QUIET: usize = 27; // ~0.8 s of quiet ends a chunk
-    const MAX_FRAMES: usize = 833; // ~25 s, under Whisper's 30 s window
+/// A stretch of speech from one track. `start` counts samples from the
+/// beginning of the recording.
+pub struct Segment {
+    pub start: usize,
+    pub samples: Vec<f32>,
+}
 
-    let voiced: Vec<bool> = samples
-        .chunks(FRAME)
-        .map(|f| (f.iter().map(|s| s * s).sum::<f32>() / f.len() as f32).sqrt() > VOICE_RMS)
-        .collect();
-    let n = voiced.len();
-    let to_sample = |frame: usize| (frame * FRAME).min(samples.len());
+/// Cuts one track into stretches of speech as audio arrives: a stretch ends
+/// after 0.8 s of quiet, or at 25 s (under Whisper's 30 s window), and keeps
+/// 0.2 s around the speech so first and last words aren't clipped. The model
+/// never sees long silence, where Whisper invents "Thank you."
+/// Says whether a frame of audio is someone speaking.
+type IsVoice = Box<dyn FnMut(&[f32]) -> bool + Send>;
 
-    let mut chunks = Vec::new();
-    let mut start: Option<usize> = None;
-    let mut last_voice = 0;
-    let mut floor = 0; // frames before this already belong to a chunk
-    for (i, &is_voice) in voiced.iter().enumerate() {
-        if is_voice {
-            if start.is_none() {
-                start = Some(i.saturating_sub(PAD).max(floor));
+pub struct Segmenter {
+    is_voice: IsVoice,
+    frame: usize,
+    pending: Vec<f32>,
+    /// Audio kept for the current (or next) stretch, from `kept_from`.
+    kept: Vec<f32>,
+    kept_from: usize,
+    /// Samples seen so far.
+    at: usize,
+    start: Option<usize>,
+    voice_end: usize,
+}
+
+const PAD: usize = SAMPLE_RATE / 5;
+const CUT_AFTER_QUIET: usize = SAMPLE_RATE * 8 / 10;
+const MAX_SEGMENT: usize = SAMPLE_RATE * 25;
+
+impl Segmenter {
+    /// Silero from `vad` (dictation's detector), or a loudness check when it
+    /// can't load.
+    pub fn new(vad: Option<&Path>) -> Self {
+        use crate::audio_toolkit::vad::{SileroVad, VoiceActivityDetector};
+        let silero = vad.and_then(|path| {
+            SileroVad::new(path, crate::managers::audio::SILERO_VAD_THRESHOLD)
+                .map_err(|e| log::warn!("Meeting: Silero unavailable, using loudness: {e}"))
+                .ok()
+        });
+        match silero {
+            Some(mut vad) => {
+                let frame = vad.frame_samples();
+                Self::with_detector(frame, Box::new(move |f| vad.is_voice(f).unwrap_or(false)))
             }
-            last_voice = i;
+            None => Self::with_detector(SAMPLE_RATE * 30 / 1000, Box::new(is_loud)),
         }
-        let Some(s) = start else { continue };
-        let end = if i + 1 - s >= MAX_FRAMES {
-            i + 1
-        } else if i - last_voice >= CUT_AFTER_QUIET {
-            (last_voice + 1 + PAD).min(n)
-        } else {
-            continue;
+    }
+
+    fn with_detector(frame: usize, is_voice: IsVoice) -> Self {
+        Self {
+            is_voice,
+            frame,
+            pending: Vec::new(),
+            kept: Vec::new(),
+            kept_from: 0,
+            at: 0,
+            start: None,
+            voice_end: 0,
+        }
+    }
+
+    pub fn push(&mut self, samples: &[f32]) -> Vec<Segment> {
+        self.pending.extend_from_slice(samples);
+        let mut out = Vec::new();
+        while self.pending.len() >= self.frame {
+            let frame: Vec<f32> = self.pending.drain(..self.frame).collect();
+            out.extend(self.step(&frame));
+        }
+        out
+    }
+
+    fn step(&mut self, frame: &[f32]) -> Option<Segment> {
+        let frame_start = self.at;
+        self.at += frame.len();
+        self.kept.extend_from_slice(frame);
+        if (self.is_voice)(frame) {
+            self.voice_end = self.at;
+            if self.start.is_none() {
+                self.start = Some(frame_start.saturating_sub(PAD).max(self.kept_from));
+            }
+        }
+        let Some(start) = self.start else {
+            // Between stretches keep only what the next one's padding needs.
+            let excess = self.kept.len().saturating_sub(PAD);
+            self.kept.drain(..excess);
+            self.kept_from += excess;
+            return None;
         };
-        chunks.push((to_sample(s), to_sample(end)));
-        floor = end;
-        start = None;
+        let end = if self.at - self.voice_end >= CUT_AFTER_QUIET {
+            (self.voice_end + PAD).min(self.at)
+        } else if self.at - start >= MAX_SEGMENT {
+            self.at
+        } else {
+            return None;
+        };
+        Some(self.cut(start, end))
     }
-    if let Some(s) = start {
-        chunks.push((to_sample(s), to_sample((last_voice + 1 + PAD).min(n))));
+
+    /// Hands over `start..end` and keeps the audio after it.
+    fn cut(&mut self, start: usize, end: usize) -> Segment {
+        let samples = self.kept[start - self.kept_from..end - self.kept_from].to_vec();
+        self.kept.drain(..end - self.kept_from);
+        self.kept_from = end;
+        self.start = None;
+        Segment { start, samples }
     }
-    chunks
+
+    /// The last stretch, at the end of the recording.
+    pub fn finish(&mut self) -> Option<Segment> {
+        let rest = std::mem::take(&mut self.pending);
+        self.at += rest.len();
+        self.kept.extend(rest);
+        let start = self.start?;
+        Some(self.cut(start, (self.voice_end + PAD).min(self.at)))
+    }
+}
+
+/// The fallback detector: louder than about -40 dBFS.
+fn is_loud(frame: &[f32]) -> bool {
+    (frame.iter().map(|s| s * s).sum::<f32>() / frame.len() as f32).sqrt() > 0.01
 }
 
 #[cfg(test)]
@@ -905,6 +1187,20 @@ mod tests {
         samples as f32 / SAMPLE_RATE as f32
     }
 
+    /// `(start, end)` of each stretch, fed a second at a time like live audio.
+    fn speech_chunks(audio: &[f32]) -> Vec<(usize, usize)> {
+        let mut seg = Segmenter::with_detector(480, Box::new(is_loud));
+        let mut found: Vec<Segment> = audio
+            .chunks(SAMPLE_RATE)
+            .flat_map(|c| seg.push(c))
+            .collect();
+        found.extend(seg.finish());
+        found
+            .iter()
+            .map(|s| (s.start, s.start + s.samples.len()))
+            .collect()
+    }
+
     /// Real devices: `cargo test --lib records_both_tracks -- --ignored`.
     #[test]
     #[ignore]
@@ -914,7 +1210,12 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let handle = {
             let (folder, stop) = (folder.clone(), stop.clone());
-            std::thread::spawn(move || record(&folder, None, &stop))
+            let stages = Stages {
+                vad: None,
+                echo: None,
+            };
+            let (segments, _queue) = mpsc::channel();
+            std::thread::spawn(move || record(&folder, None, &stop, &stages, &segments))
         };
         std::thread::sleep(Duration::from_secs(3));
         stop.store(true, Ordering::Relaxed);
@@ -979,6 +1280,73 @@ mod tests {
     fn labelled_notes_use_speaker_placeholders() {
         let prompt = summary_prompt(&crate::settings::get_default_settings(), "general", true);
         assert!(prompt.contains("<@speaker:2>") && !prompt.contains("{OTHERS}"));
+    }
+
+    /// Real Silero and LocalVQE on speech made with `say` (see the PR notes):
+    /// `OWL_TEST_AUDIO=/tmp/owl-audio cargo test --lib echo_keeps -- --ignored`.
+    /// en.wav plays through the speakers and leaks into the mic 40 ms late;
+    /// zh.wav is you, starting at 7 s.
+    #[test]
+    #[ignore]
+    fn echo_keeps_the_other_side_out_of_your_lines() {
+        let dir = PathBuf::from(std::env::var("OWL_TEST_AUDIO").unwrap_or("/tmp/owl-audio".into()));
+        let far = read_wav_samples(dir.join("en.wav")).unwrap();
+        let near = read_wav_samples(dir.join("zh.wav")).unwrap();
+        let n = SAMPLE_RATE * 13;
+        let at = |x: &[f32], i: usize| x.get(i).copied().unwrap_or(0.0);
+        let system: Vec<f32> = (0..n).map(|i| at(&far, i)).collect();
+        let you_start = SAMPLE_RATE * 7;
+        let mic: Vec<f32> = (0..n)
+            .map(|i| {
+                0.6 * at(&far, i.saturating_sub(640)) + 0.8 * at(&near, i.wrapping_sub(you_start))
+            })
+            .collect();
+        let resources = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources");
+        let vad = Some(resources.join("models/silero-vad-v6.2-F32.gguf"));
+        let yours = |echo: Option<PathBuf>| -> Vec<(usize, usize)> {
+            let stages = Stages {
+                vad: vad.clone(),
+                echo,
+            };
+            split_tracks(&stages, &mic, Some(&system))
+                .into_iter()
+                .filter(|(speaker, _)| *speaker == Speaker::You)
+                .map(|(_, s)| (s.start, s.start + s.samples.len()))
+                .collect()
+        };
+        let before = yours(None);
+        let after = yours(Some(resources.join("localvqe")));
+        println!("You, without echo removal: {before:?}\nYou, with: {after:?}");
+        // Without echo removal the other side's sentence shows up as you.
+        assert!(before.iter().any(|&(s, _)| s < you_start - SAMPLE_RATE));
+        // With it, only your own speech (from 7 s) is left, apart from a scrap
+        // in the first two seconds while LocalVQE adapts to the room.
+        assert!(after.iter().any(|&(s, _)| s >= you_start - SAMPLE_RATE));
+        assert!(after
+            .iter()
+            .all(|&(s, e)| s >= you_start - SAMPLE_RATE || e <= 2 * SAMPLE_RATE));
+    }
+
+    #[test]
+    fn neighbouring_lines_from_one_person_are_joined() {
+        let line = |start_ms, end_ms, speaker, voice, text: &str| TranscriptLine {
+            start_ms,
+            end_ms,
+            speaker,
+            voice,
+            text: text.to_string(),
+        };
+        let joined = join_lines(vec![
+            line(0, 2_000, Speaker::Others, Some(1), "Hello"),
+            line(2_500, 4_000, Speaker::Others, Some(1), "there."),
+            line(4_200, 5_000, Speaker::Others, Some(2), "Hi."),
+            line(5_100, 6_000, Speaker::You, None, "我們"),
+            line(6_200, 7_000, Speaker::You, None, "開始吧"),
+            line(9_000, 9_500, Speaker::You, None, "OK."),
+        ]);
+        let texts: Vec<&str> = joined.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(texts, vec!["Hello there.", "Hi.", "我們開始吧", "OK."]);
+        assert_eq!((joined[0].start_ms, joined[0].end_ms), (0, 4_000));
     }
 
     #[test]

@@ -58,6 +58,8 @@ handy-recorder = "0.1"
 # resampled to 16 kHz with rubato; handy-recorder only covers microphones.
 rtrb = "0.4.0"
 rubato = "0.16.2"
+# Owl: loads LocalVQE for meeting echo removal (echo.rs).
+libloading = "0.7"
 reqwest = { version = "0.12", features = ["json", "stream", "gzip", "brotli", "deflate"] }
 futures-util = "0.3"
 rustfft = "6.4.0"

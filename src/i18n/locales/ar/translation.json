@@ -825,6 +825,7 @@
       "more": "More",
       "retranscribe": "Transcribe again",
       "rename": "Rename",
+      "listening": "Listening…",
       "templates": {
         "title": "Note templates",
         "description": "What meeting notes contain.",

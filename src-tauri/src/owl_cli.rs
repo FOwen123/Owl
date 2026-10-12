@@ -162,12 +162,21 @@ pub fn install() -> Result<PathBuf> {
     Err(last_error.unwrap_or_else(|| anyhow!("Nowhere to install")))
 }
 
+/// The `.app` a binary is in. Owl and Handy's binaries share a name, so this
+/// is what tells their links apart.
+fn app_of(path: &Path) -> Option<&std::ffi::OsStr> {
+    path.ancestors()
+        .filter_map(Path::file_name)
+        .find(|name| name.to_string_lossy().ends_with(".app"))
+}
+
 fn link_to(exe: &Path, dir: &Path, link: &Path) -> Result<()> {
     std::fs::create_dir_all(dir)?;
     // Replace an old link to Owl (e.g. to a moved app), never a real file or
     // another program's link.
     if let Ok(target) = std::fs::read_link(link) {
-        if link.exists() && target.file_name() != exe.file_name() {
+        let ours = target == exe || app_of(&target).is_some_and(|app| Some(app) == app_of(exe));
+        if link.exists() && !ours {
             return Err(anyhow!("{} belongs to another program", link.display()));
         }
         std::fs::remove_file(link)?;
@@ -194,8 +203,24 @@ mod tests {
         assert!(link_to(exe, dir.path(), &link).is_err());
         assert_eq!(std::fs::read_link(&link).unwrap(), Path::new("/bin/ls"));
 
+        // Handy's binary has the same name as Owl's.
+        let handy = dir.path().join("Handy.app/Contents/MacOS/handy");
+        std::fs::create_dir_all(handy.parent().unwrap()).unwrap();
+        std::fs::write(&handy, "").unwrap();
         std::fs::remove_file(&link).unwrap();
-        std::os::unix::fs::symlink("/gone/Owl.app/Contents/MacOS/handy", &link).unwrap();
+        std::os::unix::fs::symlink(&handy, &link).unwrap();
+        assert!(link_to(exe, dir.path(), &link).is_err());
+
+        // A moved Owl, and a link to nothing, are replaced.
+        let moved = dir.path().join("Old/Owl.app/Contents/MacOS/handy");
+        std::fs::create_dir_all(moved.parent().unwrap()).unwrap();
+        std::fs::write(&moved, "").unwrap();
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink(&moved, &link).unwrap();
+        link_to(exe, dir.path(), &link).unwrap();
+        assert_eq!(std::fs::read_link(&link).unwrap(), exe);
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink("/gone/handy", &link).unwrap();
         link_to(exe, dir.path(), &link).unwrap();
         assert_eq!(std::fs::read_link(&link).unwrap(), exe);
     }

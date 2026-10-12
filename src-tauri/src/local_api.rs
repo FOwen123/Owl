@@ -1,24 +1,32 @@
 //! Owl: an OpenAI-compatible `POST /v1/audio/transcriptions` for other apps
 //! on this Mac. Off by default, listens on 127.0.0.1 only, and needs the
-//! token shown in Settings (`Authorization: Bearer <token>`).
+//! token shown in Settings (`Authorization: Bearer <token>`). A small HTTP
+//! server of its own: one connection at a time, with limits on header and
+//! upload size and on how long a request may take to arrive.
 
 use crate::managers::meeting::MeetingManager;
 use crate::settings::{get_settings, write_settings, Secret};
 use anyhow::{anyhow, Result};
-use std::io::Read;
+use std::io::{Read, Write};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
-use tiny_http::{Header, Request, Response, Server};
 
 pub const PORT: u16 = 8723;
 /// Bigger uploads are refused before they're read (OpenAI's limit too).
 const MAX_UPLOAD: usize = 25 * 1024 * 1024;
+const MAX_HEADERS: usize = 16 * 1024;
+/// A request must arrive within this, so a slow client can't hold the server.
+const DEADLINE: Duration = Duration::from_secs(60);
 /// Longer audio is refused while it's decoded.
 const MAX_SECONDS: usize = 60 * 60;
 
-static SERVER: Mutex<Option<Arc<Server>>> = Mutex::new(None);
+/// The running server's stop flag and address.
+static SERVER: Mutex<Option<(Arc<AtomicBool>, SocketAddr)>> = Mutex::new(None);
 
 /// Starts or stops the server to match Settings. A token is made the first
 /// time the API is turned on.
@@ -26,8 +34,9 @@ pub fn sync(app: &AppHandle) -> Result<()> {
     let mut settings = get_settings(app);
     let mut running = SERVER.lock().unwrap_or_else(|e| e.into_inner());
     if !settings.local_api_enabled {
-        if let Some(server) = running.take() {
-            server.unblock();
+        if let Some((stop, addr)) = running.take() {
+            stop.store(true, Ordering::SeqCst);
+            let _ = TcpStream::connect(addr); // wakes the waiting accept
         }
         return Ok(());
     }
@@ -38,16 +47,23 @@ pub fn sync(app: &AppHandle) -> Result<()> {
     if running.is_some() {
         return Ok(());
     }
-    let server = Arc::new(
-        Server::http(("127.0.0.1", PORT))
-            .map_err(|e| anyhow!("Port {PORT} is busy, so the local API can't start: {e}"))?,
-    );
-    *running = Some(server.clone());
+    let listener = TcpListener::bind(("127.0.0.1", PORT))
+        .map_err(|e| anyhow!("Port {PORT} is busy, so the local API can't start: {e}"))?;
+    let stop = Arc::new(AtomicBool::new(false));
+    *running = Some((stop.clone(), listener.local_addr()?));
     let app = app.clone();
     std::thread::spawn(move || {
-        // One request at a time, so uploads and decoded audio never pile up.
-        for request in server.incoming_requests() {
-            if catch_unwind(AssertUnwindSafe(|| answer(&app, request))).is_err() {
+        for stream in listener.incoming() {
+            if stop.load(Ordering::SeqCst) {
+                break;
+            }
+            let Ok(stream) = stream else { continue };
+            let token = get_settings(&app).local_api_token.0;
+            let transcribe = |path: &Path| {
+                app.state::<Arc<MeetingManager>>()
+                    .transcribe_file(path, MAX_SECONDS)
+            };
+            if catch_unwind(AssertUnwindSafe(|| serve(stream, &token, &transcribe))).is_err() {
                 log::error!("Local API: a request crashed");
             }
         }
@@ -64,17 +80,9 @@ fn new_token() -> Result<String> {
     ))
 }
 
-fn answer(app: &AppHandle, request: Request) {
-    let token = get_settings(app).local_api_token.0;
-    serve(request, &token, &|path| {
-        app.state::<Arc<MeetingManager>>()
-            .transcribe_file(path, MAX_SECONDS)
-    });
-}
-
-/// Answers one request; `transcribe` turns the uploaded file into text.
-fn serve(mut request: Request, token: &str, transcribe: &dyn Fn(&Path) -> Result<String>) {
-    let (status, body, kind) = match respond(&mut request, token, transcribe) {
+/// Answers one connection; `transcribe` turns the uploaded file into text.
+fn serve(mut stream: TcpStream, token: &str, transcribe: &dyn Fn(&Path) -> Result<String>) {
+    let (status, body, kind) = match respond(&mut stream, token, transcribe) {
         Ok((text, true)) => (200, text, "text/plain; charset=utf-8"),
         Ok((text, false)) => (
             200,
@@ -88,54 +96,103 @@ fn serve(mut request: Request, token: &str, transcribe: &dyn Fn(&Path) -> Result
             "application/json",
         ),
     };
-    let kind = Header::from_bytes("Content-Type", kind).expect("valid header");
-    let _ = request.respond(
-        Response::from_string(body)
-            .with_status_code(status)
-            .with_header(kind),
+    let reason = match status {
+        200 => "OK",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        404 => "Not Found",
+        408 => "Request Timeout",
+        411 => "Length Required",
+        413 => "Content Too Large",
+        431 => "Request Header Fields Too Large",
+        _ => "Internal Server Error",
+    };
+    let _ = write!(
+        stream,
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
     );
+    // Let the client read the reply before the connection closes: skip a
+    // little of any body it's still sending, in small reads.
+    let _ = stream.shutdown(Shutdown::Write);
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+    let _ = std::io::copy(&mut (&stream).take(1 << 20), &mut std::io::sink());
 }
 
 /// The text, and whether it was asked for as plain text.
 fn respond(
-    request: &mut Request,
+    stream: &mut TcpStream,
     token: &str,
     transcribe: &dyn Fn(&Path) -> Result<String>,
 ) -> Result<(String, bool), (u16, String)> {
-    let path = request.url().split('?').next().unwrap_or("");
-    if request.method() != &tiny_http::Method::Post || path != "/v1/audio/transcriptions" {
+    let started = Instant::now();
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let too_slow = || (408, "The request took too long to arrive".to_string());
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 8192];
+    let end = loop {
+        if let Some(end) = find(&buf, b"\r\n\r\n") {
+            break end;
+        }
+        if buf.len() > MAX_HEADERS {
+            return Err((431, "The headers are too large".into()));
+        }
+        if started.elapsed() > DEADLINE {
+            return Err(too_slow());
+        }
+        let n = stream.read(&mut chunk).map_err(|_| too_slow())?;
+        if n == 0 {
+            return Err((400, "The request ended early".into()));
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    };
+    let head = String::from_utf8_lossy(&buf[..end]).into_owned();
+    let mut lines = head.split("\r\n");
+    let mut request_line = lines.next().unwrap_or_default().split(' ');
+    let (method, target) = (
+        request_line.next().unwrap_or_default(),
+        request_line.next().unwrap_or_default(),
+    );
+    let headers: Vec<(String, &str)> = lines
+        .filter_map(|l| l.split_once(':'))
+        .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim()))
+        .collect();
+    let header = |name: &str| headers.iter().find(|(k, _)| k == name).map(|(_, v)| *v);
+
+    if method != "POST" || target.split('?').next() != Some("/v1/audio/transcriptions") {
         return Err((404, "Only POST /v1/audio/transcriptions is served".into()));
     }
-    let header = |name: &str| {
-        request
-            .headers()
-            .iter()
-            .find(|h| h.field.as_str().as_str().eq_ignore_ascii_case(name))
-            .map(|h| h.value.as_str().to_string())
-    };
-    let given = header("Authorization").unwrap_or_default();
+    let given = header("authorization").unwrap_or_default();
     if token.is_empty() || !same(given.strip_prefix("Bearer ").unwrap_or(""), token) {
         return Err((401, "Wrong or missing token".into()));
     }
-    let boundary = header("Content-Type")
-        .as_deref()
-        .and_then(boundary)
-        .ok_or((
-            400,
-            "Send multipart/form-data with a `file` field".to_string(),
-        ))?;
-    if request.body_length().unwrap_or(0) > MAX_UPLOAD {
+    let boundary = header("content-type").and_then(boundary).ok_or((
+        400,
+        "Send multipart/form-data with a `file` field".to_string(),
+    ))?;
+    let length = header("content-length")
+        .filter(|_| header("transfer-encoding").is_none())
+        .and_then(|v| v.parse::<usize>().ok())
+        .ok_or((411, "Send a Content-Length".to_string()))?;
+    if length > MAX_UPLOAD {
         return Err((413, "The file is too big".into()));
     }
-    let mut body = Vec::new();
-    request
-        .as_reader()
-        .take(MAX_UPLOAD as u64 + 1)
-        .read_to_end(&mut body)
-        .map_err(|e| (400, e.to_string()))?;
-    if body.len() > MAX_UPLOAD {
-        return Err((413, "The file is too big".into()));
+    if header("expect").is_some_and(|e| e.eq_ignore_ascii_case("100-continue")) {
+        let _ = stream.write_all(b"HTTP/1.1 100 Continue\r\n\r\n");
     }
+    let mut body = buf.split_off(end + 4);
+    body.truncate(length);
+    while body.len() < length {
+        if started.elapsed() > DEADLINE {
+            return Err(too_slow());
+        }
+        let n = stream.read(&mut chunk).map_err(|_| too_slow())?;
+        if n == 0 {
+            return Err((400, "The upload ended early".into()));
+        }
+        body.extend_from_slice(&chunk[..n.min(length - body.len())]);
+    }
+
     let parts = parts(&body, &boundary);
     let file = parts
         .iter()
@@ -277,17 +334,16 @@ mod tests {
 
     #[test]
     fn the_server_needs_the_token_and_answers_like_openai() {
-        let server = Server::http("127.0.0.1:0").unwrap();
-        let port = server.server_addr().to_ip().unwrap().port();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
         std::thread::spawn(move || {
-            for request in server.incoming_requests() {
-                serve(request, "owl_t", &|path| {
+            for stream in listener.incoming() {
+                serve(stream.unwrap(), "owl_t", &|path| {
                     Ok(format!("{} bytes", std::fs::read(path)?.len()))
                 });
             }
         });
         let post = |auth: &str, format: &str| {
-            use std::io::Write;
             let body = format!(
                 "--b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.wav\"\r\n\r\nabc\r\n\
 --b\r\nContent-Disposition: form-data; name=\"response_format\"\r\n\r\n{format}\r\n--b--\r\n"
@@ -312,6 +368,36 @@ Content-Length: {}\r\n\r\n{body}",
         assert!(json.ends_with(r#"{"text":"3 bytes"}"#), "{json}");
         assert!(post("Bearer owl_t", "text").ends_with("\r\n\r\n3 bytes"));
         assert!(post("Bearer owl_t", "srt").starts_with("HTTP/1.1 400"));
+
+        // Clients that wait for "100 Continue" before the body get it.
+        let body = "--b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.wav\"\r\n\r\nabcd\r\n--b--\r\n";
+        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        write!(
+            stream,
+            "POST /v1/audio/transcriptions HTTP/1.1\r\nAuthorization: Bearer owl_t\r\n\
+Content-Type: multipart/form-data; boundary=b\r\nExpect: 100-continue\r\nContent-Length: {}\r\n\r\n",
+            body.len()
+        )
+        .unwrap();
+        let mut interim = [0u8; 25];
+        stream.read_exact(&mut interim).unwrap();
+        assert_eq!(&interim, b"HTTP/1.1 100 Continue\r\n\r\n");
+        stream.write_all(body.as_bytes()).unwrap();
+        let mut reply = String::new();
+        stream.read_to_string(&mut reply).unwrap();
+        assert!(reply.ends_with(r#"{"text":"4 bytes"}"#), "{reply}");
+
+        // A huge declared length is refused without waiting for or storing it.
+        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream
+            .write_all(
+                b"POST /v1/audio/transcriptions HTTP/1.1\r\nAuthorization: Bearer owl_t\r\n\
+Content-Type: multipart/form-data; boundary=b\r\nContent-Length: 999999999999\r\n\r\n",
+            )
+            .unwrap();
+        let mut reply = String::new();
+        stream.read_to_string(&mut reply).unwrap();
+        assert!(reply.starts_with("HTTP/1.1 413"), "{reply}");
     }
 
     #[test]

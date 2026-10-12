@@ -530,7 +530,10 @@ impl MeetingManager {
             Ok((lines, warning)) => {
                 let json = serde_json::to_string(&lines).unwrap_or_else(|_| "[]".into());
                 let _ = conn.execute(
-                    "UPDATE meetings SET status = 'ready', transcript = ?1, error = ?2 WHERE id = ?3",
+                    // A changed transcript drops notes written from the old one.
+                    "UPDATE meetings SET status = 'ready',
+                     summary = CASE WHEN transcript IS ?1 THEN summary ELSE NULL END,
+                     transcript = ?1, error = ?2 WHERE id = ?3",
                     params![json, warning, id],
                 );
                 self.changed();
@@ -625,9 +628,11 @@ impl MeetingManager {
         let result = (|| {
             let samples = crate::media::decode(path, usize::MAX)?;
             crate::audio_toolkit::audio::save_wav_file(folder.join("system.wav"), &samples)?;
+            let duration_ms = (samples.len() * 1000 / SAMPLE_RATE) as i64;
+            drop(samples); // transcribing reads the saved copy
             self.conn()?.execute(
                 "UPDATE meetings SET duration_ms = ?1 WHERE id = ?2",
-                params![(samples.len() * 1000 / SAMPLE_RATE) as i64, id],
+                params![duration_ms, id],
             )?;
             self.transcribe(id)
         })();
@@ -808,6 +813,17 @@ impl MeetingManager {
             .or(meeting.template)
             .unwrap_or_else(|| settings.meeting_template.clone());
         let (transcript, labelled) = self.transcript_text(id).map_err(|e| e.to_string())?;
+        // Notes are saved only for the transcript they were written from.
+        let revision: Option<String> = self
+            .conn()
+            .and_then(|conn| {
+                Ok(conn.query_row(
+                    "SELECT transcript FROM meetings WHERE id = ?1",
+                    params![id],
+                    |row| row.get(0),
+                )?)
+            })
+            .map_err(|e| e.to_string())?;
         if transcript.is_empty() {
             return Err("Nothing was said in this meeting.".into());
         }
@@ -841,15 +857,19 @@ impl MeetingManager {
         .and_then(|reply| {
             let (title, summary) = split_title(&reply);
             // The AI names a meeting once; a title the user set always stays.
-            self.conn()
+            let saved = self
+                .conn()
                 .and_then(|conn| {
                     Ok(conn.execute(
                         "UPDATE meetings SET summary = ?1, template = ?2, title = COALESCE(title, ?3)
-                         WHERE id = ?4",
-                        params![summary, template, title, id],
+                         WHERE id = ?4 AND transcript IS ?5",
+                        params![summary, template, title, id, revision],
                     )?)
                 })
                 .map_err(|e| e.to_string())?;
+            if saved == 0 {
+                return Err("The transcript changed while the notes were written. Summarize again.".into());
+            }
             Ok(summary)
         });
         self.summarizing.lock().unwrap().remove(&id);

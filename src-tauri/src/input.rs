@@ -16,7 +16,6 @@ mod macos {
     // resolution and remains the safest fallback if macOS cannot expose the
     // active layout.
     const ANSI_V_KEYCODE: u16 = 9;
-    const ANSI_C_KEYCODE: u16 = 8;
     const KEYCODE_COUNT: u16 = 128;
     const UC_KEY_ACTION_DISPLAY: u16 = 3;
     const UC_KEY_TRANSLATE_NO_DEAD_KEYS_MASK: u32 = 1;
@@ -75,7 +74,7 @@ mod macos {
     ///
     /// TIS APIs must run on the main thread. Handy's paste path already enters
     /// through `AppHandle::run_on_main_thread` before reaching this function.
-    fn resolve_command_keycode(letter: u8) -> Result<u16, String> {
+    fn resolve_command_v_keycode() -> Result<u16, String> {
         // SAFETY: This function is called on the macOS main thread. The returned
         // source follows the Create Rule and is released by InputSource::drop.
         let source = InputSource(unsafe { TISCopyCurrentKeyboardLayoutInputSource() });
@@ -124,41 +123,24 @@ mod macos {
                 )
             };
 
-            status == 0 && length == 1 && chars[0] == u16::from(letter)
+            status == 0 && length == 1 && chars[0] == u16::from(b'v')
         })
-        .ok_or_else(|| {
-            format!(
-                "could not map Cmd+{} in the current macOS keyboard layout",
-                letter.to_ascii_uppercase() as char
-            )
-        })?;
+        .ok_or_else(|| "could not map Cmd+V in the current macOS keyboard layout".to_string())?;
 
         Ok(keycode)
     }
 
     pub(super) fn command_v_key() -> Key {
-        command_key(b'v', ANSI_V_KEYCODE)
-    }
-
-    pub(super) fn command_c_key() -> Key {
-        command_key(b'c', ANSI_C_KEYCODE)
-    }
-
-    fn command_key(letter: u8, ansi_keycode: u16) -> Key {
-        match resolve_command_keycode(letter) {
+        match resolve_command_v_keycode() {
             Ok(keycode) => {
-                debug!(
-                    "Resolved Cmd+{} for the active macOS layout to keycode {keycode}",
-                    letter as char
-                );
+                debug!("Resolved Cmd+V for the active macOS layout to keycode {keycode}");
                 Key::Other(u32::from(keycode))
             }
             Err(error) => {
                 warn!(
-                    "Could not resolve Cmd+{} for the active macOS layout ({error}); using ANSI keycode {ansi_keycode}",
-                    letter as char
+                    "Could not resolve Cmd+V for the active macOS layout ({error}); using ANSI V keycode {ANSI_V_KEYCODE}"
                 );
-                Key::Other(u32::from(ansi_keycode))
+                Key::Other(u32::from(ANSI_V_KEYCODE))
             }
         }
     }
@@ -182,23 +164,6 @@ pub fn get_cursor_position(app_handle: &AppHandle) -> Option<(i32, i32)> {
     let enigo_state = app_handle.try_state::<EnigoState>()?;
     let enigo = enigo_state.0.lock().ok()?;
     enigo.location().ok()
-}
-
-/// Owl (Edit by voice): Cmd+C, to copy the selection in apps that hide it
-/// from Accessibility. Enigo sends only Command, even while the user still
-/// holds the shortcut's other keys. Runs on the main thread, like paste.
-#[cfg(target_os = "macos")]
-pub fn send_copy(enigo: &mut Enigo) -> Result<(), String> {
-    enigo
-        .key(Key::Meta, enigo::Direction::Press)
-        .map_err(|e| format!("Failed to press Command: {}", e))?;
-    let copied = enigo
-        .key(macos::command_c_key(), enigo::Direction::Click)
-        .map_err(|e| format!("Failed to click C: {}", e));
-    enigo
-        .key(Key::Meta, enigo::Direction::Release)
-        .map_err(|e| format!("Failed to release Command: {}", e))?;
-    copied
 }
 
 /// Sends a Ctrl+V or Cmd+V paste command using platform-specific virtual key codes.

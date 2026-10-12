@@ -237,8 +237,12 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(history_manager.clone());
     app_handle.manage(meeting_manager);
     app_handle.manage(tray::TrayState::new());
+    // A busy port turns the API off, so Settings shows what's true.
     if let Err(e) = local_api::sync(app_handle) {
         log::warn!("Local API: {e:#}");
+        let mut settings = get_settings(app_handle);
+        settings.local_api_enabled = false;
+        settings::write_settings(app_handle, settings);
     }
 
     // Note: Shortcuts are NOT initialized here.

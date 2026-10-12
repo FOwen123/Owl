@@ -98,10 +98,6 @@
         "name": "SenseVoice",
         "description": "धेरै छिटो। चिनियाँ, अङ्ग्रेजी, जापानी, कोरियाली, क्यान्टोनिज।"
       },
-      "gigaam-v3-e2e-ctc": {
-        "name": "GigaAM v3",
-        "description": "रुसी वाक् पहिचान। छिटो र सटीक।"
-      },
       "canary-180m-flash": {
         "name": "Canary 180M Flash",
         "description": "धेरै छिटो। अङ्ग्रेजी, जर्मन, स्पेनी, फ्रान्सेली। अनुवाद समर्थन गर्छ।"

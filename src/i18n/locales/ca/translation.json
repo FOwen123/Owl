@@ -98,10 +98,6 @@
         "name": "SenseVoice",
         "description": "Molt ràpid. Xinès, anglès, japonès, coreà i cantonès."
       },
-      "gigaam-v3-e2e-ctc": {
-        "name": "GigaAM v3",
-        "description": "Reconeixement de la parla en rus. Ràpid i precís."
-      },
       "canary-180m-flash": {
         "name": "Canary 180M Flash",
         "description": "Molt ràpid. Anglès, alemany, castellà i francès. Admet la traducció."

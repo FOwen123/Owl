@@ -98,10 +98,6 @@
         "name": "SenseVoice",
         "description": "Meget hurtig. Kinesisk, engelsk, japansk, koreansk, kantonesisk."
       },
-      "gigaam-v3-e2e-ctc": {
-        "name": "GigaAM v3",
-        "description": "Russisk talegenkendelse. Hurtig og nøjagtig."
-      },
       "canary-180m-flash": {
         "name": "Canary 180M Flash",
         "description": "Meget hurtig. Engelsk, tysk, spansk, fransk. Understøtter oversættelse."

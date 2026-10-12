@@ -98,10 +98,6 @@
         "name": "SenseVoice",
         "description": "बहुत तेज़. चीनी, अंग्रेज़ी, जापानी, कोरियाई, कैंटोनीज़."
       },
-      "gigaam-v3-e2e-ctc": {
-        "name": "GigaAM v3",
-        "description": "रूसी बोली पहचानता है. तेज़ और सटीक."
-      },
       "canary-180m-flash": {
         "name": "Canary 180M Flash",
         "description": "बहुत तेज़. अंग्रेज़ी, जर्मन, स्पेनिश, फ़्रेंच. अनुवाद भी कर सकता है."

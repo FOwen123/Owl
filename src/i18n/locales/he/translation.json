@@ -98,10 +98,6 @@
         "name": "SenseVoice",
         "description": "מהיר מאוד. סינית, אנגלית, יפנית, קוריאנית וקנטונזית."
       },
-      "gigaam-v3-e2e-ctc": {
-        "name": "GigaAM v3",
-        "description": "זיהוי דיבור ברוסית. מהיר ומדויק."
-      },
       "canary-180m-flash": {
         "name": "Canary 180M Flash",
         "description": "מהיר מאוד. אנגלית, גרמנית, ספרדית וצרפתית. תומך בתרגום."

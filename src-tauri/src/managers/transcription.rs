@@ -28,7 +28,6 @@ use transcribe_rs::{
     onnx::{
         canary::CanaryModel,
         cohere::CohereModel,
-        gigaam::GigaAMModel,
         moonshine::{MoonshineModel, MoonshineVariant, StreamingModel},
         parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity},
         sense_voice::{SenseVoiceModel, SenseVoiceParams},
@@ -186,7 +185,6 @@ enum LoadedEngine {
     Moonshine(MoonshineModel),
     MoonshineStreaming(StreamingModel),
     SenseVoice(SenseVoiceModel),
-    GigaAM(GigaAMModel),
     Canary(CanaryModel),
     Cohere(CohereModel),
 }
@@ -681,14 +679,6 @@ impl TranscriptionManager {
                         anyhow::anyhow!(error_msg)
                     })?;
                 LoadedEngine::SenseVoice(engine)
-            }
-            EngineType::GigaAM => {
-                let engine = GigaAMModel::load(&model_path, &Quantization::Int8).map_err(|e| {
-                    let error_msg = format!("Failed to load gigaam model {}: {}", model_id, e);
-                    emit_loading_failed(&error_msg);
-                    anyhow::anyhow!(error_msg)
-                })?;
-                LoadedEngine::GigaAM(engine)
             }
             EngineType::Canary => {
                 let engine = CanaryModel::load(&model_path, &Quantization::Int8).map_err(|e| {
@@ -1398,10 +1388,6 @@ impl TranscriptionManager {
                             .map(|r| r.text)
                             .map_err(|e| anyhow::anyhow!("SenseVoice transcription failed: {}", e))
                     }
-                    LoadedEngine::GigaAM(gigaam_engine) => gigaam_engine
-                        .transcribe(&audio, &TranscribeOptions::default())
-                        .map(|r| r.text)
-                        .map_err(|e| anyhow::anyhow!("GigaAM transcription failed: {}", e)),
                     LoadedEngine::Canary(canary_engine) => {
                         output_was_translated = settings.translate_to_english;
                         let lang = if validated_language == "auto" {

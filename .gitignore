@@ -45,3 +45,6 @@ result
 
 # Python bytecode (scripts/)
 __pycache__/
+
+# Owl: built by scripts/build_localvqe.sh
+src-tauri/resources/localvqe/liblocalvqe.dylib

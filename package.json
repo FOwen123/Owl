@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:localvqe": "sh scripts/build_localvqe.sh",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint src",

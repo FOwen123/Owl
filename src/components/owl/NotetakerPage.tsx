@@ -84,6 +84,17 @@ export const NotetakerPage: React.FC = () => {
     setBusy(false);
   };
 
+  if (recording) {
+    return (
+      <LiveMeeting
+        meeting={recording}
+        elapsed={now - recording.started_at}
+        busy={busy}
+        onStop={() => run(commands.stopMeeting)}
+      />
+    );
+  }
+
   const open = meetings.find((m) => m.id === openId);
   if (open) {
     return (
@@ -100,38 +111,16 @@ export const NotetakerPage: React.FC = () => {
     <div className="max-w-3xl w-full mx-auto space-y-6">
       <SettingsGroup title={t("owl.notetaker.title")}>
         <div className="flex items-center justify-between gap-4 p-4">
-          {recording ? (
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Circle className="w-3 h-3 fill-logo-primary text-logo-primary animate-pulse" />
-              {t("owl.notetaker.recording")}
-              <span className="font-mono text-mid-gray">
-                {clock(now - recording.started_at)}
-              </span>
-            </div>
-          ) : (
-            <p className="text-sm text-mid-gray">
-              {t("owl.notetaker.description")}
-            </p>
-          )}
-          {recording ? (
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => run(commands.stopMeeting)}
-              className="inline-flex items-center gap-2 shrink-0"
-            >
-              <Square className="w-3.5 h-3.5" />
-              {t("owl.notetaker.stop")}
-            </Button>
-          ) : (
-            <Button
-              disabled={busy}
-              onClick={() => run(commands.startMeeting)}
-              className="shrink-0"
-            >
-              {t("owl.notetaker.start")}
-            </Button>
-          )}
+          <p className="text-sm text-mid-gray">
+            {t("owl.notetaker.description")}
+          </p>
+          <Button
+            disabled={busy}
+            onClick={() => run(commands.startMeeting)}
+            className="shrink-0"
+          >
+            {t("owl.notetaker.start")}
+          </Button>
         </div>
         <SpeakerModelRow />
       </SettingsGroup>
@@ -154,6 +143,66 @@ export const NotetakerPage: React.FC = () => {
       </SettingsGroup>
 
       <MeetingTemplates builtIn={options.built_in_templates} />
+    </div>
+  );
+};
+
+/** While recording: the transcript as it arrives, with Stop. */
+const LiveMeeting: React.FC<{
+  meeting: Meeting;
+  elapsed: number;
+  busy: boolean;
+  onStop: () => void;
+}> = ({ meeting, elapsed, busy, onStop }) => {
+  const { t } = useTranslation();
+  const speaker = useSpeakerLabel(meeting.speaker_names);
+  const end = useRef<HTMLDivElement>(null);
+  const lines = meeting.transcript.length;
+  useEffect(() => {
+    end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [lines]);
+  return (
+    <div className="max-w-3xl w-full mx-auto space-y-6">
+      <div className="flex items-center justify-between gap-4 px-4">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Circle className="w-3 h-3 fill-logo-primary text-logo-primary animate-pulse" />
+          {t("owl.notetaker.recording")}
+          <span className="font-mono text-mid-gray">{clock(elapsed)}</span>
+        </div>
+        <Button
+          variant="secondary"
+          disabled={busy}
+          onClick={onStop}
+          className="inline-flex items-center gap-2 shrink-0"
+        >
+          <Square className="w-3.5 h-3.5" />
+          {t("owl.notetaker.stop")}
+        </Button>
+      </div>
+      <SettingsGroup title={t("owl.notetaker.transcript")}>
+        {lines === 0 ? (
+          <p className="p-4 text-sm text-mid-gray">
+            {t("owl.notetaker.listening")}
+          </p>
+        ) : (
+          <ul className="p-4 space-y-2">
+            {meeting.transcript.map((line, i) => (
+              <li key={i} className="flex gap-3 text-sm">
+                <span className="font-mono text-xs text-mid-gray w-12 shrink-0 pt-0.5">
+                  {clock(line.start_ms)}
+                </span>
+                <span
+                  className={`w-20 shrink-0 font-medium truncate ${line.speaker === "you" ? "text-logo-primary" : ""}`}
+                >
+                  {speaker(line)}
+                </span>
+                <span className="flex-1 min-w-0">{line.text}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div ref={end} />
+      </SettingsGroup>
     </div>
   );
 };

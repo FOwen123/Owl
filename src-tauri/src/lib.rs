@@ -16,6 +16,7 @@ mod correction;
 mod correction_watch;
 mod diarization;
 mod dictionary;
+mod echo;
 pub mod engine_supervisor;
 mod helpers;
 mod input;

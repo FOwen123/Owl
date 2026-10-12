@@ -68,7 +68,7 @@ OVERRIDES = {
 
 # ───────────────────────── helpers ──────────────────────────────────────────
 ARCH = ["whisper","moonshine-streaming","moonshine","parakeet","canary-qwen","canary","voxtral",
-        "granite-speech","granite","qwen3","gigaam","sensevoice","cohere","fun-asr","nemotron","medasr",
+        "granite-speech","granite","qwen3","sensevoice","cohere","fun-asr","nemotron","medasr",
         "moss","sortformer"]
 ACR = {"asr":"ASR","ctc":"CTC","rnnt":"RNNT","tdt":"TDT","nar":"NAR","mlt":"MLT"}
 SCALAR = {0:("<B",1),1:("<b",1),2:("<H",2),3:("<h",2),4:("<I",4),5:("<i",4),
@@ -79,7 +79,7 @@ def family(s, tags):
     for f in ARCH:
         if f in s.lower(): return "moonshine" if f.startswith("moonshine") else f.split("-")[0]
     for t in tags or []:
-        if t in ("whisper","moonshine","parakeet","canary","voxtral","granite","qwen3","gigaam","sensevoice","cohere"):
+        if t in ("whisper","moonshine","parakeet","canary","voxtral","granite","qwen3","sensevoice","cohere"):
             return t
     return "other"
 def pretty(s):
@@ -260,7 +260,8 @@ def build(repo):
     }
 
 def main():
-    repos = [m.id for m in api.list_models(author=ORG, limit=500)]
+    repos = [m.id for m in api.list_models(author=ORG, limit=500)
+             if "gigaam" not in m.id.lower()]
     models = []
     failures = []
     with ThreadPoolExecutor(max_workers=10) as ex:

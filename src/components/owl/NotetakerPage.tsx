@@ -1,13 +1,21 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { emit, listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
-import { ArrowLeft, Copy, Sparkles, Square, Circle } from "lucide-react";
-import { commands, type Meeting } from "@/bindings";
+import {
+  ArrowLeft,
+  Copy,
+  Sparkles,
+  Square,
+  Circle,
+  MoreHorizontal,
+} from "lucide-react";
+import { commands, type Meeting, type SummaryOptions } from "@/bindings";
 import { formatDateTime } from "@/utils/dateFormat";
 import { SettingsGroup } from "../ui/SettingsGroup";
 import { Button } from "../ui/Button";
 import { Alert } from "../ui/Alert";
+import { Dropdown } from "../ui/Dropdown";
 import { MarkdownContent } from "../whats-new/MarkdownContent";
 import {
   SpeakerChips,
@@ -15,6 +23,7 @@ import {
   useFillSpeakers,
   useSpeakerLabel,
 } from "./MeetingSpeakers";
+import { MeetingTemplates, useTemplateOptions } from "./MeetingTemplates";
 
 const clock = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -27,12 +36,23 @@ const clock = (ms: number) => {
 const when = (m: Meeting, locale: string) =>
   formatDateTime(String(Math.floor(m.started_at / 1000)), locale);
 
+/** The notes' first sentence, without Markdown, for the meeting list. */
+const firstLine = (markdown: string) =>
+  markdown
+    .split("\n")
+    .map((l) => l.replace(/^[#>*\-\s]+/, "").replace(/[*_`]/g, ""))
+    .find((l) => l.trim()) ?? "";
+
 export const NotetakerPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
+  const [options, setOptions] = useState<SummaryOptions>({
+    built_in_templates: ["general"],
+    providers: [],
+  });
 
   const refresh = useCallback(async () => {
     const result = await commands.getMeetings();
@@ -41,6 +61,7 @@ export const NotetakerPage: React.FC = () => {
 
   useEffect(() => {
     refresh();
+    commands.getSummaryOptions().then(setOptions);
     const unlisten = listen("meetings-updated", refresh);
     return () => {
       unlisten.then((fn) => fn());
@@ -68,6 +89,7 @@ export const NotetakerPage: React.FC = () => {
     return (
       <MeetingDetail
         meeting={open}
+        options={options}
         locale={i18n.language}
         onBack={() => setOpenId(null)}
       />
@@ -121,47 +143,162 @@ export const NotetakerPage: React.FC = () => {
           </p>
         ) : (
           meetings.map((m) => (
-            <button
+            <MeetingRow
               key={m.id}
-              type="button"
-              disabled={m.status === "recording"}
-              onClick={() => setOpenId(m.id)}
-              className="w-full flex items-center justify-between gap-4 px-4 py-3 text-start hover:bg-mid-gray/10 disabled:cursor-default cursor-pointer"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{when(m, i18n.language)}</p>
-                <p className="text-xs text-mid-gray truncate">
-                  {m.transcript[0]?.text ??
-                    t(`owl.notetaker.status.${m.status}`)}
-                </p>
-              </div>
-              <span className="text-xs text-mid-gray shrink-0">
-                {m.status === "ready"
-                  ? clock(m.duration_ms)
-                  : t(`owl.notetaker.status.${m.status}`)}
-              </span>
-            </button>
+              meeting={m}
+              locale={i18n.language}
+              onOpen={() => setOpenId(m.id)}
+            />
           ))
         )}
       </SettingsGroup>
+
+      <MeetingTemplates builtIn={options.built_in_templates} />
     </div>
+  );
+};
+
+const MeetingRow: React.FC<{
+  meeting: Meeting;
+  locale: string;
+  onOpen: () => void;
+}> = ({ meeting: m, locale, onOpen }) => {
+  const { t } = useTranslation();
+  const fillSpeakers = useFillSpeakers(m.speaker_names);
+  const preview = m.summary
+    ? firstLine(fillSpeakers(m.summary))
+    : (m.transcript[0]?.text ?? t(`owl.notetaker.status.${m.status}`));
+  return (
+    <button
+      type="button"
+      disabled={m.status === "recording"}
+      onClick={onOpen}
+      className="w-full flex items-center justify-between gap-4 px-4 py-3 text-start hover:bg-mid-gray/10 disabled:cursor-default cursor-pointer"
+    >
+      <div className="min-w-0">
+        <p className="text-sm font-medium truncate">
+          {m.title ?? when(m, locale)}
+        </p>
+        <p className="text-xs text-mid-gray truncate">{preview}</p>
+      </div>
+      <span className="text-xs text-mid-gray shrink-0 text-end">
+        {m.title && <span className="block">{when(m, locale)}</span>}
+        {m.status === "ready"
+          ? clock(m.duration_ms)
+          : t(`owl.notetaker.status.${m.status}`)}
+      </span>
+    </button>
+  );
+};
+
+/** A "⋯" button with a short list of actions. */
+const MoreMenu: React.FC<{
+  items: { label: string; danger?: boolean; onSelect: () => void }[];
+}> = ({ items }) => {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+  return (
+    <div ref={ref} className="relative">
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label={t("owl.notetaker.more")}
+        onClick={() => setOpen(!open)}
+      >
+        <MoreHorizontal className="w-4 h-4" />
+      </Button>
+      {open && (
+        <div className="absolute end-0 mt-1 min-w-40 z-20 py-1 rounded-lg border border-border bg-surface shadow-lg">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                item.onSelect();
+              }}
+              className={`w-full px-3 py-1.5 text-start text-sm hover:bg-mid-gray/10 cursor-pointer ${item.danger ? "text-error" : ""}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** The meeting's title; click to rename. An empty title goes back to the date. */
+const MeetingTitle: React.FC<{ meeting: Meeting; fallback: string }> = ({
+  meeting,
+  fallback,
+}) => {
+  const { t } = useTranslation();
+  const [editing, setEditing] = useState(false);
+  const save = async (title: string) => {
+    setEditing(false);
+    if (title.trim() === (meeting.title ?? "")) return;
+    const result = await commands.renameMeeting(meeting.id, title);
+    if (result.status === "error") toast.error(result.error);
+  };
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        defaultValue={meeting.title ?? ""}
+        placeholder={fallback}
+        aria-label={t("owl.notetaker.rename")}
+        className="w-full text-lg font-semibold bg-transparent border-b border-mid-gray/30 outline-none"
+        onBlur={(e) => save(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") setEditing(false);
+        }}
+      />
+    );
+  }
+  return (
+    <h1
+      className="text-lg font-semibold cursor-text"
+      title={t("owl.notetaker.rename")}
+      onClick={() => setEditing(true)}
+    >
+      {meeting.title ?? fallback}
+    </h1>
   );
 };
 
 const MeetingDetail: React.FC<{
   meeting: Meeting;
+  options: SummaryOptions;
   locale: string;
   onBack: () => void;
-}> = ({ meeting, locale, onBack }) => {
+}> = ({ meeting, options, locale, onBack }) => {
   const { t } = useTranslation();
   const speaker = useSpeakerLabel(meeting.speaker_names);
   const fillSpeakers = useFillSpeakers(meeting.speaker_names);
+  const templates = useTemplateOptions(options.built_in_templates);
+  const [template, setTemplate] = useState<string | null>(meeting.template);
+  const [provider, setProvider] = useState<string | null>(null);
   const transcriptText = meeting.transcript
     .map((l) => `[${clock(l.start_ms)}] ${speaker(l)}: ${l.text}`)
     .join("\n");
 
   const summarize = async () => {
-    const result = await commands.summarizeMeeting(meeting.id);
+    const result = await commands.summarizeMeeting(
+      meeting.id,
+      template,
+      provider,
+    );
     if (result.status === "error" && result.error === "no_provider") {
       toast(t("owl.notetaker.summaryNeedsProvider"), {
         action: {
@@ -174,10 +311,13 @@ const MeetingDetail: React.FC<{
     }
   };
 
-  const remove = async () => {
-    const result = await commands.deleteMeeting(meeting.id);
+  const act = async (
+    action: Promise<{ status: string; error?: string }>,
+    done?: () => void,
+  ) => {
+    const result = await action;
     if (result.status === "error") toast.error(result.error);
-    else onBack();
+    else done?.();
   };
 
   return (
@@ -192,15 +332,28 @@ const MeetingDetail: React.FC<{
           <ArrowLeft className="w-4 h-4" />
           {t("owl.notetaker.back")}
         </Button>
-        <Button variant="danger-ghost" size="sm" onClick={remove}>
-          {t("owl.notetaker.delete")}
-        </Button>
+        <MoreMenu
+          items={[
+            {
+              label: t("owl.notetaker.retranscribe"),
+              onSelect: () => act(commands.retranscribeMeeting(meeting.id)),
+            },
+            {
+              label: t("owl.notetaker.delete"),
+              danger: true,
+              onSelect: () => act(commands.deleteMeeting(meeting.id), onBack),
+            },
+          ]}
+        />
       </div>
 
-      <div className="px-4">
-        <h1 className="text-lg font-semibold">{when(meeting, locale)}</h1>
+      <div className="px-4 space-y-1">
+        <MeetingTitle meeting={meeting} fallback={when(meeting, locale)} />
         <p className="text-xs text-mid-gray flex flex-wrap items-center gap-2">
-          {clock(meeting.duration_ms)}
+          <span>
+            {meeting.title && `${when(meeting, locale)} · `}
+            {clock(meeting.duration_ms)}
+          </span>
           <SpeakerChips meeting={meeting} />
         </p>
       </div>
@@ -216,25 +369,44 @@ const MeetingDetail: React.FC<{
       )}
 
       {meeting.status === "ready" && (
-        <SettingsGroup title={t("owl.notetaker.summary")}>
+        <SettingsGroup title={t("owl.notetaker.notes")}>
           <div className="p-4 space-y-3">
             {meeting.summary && (
               <MarkdownContent markdown={fillSpeakers(meeting.summary)} />
             )}
-            <Button
-              variant={meeting.summary ? "secondary" : "primary"}
-              size="sm"
-              disabled={meeting.summarizing || meeting.transcript.length === 0}
-              onClick={summarize}
-              className="inline-flex items-center gap-1.5"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              {meeting.summarizing
-                ? t("owl.notetaker.summarizing")
-                : meeting.summary
-                  ? t("owl.notetaker.resummarize")
-                  : t("owl.notetaker.summarize")}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Dropdown
+                options={templates}
+                selectedValue={template ?? templates[0]?.value ?? null}
+                onSelect={setTemplate}
+              />
+              {options.providers.length > 1 && (
+                <Dropdown
+                  options={options.providers.map((p) => ({
+                    value: p.id,
+                    label: p.label,
+                    description: p.model,
+                  }))}
+                  selectedValue={provider ?? options.providers[0].id}
+                  onSelect={setProvider}
+                />
+              )}
+              <Button
+                variant={meeting.summary ? "secondary" : "primary"}
+                disabled={
+                  meeting.summarizing || meeting.transcript.length === 0
+                }
+                onClick={summarize}
+                className="inline-flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                {meeting.summarizing
+                  ? t("owl.notetaker.summarizing")
+                  : meeting.summary
+                    ? t("owl.notetaker.resummarize")
+                    : t("owl.notetaker.summarize")}
+              </Button>
+            </div>
           </div>
         </SettingsGroup>
       )}

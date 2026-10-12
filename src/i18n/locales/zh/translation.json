@@ -819,6 +819,25 @@
         "download": "下载（139 MB）",
         "downloading": "正在下载… {{percent}}%"
       },
+      "notes": "笔记",
+      "more": "更多",
+      "retranscribe": "重新转写",
+      "rename": "重命名",
+      "templates": {
+        "title": "笔记模板",
+        "description": "会议笔记包含的内容。",
+        "default": "默认模板",
+        "general": "通用",
+        "one_on_one": "一对一",
+        "interview": "面试",
+        "standup": "站会",
+        "lecture": "讲座",
+        "add": "添加模板",
+        "name": "名称",
+        "prompt": "笔记应包含的内容",
+        "remove": "删除",
+        "untitled": "我的模板"
+      },
       "speaker": {
         "you": "你",
         "others": "其他人"

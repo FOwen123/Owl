@@ -819,6 +819,25 @@
         "download": "Download (139 MB)",
         "downloading": "Downloading… {{percent}}%"
       },
+      "notes": "Notes",
+      "more": "More",
+      "retranscribe": "Transcribe again",
+      "rename": "Rename",
+      "templates": {
+        "title": "Note templates",
+        "description": "What meeting notes contain.",
+        "default": "Default template",
+        "general": "General",
+        "one_on_one": "1:1",
+        "interview": "Interview",
+        "standup": "Stand-up",
+        "lecture": "Lecture",
+        "add": "Add template",
+        "name": "Name",
+        "prompt": "What the notes should contain",
+        "remove": "Remove",
+        "untitled": "My template"
+      },
       "speaker": {
         "you": "You",
         "others": "Others"

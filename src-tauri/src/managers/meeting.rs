@@ -691,6 +691,7 @@ impl MeetingManager {
             MeetingStatus::Ready => Ok(meeting),
             MeetingStatus::Failed => Err(match meeting.error.as_deref() {
                 Some(crate::media::TOO_LONG) => anyhow!("The file is longer than 4 hours"),
+                Some(crate::media::UNSUPPORTED) => anyhow!("This file's format isn't supported"),
                 error => anyhow!(error.unwrap_or_default().to_string()),
             }),
             _ => Err(anyhow!("The transcript couldn't be saved")),

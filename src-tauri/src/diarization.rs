@@ -1,17 +1,24 @@
 //! Owl: who spoke when in a meeting's call audio. NVIDIA's Sortformer v2.1
-//! (up to 4 speakers) runs in its own transcribe.cpp worker, so a crash there
-//! ends only that worker. The model is downloaded once, on request.
+//! (up to 4 speakers) runs in a short-lived copy of Owl started with
+//! `--owl-diarize`, so a crash there (a GPU driver, a bad model) only ends
+//! that process. The model is downloaded once, on request.
 
-use crate::engine_supervisor::{DeviceSelector, EngineSupervisor, LoadSpec};
 use anyhow::{anyhow, Result};
 use futures_util::StreamExt;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use specta::Type;
 use std::io::Write;
+use std::path::Path;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
-use transcribe_cpp::{Backend, Diarize, RunOptions};
+
+/// First argument that turns Owl into a one-shot speaker-labelling process:
+/// `owl --owl-diarize <model> <16 kHz wav> <output json>`.
+pub const WORKER_FLAG: &str = "--owl-diarize";
+/// Long enough for a long meeting on the CPU (about 25x real time).
+const WORKER_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 /// Pinned so the bytes always match `SHA256`.
 const URL: &str = "https://huggingface.co/handy-computer/diar_streaming_sortformer_4spk-v2.1-gguf/resolve/ae4afbb5c3d33b71cf2dbf600022b655ee706dd0/diar_streaming_sortformer_4spk-v2.1-Q8_0.gguf";
@@ -85,38 +92,78 @@ pub async fn download(app: &AppHandle) -> Result<()> {
     Ok(())
 }
 
-/// Who spoke when in 16 kHz mono `samples`.
-pub fn diarize(app: &AppHandle, samples: Vec<f32>) -> Result<Vec<Turn>> {
-    let engine = EngineSupervisor::new(!crate::utils::is_windows_x64_emulated_on_arm64());
-    let result = engine
-        .load(LoadSpec {
-            path: model_path(app)?,
-            backend: Backend::Auto,
-            device: DeviceSelector::Auto,
-        })
-        .and_then(|_| {
-            engine.transcribe(
-                samples,
-                RunOptions {
-                    diarize: Diarize::On,
-                    ..Default::default()
-                },
-            )
-        });
-    engine.unload().wait();
-    let transcript = result.map_err(|e| anyhow!("Speaker labels failed: {e}"))?;
-    let mut turns: Vec<Turn> = transcript
-        .speaker_segments
-        .iter()
-        .filter(|s| s.t1_ms > s.t0_ms && s.speaker_id > 0)
-        .map(|s| Turn {
-            start_ms: s.t0_ms,
-            end_ms: s.t1_ms,
-            speaker: s.speaker_id as u32,
+/// Who spoke when in the 16 kHz mono WAV at `wav`.
+pub fn diarize(app: &AppHandle, wav: &Path) -> Result<Vec<Turn>> {
+    let output = wav.with_extension("speakers.json");
+    let _ = std::fs::remove_file(&output);
+    let mut child = std::process::Command::new(std::env::current_exe()?)
+        .arg(WORKER_FLAG)
+        .arg(model_path(app)?)
+        .arg(wav)
+        .arg(&output)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if started.elapsed() > WORKER_TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(anyhow!("Speaker labels took too long"));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    };
+    if !status.success() {
+        return Err(anyhow!("Speaker labels failed ({status})"));
+    }
+    let raw: Vec<(i64, i64, u32)> = serde_json::from_slice(&std::fs::read(&output)?)?;
+    let _ = std::fs::remove_file(&output);
+    let mut turns: Vec<Turn> = raw
+        .into_iter()
+        .filter(|&(start, end, speaker)| end > start && speaker > 0)
+        .map(|(start_ms, end_ms, speaker)| Turn {
+            start_ms,
+            end_ms,
+            speaker,
         })
         .collect();
     turns.sort_by_key(|t| t.start_ms);
     Ok(renumber(turns))
+}
+
+/// The `--owl-diarize` process: runs the model and writes
+/// `[[start_ms, end_ms, speaker], …]` to the output file. Returns the exit code.
+pub fn run_worker() -> i32 {
+    let args: Vec<std::path::PathBuf> = std::env::args_os().skip(2).map(Into::into).collect();
+    let [model, wav, output] = args.as_slice() else {
+        eprintln!("usage: {WORKER_FLAG} <model> <wav> <output>");
+        return 2;
+    };
+    let result = (|| -> Result<()> {
+        transcribe_cpp::init_logging();
+        transcribe_cpp::init_backends_default()?;
+        let model = transcribe_cpp::Model::load(model)?;
+        let mut session = model.diarize_session()?;
+        let pcm = crate::audio_toolkit::audio::read_wav_samples(wav)?;
+        let segments = session.run(&pcm, &transcribe_cpp::DiarizeOptions::default())?;
+        let turns: Vec<(i64, i64, i32)> = segments
+            .iter()
+            .map(|s| (s.t0_ms, s.t1_ms, s.speaker_id))
+            .collect();
+        std::fs::write(output, serde_json::to_vec(&turns)?)?;
+        Ok(())
+    })();
+    match result {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            1
+        }
+    }
 }
 
 /// Speakers counted from 1 in the order they first speak.

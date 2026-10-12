@@ -283,18 +283,25 @@ pub struct MeetingManager {
 
 impl MeetingManager {
     pub fn new(app: &AppHandle) -> Result<Self> {
+        let this = Self::open(app)?;
+        // A crash mid-meeting leaves rows that can never finish.
+        this.conn()?.execute(
+            "UPDATE meetings SET status = 'failed', error = 'Owl quit before this meeting finished'
+             WHERE status IN ('recording', 'transcribing')",
+            [],
+        )?;
+        Ok(this)
+    }
+
+    /// Like `new`, but leaves unfinished meetings alone: for `owl transcribe`,
+    /// which may run while the app is recording one.
+    pub fn open(app: &AppHandle) -> Result<Self> {
         let data = crate::portable::app_data_dir(app)?;
         let dir = data.join("meetings");
         std::fs::create_dir_all(&dir)?;
         let db_path = data.join("meetings.db");
         let mut conn = Connection::open(&db_path)?;
         Migrations::from_slice(MIGRATIONS).to_latest(&mut conn)?;
-        // A crash mid-meeting leaves rows that can never finish.
-        conn.execute(
-            "UPDATE meetings SET status = 'failed', error = 'Owl quit before this meeting finished'
-             WHERE status IN ('recording', 'transcribing')",
-            [],
-        )?;
         Ok(Self {
             app: app.clone(),
             dir,
@@ -510,7 +517,8 @@ impl MeetingManager {
         if old.status == MeetingStatus::Transcribing {
             return Err(anyhow!("This meeting is already being transcribed"));
         }
-        if !self.dir.join(id.to_string()).join("mic.wav").exists() {
+        let folder = self.dir.join(id.to_string());
+        if !folder.join("mic.wav").exists() && !folder.join("system.wav").exists() {
             return Err(anyhow!("This meeting's audio is gone"));
         }
         self.conn()?.execute(
@@ -527,6 +535,79 @@ impl MeetingManager {
                 .map(|(lines, warning)| (lines, kept.or(warning)));
             this.finish(id, result);
         });
+        Ok(())
+    }
+
+    /// Adds an audio or video file as a meeting. It's one track, so everyone
+    /// in it goes through speaker labels (there's no "You"). Fails at once
+    /// with `media::UNSUPPORTED` for formats Owl can't read.
+    pub fn import(self: &Arc<Self>, path: PathBuf) -> Result<i64> {
+        let id = self.add_import(&path)?;
+        let this = self.clone();
+        std::thread::spawn(move || this.run_import(id, &path));
+        Ok(id)
+    }
+
+    /// `import`, finished (notes too) before it returns: `owl transcribe`.
+    pub fn import_and_wait(&self, path: PathBuf) -> Result<Meeting> {
+        let id = self.add_import(&path)?;
+        self.run_import(id, &path);
+        let meeting = self.get(id)?;
+        match meeting.status {
+            MeetingStatus::Failed => Err(anyhow!(meeting.error.unwrap_or_default())),
+            _ => Ok(meeting),
+        }
+    }
+
+    fn add_import(&self, path: &Path) -> Result<i64> {
+        crate::media::check(path)?;
+        let started_at = chrono::Utc::now().timestamp_millis();
+        let conn = self.conn()?;
+        conn.execute(
+            "INSERT INTO meetings (started_at, status) VALUES (?1, 'transcribing')",
+            params![started_at],
+        )?;
+        let id = conn.last_insert_rowid();
+        std::fs::create_dir_all(self.dir.join(id.to_string()))?;
+        self.changed();
+        Ok(id)
+    }
+
+    fn run_import(&self, id: i64, path: &Path) {
+        let folder = self.dir.join(id.to_string());
+        let result = (|| {
+            let samples = crate::media::decode(path)?;
+            crate::audio_toolkit::audio::save_wav_file(folder.join("system.wav"), &samples)?;
+            self.conn()?.execute(
+                "UPDATE meetings SET duration_ms = ?1 WHERE id = ?2",
+                params![(samples.len() * 1000 / SAMPLE_RATE) as i64, id],
+            )?;
+            self.transcribe(id)
+        })();
+        self.finish(id, result);
+    }
+
+    /// A file's speech as text, saved nowhere: the local API.
+    pub fn transcribe_file(&self, path: &Path) -> Result<String> {
+        let samples = crate::media::decode(path)?;
+        let mut lines = Vec::new();
+        for (speaker, segment) in split_tracks(&self.stages(), &samples, None) {
+            lines.extend(self.transcribe_segment(speaker, &segment)?);
+        }
+        Ok(join_lines(lines)
+            .into_iter()
+            .map(|l| l.text)
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
+
+    /// Writes meeting `id` to `path` as `format`.
+    pub fn export(&self, id: i64, format: ExportFormat, path: &Path) -> Result<()> {
+        // Only ever writes a file of the kind asked for.
+        if path.extension().and_then(|e| e.to_str()) != Some(format.extension()) {
+            return Err(anyhow!("Save it as a .{} file", format.extension()));
+        }
+        std::fs::write(path, render(&self.get(id)?, format))?;
         Ok(())
     }
 
@@ -595,8 +676,8 @@ impl MeetingManager {
         {
             return Ok(lines);
         }
+        let turns = crate::diarization::diarize(&self.app, &path)?;
         let samples = read_wav_samples(&path)?;
-        let turns = crate::diarization::diarize(&self.app, samples.clone())?;
         let tm = self.app.state::<Arc<TranscriptionManager>>();
         let at = |ms: i64| ((ms.max(0) as usize) * SAMPLE_RATE / 1000).min(samples.len());
         let mut out = Vec::with_capacity(lines.len());
@@ -631,31 +712,7 @@ impl MeetingManager {
     }
 
     pub fn list(&self) -> Result<Vec<Meeting>> {
-        let conn = self.conn()?;
-        let mut stmt = conn.prepare(
-            "SELECT id, started_at, duration_ms, status, transcript, summary, error, speaker_names,
-                    title, template
-             FROM meetings ORDER BY started_at DESC",
-        )?;
-        let rows = stmt.query_map([], |row| {
-            let status: String = row.get(3)?;
-            let transcript: String = row.get(4)?;
-            Ok(Meeting {
-                id: row.get(0)?,
-                title: row.get(8)?,
-                template: row.get(9)?,
-                started_at: row.get(1)?,
-                duration_ms: row.get(2)?,
-                status: serde_json::from_value(serde_json::Value::String(status))
-                    .unwrap_or(MeetingStatus::Failed),
-                transcript: serde_json::from_str(&transcript).unwrap_or_default(),
-                summary: row.get(5)?,
-                speaker_names: serde_json::from_str(&row.get::<_, String>(7)?).unwrap_or_default(),
-                summarizing: false,
-                error: row.get(6)?,
-            })
-        })?;
-        let mut meetings: Vec<Meeting> = rows.collect::<rusqlite::Result<_>>()?;
+        let mut meetings = read_meetings(&self.conn()?)?;
         let summarizing = self.summarizing.lock().unwrap();
         for m in &mut meetings {
             m.summarizing = summarizing.contains(&m.id);
@@ -967,7 +1024,7 @@ impl Splitter {
 
 /// Saved tracks, cut the same way as live.
 fn split_tracks(stages: &Stages, mic: &[f32], system: Option<&[f32]>) -> Vec<(Speaker, Segment)> {
-    let mut split = Splitter::new(stages, system.is_some());
+    let mut split = Splitter::new(stages, system.is_some() && !mic.is_empty());
     let system = system.unwrap_or_default();
     let step = SAMPLE_RATE; // a second at a time, like the live recorder
     let mut out = Vec::new();
@@ -1046,6 +1103,169 @@ fn open_mic(
         .start(RingSink(producer))
         .map_err(|e| anyhow!("The microphone didn't start: {}", e.error))?;
     Ok((recorder, consumer))
+}
+
+/// Every meeting in `conn`, newest first. Also read directly by the command
+/// line and the MCP server, without the app running.
+pub fn read_meetings(conn: &Connection) -> Result<Vec<Meeting>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, started_at, duration_ms, status, transcript, summary, error, speaker_names,
+                    title, template
+             FROM meetings ORDER BY started_at DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let status: String = row.get(3)?;
+        let transcript: String = row.get(4)?;
+        Ok(Meeting {
+            id: row.get(0)?,
+            title: row.get(8)?,
+            template: row.get(9)?,
+            started_at: row.get(1)?,
+            duration_ms: row.get(2)?,
+            status: serde_json::from_value(serde_json::Value::String(status))
+                .unwrap_or(MeetingStatus::Failed),
+            transcript: serde_json::from_str(&transcript).unwrap_or_default(),
+            summary: row.get(5)?,
+            speaker_names: serde_json::from_str(&row.get::<_, String>(7)?).unwrap_or_default(),
+            summarizing: false,
+            error: row.get(6)?,
+        })
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// How a meeting can be exported.
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportFormat {
+    Markdown,
+    Text,
+    Srt,
+    Vtt,
+}
+
+impl ExportFormat {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Markdown => "md",
+            Self::Text => "txt",
+            Self::Srt => "srt",
+            Self::Vtt => "vtt",
+        }
+    }
+}
+
+/// "You", a speaker's name, "Speaker 2", or "Others" before speaker labels.
+fn speaker_label(line: &TranscriptLine, names: &HashMap<u32, String>) -> String {
+    match (line.speaker, line.voice) {
+        (Speaker::You, _) => "You".to_string(),
+        (Speaker::Others, Some(n)) => names
+            .get(&n)
+            .cloned()
+            .unwrap_or_else(|| format!("Speaker {n}")),
+        (Speaker::Others, None) => "Others".to_string(),
+    }
+}
+
+/// Notes written with `<@speaker:N>` placeholders, with the current names.
+pub fn fill_speakers(text: &str, names: &HashMap<u32, String>) -> String {
+    static PLACEHOLDER: once_cell::sync::Lazy<regex::Regex> =
+        once_cell::sync::Lazy::new(|| regex::Regex::new(r"<@speaker:(\d+)>").expect("valid regex"));
+    PLACEHOLDER
+        .replace_all(text, |c: &regex::Captures| {
+            let voice = c[1].parse().unwrap_or(0);
+            let line = TranscriptLine {
+                start_ms: 0,
+                end_ms: 0,
+                speaker: Speaker::Others,
+                voice: Some(voice),
+                text: String::new(),
+            };
+            speaker_label(&line, names)
+        })
+        .into_owned()
+}
+
+/// `H:MM:SS` (or `M:SS`) as the meeting page shows it.
+fn clock(ms: i64) -> String {
+    let s = ms.max(0) / 1000;
+    match s / 3600 {
+        0 => format!("{}:{:02}", s / 60, s % 60),
+        h => format!("{h}:{:02}:{:02}", s / 60 % 60, s % 60),
+    }
+}
+
+/// Subtitle time: `HH:MM:SS,mmm` (SRT) or `HH:MM:SS.mmm` (VTT).
+fn cue_time(ms: i64, separator: char) -> String {
+    let ms = ms.max(0);
+    let (h, m, s) = (ms / 3_600_000, ms / 60_000 % 60, ms / 1000 % 60);
+    format!("{h:02}:{m:02}:{s:02}{separator}{:03}", ms % 1000)
+}
+
+/// A meeting as Markdown, plain text, or SRT/VTT subtitles of its transcript.
+pub fn render(m: &Meeting, format: ExportFormat) -> String {
+    let title = m.title.clone().unwrap_or_else(|| {
+        chrono::DateTime::from_timestamp_millis(m.started_at)
+            .map(|t| {
+                t.with_timezone(&chrono::Local)
+                    .format("%B %-d, %Y %H:%M")
+                    .to_string()
+            })
+            .unwrap_or_default()
+    });
+    let notes = m
+        .summary
+        .as_deref()
+        .map(|s| fill_speakers(s, &m.speaker_names));
+    let label = |l: &TranscriptLine| speaker_label(l, &m.speaker_names);
+    match format {
+        ExportFormat::Markdown | ExportFormat::Text => {
+            let md = format == ExportFormat::Markdown;
+            let mut out = if md {
+                format!("# {title}\n\n{}\n", clock(m.duration_ms))
+            } else {
+                format!("{title}\n{}\n", clock(m.duration_ms))
+            };
+            if let Some(notes) = notes {
+                out += &format!("\n{}\n\n{notes}\n", if md { "## Notes" } else { "Notes" });
+            }
+            out += &format!("\n{}\n\n", if md { "## Transcript" } else { "Transcript" });
+            for l in &m.transcript {
+                out += &if md {
+                    format!("**{} {}:** {}\n\n", clock(l.start_ms), label(l), l.text)
+                } else {
+                    format!("[{}] {}: {}\n", clock(l.start_ms), label(l), l.text)
+                };
+            }
+            out
+        }
+        ExportFormat::Srt | ExportFormat::Vtt => {
+            let (separator, mut out) = match format {
+                ExportFormat::Srt => (',', String::new()),
+                _ => ('.', "WEBVTT\n\n".to_string()),
+            };
+            for (i, l) in m.transcript.iter().enumerate() {
+                // Lines from before end times were stored run to the next line.
+                let next = m.transcript.get(i + 1).map(|n| n.start_ms);
+                let end = if l.end_ms > l.start_ms {
+                    l.end_ms
+                } else {
+                    next.unwrap_or(l.start_ms + 3_000).max(l.start_ms + 1_000)
+                };
+                if format == ExportFormat::Srt {
+                    out += &format!("{}\n", i + 1);
+                }
+                out += &format!(
+                    "{} --> {}\n{}: {}\n\n",
+                    cue_time(l.start_ms, separator),
+                    cue_time(end, separator),
+                    label(l),
+                    l.text
+                );
+            }
+            out
+        }
+    }
 }
 
 /// A stretch of speech from one track. `start` counts samples from the
@@ -1325,6 +1545,47 @@ mod tests {
         assert!(after
             .iter()
             .all(|&(s, e)| s >= you_start - SAMPLE_RATE || e <= 2 * SAMPLE_RATE));
+    }
+
+    fn exported() -> Meeting {
+        let line = |start_ms, end_ms, speaker, voice, text: &str| TranscriptLine {
+            start_ms,
+            end_ms,
+            speaker,
+            voice,
+            text: text.to_string(),
+        };
+        Meeting {
+            id: 1,
+            title: Some("Launch".into()),
+            template: None,
+            started_at: 0,
+            duration_ms: 3_725_000,
+            status: MeetingStatus::Ready,
+            transcript: vec![
+                line(2_000, 4_500, Speaker::You, None, "Hello."),
+                line(3_661_000, 0, Speaker::Others, Some(1), "Ship it."),
+            ],
+            summary: Some("<@speaker:1> agreed.".into()),
+            speaker_names: HashMap::from([(1, "Harry".to_string())]),
+            summarizing: false,
+            error: None,
+        }
+    }
+
+    #[test]
+    fn exports_fill_in_names_and_subtitle_times() {
+        let m = exported();
+        let md = render(&m, ExportFormat::Markdown);
+        assert!(md.starts_with("# Launch\n\n1:02:05\n"));
+        assert!(md.contains("Harry agreed.") && md.contains("**1:01:01 Harry:** Ship it."));
+        let srt = render(&m, ExportFormat::Srt);
+        assert!(srt.starts_with("1\n00:00:02,000 --> 00:00:04,500\nYou: Hello.\n\n2\n"));
+        // An old line without an end time gets three seconds.
+        assert!(srt.contains("01:01:01,000 --> 01:01:04,000\nHarry: Ship it."));
+        let vtt = render(&m, ExportFormat::Vtt);
+        assert!(vtt.starts_with("WEBVTT\n\n00:00:02.000 --> 00:00:04.500\nYou: Hello."));
+        assert!(render(&m, ExportFormat::Text).contains("[0:02] You: Hello.\n"));
     }
 
     #[test]

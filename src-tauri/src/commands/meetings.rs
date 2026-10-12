@@ -1,7 +1,7 @@
 //! Owl notetaker commands. Errors are plain strings shown to the user, except
 //! `no_provider`, which the UI translates.
 
-use crate::managers::meeting::{Meeting, MeetingManager};
+use crate::managers::meeting::{ExportFormat, Meeting, MeetingManager};
 use crate::settings::{get_settings, write_settings, MeetingTemplate};
 use serde::Serialize;
 use specta::Type;
@@ -149,5 +149,28 @@ pub fn speaker_model_installed(app: AppHandle) -> bool {
 pub async fn download_speaker_model(app: AppHandle) -> Result<(), String> {
     crate::diarization::download(&app)
         .await
+        .map_err(|e| e.to_string())
+}
+
+/// Adds an audio or video file as a meeting; `unsupported_format` when Owl
+/// can't read it (the UI translates that).
+#[tauri::command]
+#[specta::specta]
+pub fn import_meeting(meetings: State<Arc<MeetingManager>>, path: String) -> Result<i64, String> {
+    meetings
+        .import(std::path::PathBuf::from(path))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn export_meeting(
+    meetings: State<Arc<MeetingManager>>,
+    id: i64,
+    format: ExportFormat,
+    path: String,
+) -> Result<(), String> {
+    meetings
+        .export(id, format, std::path::Path::new(&path))
         .map_err(|e| e.to_string())
 }

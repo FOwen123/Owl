@@ -387,6 +387,21 @@ impl fmt::Debug for SecretMap {
     }
 }
 
+/// Owl: a secret string (the local API token), kept out of logs.
+#[derive(Clone, Default, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+pub(crate) struct Secret(pub String);
+
+impl fmt::Debug for Secret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(if self.0.is_empty() {
+            "\"\""
+        } else {
+            "[REDACTED]"
+        })
+    }
+}
+
 impl std::ops::Deref for SecretMap {
     type Target = HashMap<String, String>;
     fn deref(&self) -> &Self::Target {
@@ -488,6 +503,12 @@ pub struct AppSettings {
     /// Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
     #[serde(default = "default_learn_from_edits")]
     pub learn_from_edits: bool,
+    /// Owl: the local transcription API (`local_api.rs`), off by default.
+    #[serde(default)]
+    pub local_api_enabled: bool,
+    /// Owl: its bearer token, made the first time it's turned on.
+    #[serde(default)]
+    pub local_api_token: Secret,
     /// Owl: None / Light / Medium (`cleanup_rules.rs`, AI cleanup in `actions.rs`).
     #[serde(default)]
     pub cleanup_level: CleanupLevel,
@@ -1029,6 +1050,8 @@ pub fn get_default_settings() -> AppSettings {
         meeting_templates: Vec::new(),
         meeting_template: default_meeting_template(),
         learn_from_edits: default_learn_from_edits(),
+        local_api_enabled: false,
+        local_api_token: Secret::default(),
         cleanup_level: CleanupLevel::default(),
         voice_commands_enabled: false,
         edit_suggestions: Vec::new(),
@@ -2098,8 +2121,11 @@ mod tests {
             .post_process_api_keys
             .insert("empty_provider".to_string(), "".to_string());
 
+        settings.local_api_token = Secret("owl_secret_token".to_string());
+
         let debug_output = format!("{:?}", settings);
 
+        assert!(!debug_output.contains("owl_secret_token"));
         assert!(!debug_output.contains("sk-proj-secret-key-12345"));
         assert!(!debug_output.contains("sk-ant-secret-key-67890"));
         assert!(debug_output.contains("[REDACTED]"));

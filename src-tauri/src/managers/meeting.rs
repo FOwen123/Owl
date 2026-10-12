@@ -24,6 +24,8 @@ pub const SAMPLE_RATE: usize = 16_000;
 /// Stretches of speech waiting for live transcription. When it falls this far
 /// behind, the meeting is transcribed from its saved audio after it ends.
 const LIVE_QUEUE: usize = 64;
+/// Imports are decoded whole, so they stop at 4 hours (about 1 GB of audio).
+const MAX_IMPORT_SECONDS: usize = 4 * 60 * 60;
 
 /// Every template starts with who's who and the language rule.
 const PROMPT_HEAD: &str = "You write meeting notes from a transcript. \"Me\" is the person taking the notes; call them \"you\". {OTHERS}
@@ -630,7 +632,10 @@ impl MeetingManager {
         let meeting = self.get(id)?;
         match meeting.status {
             MeetingStatus::Ready => Ok(meeting),
-            MeetingStatus::Failed => Err(anyhow!(meeting.error.unwrap_or_default())),
+            MeetingStatus::Failed => Err(match meeting.error.as_deref() {
+                Some(crate::media::TOO_LONG) => anyhow!("The file is longer than 4 hours"),
+                error => anyhow!(error.unwrap_or_default().to_string()),
+            }),
             _ => Err(anyhow!("The transcript couldn't be saved")),
         }
     }
@@ -655,7 +660,7 @@ impl MeetingManager {
     fn run_import(&self, id: i64, path: &Path) {
         let folder = self.dir.join(id.to_string());
         let result = (|| {
-            let samples = crate::media::decode(path, usize::MAX)?;
+            let samples = crate::media::decode(path, MAX_IMPORT_SECONDS * SAMPLE_RATE)?;
             crate::audio_toolkit::audio::save_wav_file(folder.join("system.wav"), &samples)?;
             let duration_ms = (samples.len() * 1000 / SAMPLE_RATE) as i64;
             drop(samples); // transcribing reads the saved copy

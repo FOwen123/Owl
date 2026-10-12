@@ -182,6 +182,7 @@
         "none": "कुनै सर्टकट सेट गरिएको छैन",
         "notFound": "सर्टकट भेटिएन",
         "pressKeys": "किहरू थिच्नुहोस्...",
+        "notSet": "Not set",
         "bindings": {
           "transcribe": {
             "name": "ट्रान्सक्राइब सर्टकट",
@@ -854,6 +855,7 @@
       "import": "Import audio",
       "audioOrVideo": "Audio or video",
       "unsupportedFormat": "This format isn't supported yet.",
+      "importTooLong": "This file is longer than 4 hours, so Owl can't import it.",
       "export": "Export",
       "exported": "Saved",
       "exportAs": {

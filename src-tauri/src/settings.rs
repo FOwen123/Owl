@@ -1168,13 +1168,8 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
             updated = true;
         }
 
-        // Merge in any bindings added since this store was written.
-        for (key, value) in get_default_settings().bindings {
-            if let std::collections::hash_map::Entry::Vacant(entry) = settings.bindings.entry(key) {
-                debug!("Adding missing binding: {}", entry.key());
-                entry.insert(value);
-                updated = true;
-            }
+        if add_missing_bindings(&mut settings) {
+            updated = true;
         }
 
         if updated {
@@ -1193,6 +1188,30 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
     }
 
     settings
+}
+
+/// Merges in bindings added since the store was written. Owl: one whose key
+/// is already taken starts with no key, so an upgrade never puts Edit by
+/// voice on a key the user already dictates with.
+fn add_missing_bindings(settings: &mut AppSettings) -> bool {
+    let mut added = false;
+    for (key, mut value) in get_default_settings().bindings {
+        if settings.bindings.contains_key(&key) {
+            continue;
+        }
+        let taken = !value.current_binding.is_empty()
+            && settings.bindings.values().any(|b| {
+                b.current_binding
+                    .eq_ignore_ascii_case(&value.current_binding)
+            });
+        if taken {
+            value.current_binding.clear();
+        }
+        debug!("Adding missing binding: {}", key);
+        settings.bindings.insert(key, value);
+        added = true;
+    }
+    added
 }
 
 /// Rebuilds settings from a store value that failed to deserialize as a whole.
@@ -1928,6 +1947,34 @@ mod tests {
             settings.bindings["edit_by_voice"].current_binding,
             "option+shift+space"
         );
+    }
+
+    #[test]
+    fn a_new_binding_on_a_key_already_in_use_starts_with_no_key() {
+        let mut settings = get_default_settings();
+        settings.bindings.remove("edit_by_voice");
+        let mine = "option+shift+space";
+        settings
+            .bindings
+            .get_mut("transcribe")
+            .unwrap()
+            .current_binding = mine.into();
+
+        assert!(add_missing_bindings(&mut settings));
+        assert_eq!(settings.bindings["transcribe"].current_binding, mine);
+        assert!(settings.bindings["edit_by_voice"]
+            .current_binding
+            .is_empty());
+
+        // Without a clash it gets its default key.
+        let mut fresh = get_default_settings();
+        let default = fresh
+            .bindings
+            .remove("edit_by_voice")
+            .unwrap()
+            .current_binding;
+        assert!(add_missing_bindings(&mut fresh));
+        assert_eq!(fresh.bindings["edit_by_voice"].current_binding, default);
     }
 
     #[test]

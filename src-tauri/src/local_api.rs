@@ -282,17 +282,13 @@ fn parts<'a>(body: &'a [u8], boundary: &str) -> Vec<Part<'a>> {
     };
     // Each part: CRLF, headers, CRLF CRLF, data, then CRLF and the delimiter.
     while !rest.starts_with(b"--") {
-        let Some(part) = rest.strip_prefix(b"\r\n") else {
+        let Some(part) = skip_padding(rest).strip_prefix(b"\r\n") else {
             break;
         };
         // A real delimiter ends its line or the body; "--b" inside a file
         // followed by anything else is just data.
         let Some(end) = (0..part.len()).find(|&i| {
-            part[i..].starts_with(delimiter)
-                && matches!(
-                    part.get(i + delimiter.len()..i + delimiter.len() + 2),
-                    Some(b"\r\n") | Some(b"--")
-                )
+            part[i..].starts_with(delimiter) && ends_delimiter(&part[i + delimiter.len()..])
         }) else {
             break;
         };
@@ -324,6 +320,22 @@ fn parts<'a>(body: &'a [u8], boundary: &str) -> Vec<Part<'a>> {
     out
 }
 
+/// Spaces and tabs a delimiter line may have before its line break.
+fn skip_padding(bytes: &[u8]) -> &[u8] {
+    let n = bytes
+        .iter()
+        .take_while(|b| matches!(b, b' ' | b'\t'))
+        .count();
+    &bytes[n..]
+}
+
+/// Whether `rest`, right after `\r\n--boundary`, finishes a delimiter: `--`
+/// for the last one, padding, then a line break or the end of the body.
+fn ends_delimiter(rest: &[u8]) -> bool {
+    let rest = skip_padding(rest.strip_prefix(b"--").unwrap_or(rest));
+    rest.is_empty() || rest.starts_with(b"\r\n")
+}
+
 fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|w| w == needle)
 }
@@ -335,7 +347,7 @@ mod tests {
     #[test]
     fn multipart_fields_and_files_are_read() {
         let body = b"--XyZ\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\nwhisper-1\r\n\
---XyZ\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n\x00\x01\r\nab--XyZ\x02\r\n--XyZX\r\n\
+--XyZ \t\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n\x00\x01\r\nab--XyZ\x02\r\n--XyZX\r\n--XyZ--X\r\n \t\r\n\
 --XyZ--\r\n";
         let found = parts(body, "XyZ");
         assert_eq!(found.len(), 2);
@@ -344,7 +356,10 @@ mod tests {
             ("model", &b"whisper-1"[..])
         );
         assert_eq!(found[1].filename.as_deref(), Some("a.m4a"));
-        assert_eq!(found[1].data, b"\x00\x01\r\nab--XyZ\x02\r\n--XyZX");
+        assert_eq!(
+            found[1].data,
+            b"\x00\x01\r\nab--XyZ\x02\r\n--XyZX\r\n--XyZ--X\r\n \t"
+        );
     }
 
     #[test]

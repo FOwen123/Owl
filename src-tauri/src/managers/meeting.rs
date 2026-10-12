@@ -787,9 +787,13 @@ impl MeetingManager {
                 });
             }
             // A part heard as nothing would lose words the whole line had:
-            // keep the line, under whoever spoke longest.
+            // keep the line, under whoever spoke longest in it.
             if split.iter().any(|l| l.text.is_empty()) {
-                let longest = parts.iter().max_by_key(|p| p.1 - p.0).map(|p| p.2);
+                let mut spoke = std::collections::BTreeMap::new();
+                for &(start, end, voice) in &parts {
+                    *spoke.entry(voice).or_insert(0) += end - start;
+                }
+                let longest = spoke.into_iter().max_by_key(|&(_, ms)| ms).map(|(v, _)| v);
                 out.push(TranscriptLine {
                     voice: longest,
                     ..line

@@ -52,12 +52,18 @@ fn finish_clipboard_paste(
 }
 
 /// Pastes text using the clipboard: saves current content, writes text, sends paste keystroke, restores clipboard.
+/// Owl: the error when Edit by voice's target changed before its paste.
+pub const TARGET_CHANGED: &str = "edit_target_changed";
+
+/// `still_there` (Edit by voice) is checked right before the keystroke, after
+/// every delay; a changed target leaves the text where it was.
 fn paste_via_clipboard(
     text: &str,
     app_handle: &AppHandle,
     paste_method: &PasteMethod,
     paste_delay_ms: u64,
     paste_delay_after_ms: u64,
+    still_there: Option<&dyn Fn() -> bool>,
 ) -> Result<(), String> {
     let clipboard = app_handle.clipboard();
     let saved_text = clipboard.read_text().ok().filter(|t| !t.is_empty());
@@ -78,6 +84,9 @@ fn paste_via_clipboard(
     // Capture key injection errors so the original clipboard is restored before
     // propagating them to the caller.
     let paste_result = (|| -> Result<(), String> {
+        if still_there.is_some_and(|f| !f()) {
+            return Err(TARGET_CHANGED.into());
+        }
         // Send paste key combo
         #[cfg(target_os = "linux")]
         let key_combo_sent = try_send_key_combo_linux(paste_method)?;
@@ -771,14 +780,33 @@ fn should_send_auto_submit(auto_submit: bool, paste_method: PasteMethod) -> bool
     auto_submit && paste_method != PasteMethod::None
 }
 
-/// `dictation` is false for Owl's Edit by voice: its text replaces a
-/// selection exactly, so no spaces are added, and it never auto-submits.
-pub fn paste(text: String, app_handle: AppHandle, dictation: bool) -> Result<(), String> {
+/// `edit_target` is Owl's Edit by voice: its text replaces a selection
+/// exactly, through the clipboard, only while `edit_target()` still holds
+/// right before Cmd+V. No spaces are added and it never auto-submits.
+pub fn paste(
+    text: String,
+    app_handle: AppHandle,
+    edit_target: Option<&dyn Fn() -> bool>,
+) -> Result<(), String> {
     let settings = get_settings(&app_handle);
     let paste_method = settings.paste_method;
     let paste_delay_ms = settings.paste_delay_ms;
     let paste_delay_after_ms = settings.paste_delay_after_ms;
+    let dictation = edit_target.is_none();
     let auto_submit = settings.auto_submit && dictation;
+    if let Some(still_there) = edit_target {
+        if matches!(paste_method, PasteMethod::None) {
+            return Ok(());
+        }
+        return paste_via_clipboard(
+            &text,
+            &app_handle,
+            &PasteMethod::CtrlV,
+            paste_delay_ms,
+            paste_delay_after_ms,
+            Some(still_there),
+        );
+    }
 
     // Append trailing space if setting is enabled
     let text = if settings.append_trailing_space && dictation {
@@ -848,6 +876,7 @@ pub fn paste(text: String, app_handle: AppHandle, dictation: bool) -> Result<(),
                 &paste_method,
                 paste_delay_ms,
                 paste_delay_after_ms,
+                None,
             )?
         }
         PasteMethod::ExternalScript => {

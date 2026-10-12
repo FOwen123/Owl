@@ -21,6 +21,9 @@ use tauri::{AppHandle, Emitter, Manager};
 
 /// Audio rate of the saved tracks; what the speech models expect.
 pub const SAMPLE_RATE: usize = 16_000;
+/// Stretches of speech waiting for live transcription. When it falls this far
+/// behind, the meeting is transcribed from its saved audio after it ends.
+const LIVE_QUEUE: usize = 64;
 
 /// Every template starts with who's who and the language rule.
 const PROMPT_HEAD: &str = "You write meeting notes from a transcript. \"Me\" is the person taking the notes; call them \"you\". {OTHERS}
@@ -150,6 +153,24 @@ fn split_title(reply: &str) -> (Option<String>, String) {
 
 /// The prompt for `template`, plus the user's Chinese script and dictionary
 /// spellings, so the notes match what their dictations look like.
+/// The transcript for the AI, and whether it has speaker labels.
+fn transcript_text(lines: &[TranscriptLine]) -> (String, bool) {
+    let labelled = lines.iter().any(|l| l.voice.is_some());
+    let text = lines
+        .iter()
+        .map(|l| {
+            let who = match (l.speaker, l.voice) {
+                (Speaker::You, _) => "Me".to_string(),
+                (Speaker::Others, Some(n)) => format!("Speaker {n}"),
+                (Speaker::Others, None) => "Others".to_string(),
+            };
+            format!("{who}: {}", l.text)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    (text, labelled)
+}
+
 /// Whether most of a transcript is Chinese, counting a character as a word.
 fn mostly_chinese(text: &str) -> bool {
     let is_cjk = crate::correction::is_cjk;
@@ -360,14 +381,17 @@ impl MeetingManager {
         let stop = Arc::new(AtomicBool::new(false));
         let mic_name = get_settings(&self.app).selected_microphone;
         let stages = self.stages();
-        let (segments, queue) = mpsc::channel();
+        let (segments, queue) = mpsc::sync_channel(LIVE_QUEUE);
+        let behind = Arc::new(AtomicBool::new(false));
         let recorder = {
-            let stop = stop.clone();
-            std::thread::spawn(move || record(&folder, mic_name, &stop, &stages, &segments))
+            let (stop, behind) = (stop.clone(), behind.clone());
+            std::thread::spawn(move || {
+                record(&folder, mic_name, &stop, &stages, &segments, &behind)
+            })
         };
         let transcriber = {
             let this = self.clone();
-            std::thread::spawn(move || this.transcribe_live(id, queue))
+            std::thread::spawn(move || this.transcribe_live(id, queue, &behind))
         };
         *active = Some(Active {
             id,
@@ -401,6 +425,7 @@ impl MeetingManager {
         &self,
         id: i64,
         queue: mpsc::Receiver<(Speaker, Segment)>,
+        behind: &AtomicBool,
     ) -> Result<Vec<TranscriptLine>> {
         let mut lines: Vec<TranscriptLine> = Vec::new();
         let mut failed = None;
@@ -424,6 +449,9 @@ impl MeetingManager {
             }
         }
         // Any line lost: the meeting is transcribed again from its saved audio.
+        if behind.load(Ordering::Relaxed) {
+            return Err(anyhow!("Live transcription fell behind"));
+        }
         match failed {
             Some(e) => Err(e),
             None => Ok(lines),
@@ -812,8 +840,8 @@ impl MeetingManager {
         let template = template
             .or(meeting.template)
             .unwrap_or_else(|| settings.meeting_template.clone());
-        let (transcript, labelled) = self.transcript_text(id).map_err(|e| e.to_string())?;
-        // Notes are saved only for the transcript they were written from.
+        // One read of the transcript: the AI gets it, and the notes are saved
+        // only while it's still the meeting's transcript.
         let revision: Option<String> = self
             .conn()
             .and_then(|conn| {
@@ -824,6 +852,11 @@ impl MeetingManager {
                 )?)
             })
             .map_err(|e| e.to_string())?;
+        let lines: Vec<TranscriptLine> = revision
+            .as_deref()
+            .and_then(|json| serde_json::from_str(json).ok())
+            .unwrap_or_default();
+        let (transcript, labelled) = transcript_text(&lines);
         if transcript.is_empty() {
             return Err("Nothing was said in this meeting.".into());
         }
@@ -833,7 +866,10 @@ impl MeetingManager {
             .cloned()
             .unwrap_or_default();
 
-        self.summarizing.lock().unwrap().insert(id);
+        // One summary per meeting at a time, so two can't overwrite each other.
+        if !self.summarizing.lock().unwrap().insert(id) {
+            return Err("These notes are already being written.".into());
+        }
         self.changed();
         let reply = crate::llm_client::send_chat_completion_with_schema(
             provider,
@@ -875,26 +911,6 @@ impl MeetingManager {
         self.summarizing.lock().unwrap().remove(&id);
         self.changed();
         result
-    }
-
-    /// The transcript for the AI, and whether it has speaker labels.
-    fn transcript_text(&self, id: i64) -> Result<(String, bool)> {
-        let meeting = self.get(id)?;
-        let labelled = meeting.transcript.iter().any(|l| l.voice.is_some());
-        let text = meeting
-            .transcript
-            .iter()
-            .map(|l| {
-                let who = match (l.speaker, l.voice) {
-                    (Speaker::You, _) => "Me".to_string(),
-                    (Speaker::Others, Some(n)) => format!("Speaker {n}"),
-                    (Speaker::Others, None) => "Others".to_string(),
-                };
-                format!("{who}: {}", l.text)
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        Ok((text, labelled))
     }
 
     pub fn get(&self, id: i64) -> Result<Meeting> {
@@ -988,7 +1004,8 @@ fn record(
     mic_name: Option<String>,
     stop: &AtomicBool,
     stages: &Stages,
-    segments: &mpsc::Sender<(Speaker, Segment)>,
+    segments: &mpsc::SyncSender<(Speaker, Segment)>,
+    behind: &AtomicBool,
 ) -> Result<Option<String>> {
     let (mic, mic_consumer) = open_mic(mic_name)?;
     let mut mic_track = Track::new(SAMPLE_RATE as u32, mic_consumer, &folder.join("mic.wav"))?;
@@ -1011,16 +1028,28 @@ fn record(
     };
 
     let mut split = Splitter::new(stages, system_track.is_some());
+    // While recording, capture never waits on transcription: a full queue
+    // gives up on live lines (the saved audio is transcribed instead).
+    let queue = |found: Vec<(Speaker, Segment)>| {
+        for s in found {
+            if behind.load(Ordering::Relaxed) || segments.try_send(s).is_err() {
+                behind.store(true, Ordering::Relaxed);
+            }
+        }
+    };
+    // After it, the last stretches can wait for room.
     let send = |found: Vec<(Speaker, Segment)>| {
         for s in found {
-            let _ = segments.send(s);
+            if !behind.load(Ordering::Relaxed) {
+                let _ = segments.send(s);
+            }
         }
     };
     while !stop.load(Ordering::Relaxed) {
         std::thread::sleep(Duration::from_millis(50));
         let mic_audio = mic_track.drain();
         let system_audio = system_track.as_mut().map(Track::drain).unwrap_or_default();
-        send(split.push(&mic_audio, &system_audio));
+        queue(split.push(&mic_audio, &system_audio));
     }
     let stopped = mic.stop()?;
     let mic_audio = mic_track.finish()?;
@@ -1501,8 +1530,9 @@ mod tests {
                 vad: None,
                 echo: None,
             };
-            let (segments, _queue) = mpsc::channel();
-            std::thread::spawn(move || record(&folder, None, &stop, &stages, &segments))
+            let (segments, _queue) = mpsc::sync_channel(LIVE_QUEUE);
+            let behind = AtomicBool::new(false);
+            std::thread::spawn(move || record(&folder, None, &stop, &stages, &segments, &behind))
         };
         std::thread::sleep(Duration::from_secs(3));
         stop.store(true, Ordering::Relaxed);

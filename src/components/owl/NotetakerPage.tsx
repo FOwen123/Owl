@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { emit, listen } from "@tauri-apps/api/event";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -9,8 +10,14 @@ import {
   Square,
   Circle,
   MoreHorizontal,
+  Download,
 } from "lucide-react";
-import { commands, type Meeting, type SummaryOptions } from "@/bindings";
+import {
+  commands,
+  type ExportFormat,
+  type Meeting,
+  type SummaryOptions,
+} from "@/bindings";
 import { formatDateTime } from "@/utils/dateFormat";
 import { SettingsGroup } from "../ui/SettingsGroup";
 import { Button } from "../ui/Button";
@@ -35,6 +42,26 @@ const clock = (ms: number) => {
 
 const when = (m: Meeting, locale: string) =>
   formatDateTime(String(Math.floor(m.started_at / 1000)), locale);
+
+/** What Import accepts; Owl can't decode Opus (WebM, .opus) yet. */
+const AUDIO_AND_VIDEO = [
+  "mp3",
+  "m4a",
+  "aac",
+  "wav",
+  "flac",
+  "ogg",
+  "mp4",
+  "mov",
+  "m4v",
+];
+
+const EXPORT_FORMATS: { format: ExportFormat; extension: string }[] = [
+  { format: "markdown", extension: "md" },
+  { format: "text", extension: "txt" },
+  { format: "srt", extension: "srt" },
+  { format: "vtt", extension: "vtt" },
+];
 
 /** The notes' first sentence, without Markdown, for the meeting list. */
 const firstLine = (markdown: string) =>
@@ -95,11 +122,32 @@ export const NotetakerPage: React.FC = () => {
     );
   }
 
-  const open = meetings.find((m) => m.id === openId);
-  if (open) {
+  const importFile = async () => {
+    const path = await open({
+      multiple: false,
+      filters: [
+        {
+          name: t("owl.notetaker.audioOrVideo"),
+          extensions: AUDIO_AND_VIDEO,
+        },
+      ],
+    });
+    if (typeof path !== "string") return;
+    const result = await commands.importMeeting(path);
+    if (result.status === "error") {
+      toast.error(
+        result.error === "unsupported_format"
+          ? t("owl.notetaker.unsupportedFormat")
+          : result.error,
+      );
+    }
+  };
+
+  const openMeeting = meetings.find((m) => m.id === openId);
+  if (openMeeting) {
     return (
       <MeetingDetail
-        meeting={open}
+        meeting={openMeeting}
         options={options}
         locale={i18n.language}
         onBack={() => setOpenId(null)}
@@ -114,13 +162,14 @@ export const NotetakerPage: React.FC = () => {
           <p className="text-sm text-mid-gray">
             {t("owl.notetaker.description")}
           </p>
-          <Button
-            disabled={busy}
-            onClick={() => run(commands.startMeeting)}
-            className="shrink-0"
-          >
-            {t("owl.notetaker.start")}
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="secondary" disabled={busy} onClick={importFile}>
+              {t("owl.notetaker.import")}
+            </Button>
+            <Button disabled={busy} onClick={() => run(commands.startMeeting)}>
+              {t("owl.notetaker.start")}
+            </Button>
+          </div>
         </div>
         <SpeakerModelRow />
       </SettingsGroup>
@@ -240,10 +289,11 @@ const MeetingRow: React.FC<{
   );
 };
 
-/** A "⋯" button with a short list of actions. */
+/** A button that opens a short list of actions; "⋯" unless given a label. */
 const MoreMenu: React.FC<{
+  label?: React.ReactNode;
   items: { label: string; danger?: boolean; onSelect: () => void }[];
-}> = ({ items }) => {
+}> = ({ label, items }) => {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -260,10 +310,11 @@ const MoreMenu: React.FC<{
       <Button
         variant="ghost"
         size="sm"
-        aria-label={t("owl.notetaker.more")}
+        aria-label={label ? undefined : t("owl.notetaker.more")}
         onClick={() => setOpen(!open)}
+        className="inline-flex items-center gap-1.5"
       >
-        <MoreHorizontal className="w-4 h-4" />
+        {label ?? <MoreHorizontal className="w-4 h-4" />}
       </Button>
       {open && (
         <div className="absolute end-0 mt-1 min-w-40 z-20 py-1 rounded-lg border border-border bg-surface shadow-lg">
@@ -360,6 +411,21 @@ const MeetingDetail: React.FC<{
     }
   };
 
+  const exportAs = async (format: ExportFormat, extension: string) => {
+    const name = (meeting.title ?? when(meeting, locale)).replace(
+      /[/\\:*?"<>|]/g,
+      "-",
+    );
+    const path = await save({
+      defaultPath: `${name}.${extension}`,
+      filters: [{ name: extension.toUpperCase(), extensions: [extension] }],
+    });
+    if (!path) return;
+    act(commands.exportMeeting(meeting.id, format, path), () =>
+      toast.success(t("owl.notetaker.exported")),
+    );
+  };
+
   const act = async (
     action: Promise<{ status: string; error?: string }>,
     done?: () => void,
@@ -381,19 +447,33 @@ const MeetingDetail: React.FC<{
           <ArrowLeft className="w-4 h-4" />
           {t("owl.notetaker.back")}
         </Button>
-        <MoreMenu
-          items={[
-            {
-              label: t("owl.notetaker.retranscribe"),
-              onSelect: () => act(commands.retranscribeMeeting(meeting.id)),
-            },
-            {
-              label: t("owl.notetaker.delete"),
-              danger: true,
-              onSelect: () => act(commands.deleteMeeting(meeting.id), onBack),
-            },
-          ]}
-        />
+        <div className="flex items-center gap-1">
+          <MoreMenu
+            label={
+              <>
+                <Download className="w-4 h-4" />
+                {t("owl.notetaker.export")}
+              </>
+            }
+            items={EXPORT_FORMATS.map(({ format, extension }) => ({
+              label: t(`owl.notetaker.exportAs.${format}`),
+              onSelect: () => exportAs(format, extension),
+            }))}
+          />
+          <MoreMenu
+            items={[
+              {
+                label: t("owl.notetaker.retranscribe"),
+                onSelect: () => act(commands.retranscribeMeeting(meeting.id)),
+              },
+              {
+                label: t("owl.notetaker.delete"),
+                danger: true,
+                onSelect: () => act(commands.deleteMeeting(meeting.id), onBack),
+              },
+            ]}
+          />
+        </div>
       </div>
 
       <div className="px-4 space-y-1">

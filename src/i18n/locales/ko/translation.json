@@ -279,11 +279,34 @@
         "output": "출력",
         "transcription": "전사",
         "history": "히스토리",
+        "outside": "Other apps",
         "experimental": "실험적"
       },
       "experimentalToggle": {
         "label": "실험적 기능",
         "description": "개발 중인 실험적 기능을 활성화합니다."
+      },
+      "outside": {
+        "cli": {
+          "title": "Command line",
+          "description": "Use Owl from Terminal.",
+          "install": "Install",
+          "installed": "Installed at {{path}}",
+          "failed": "Couldn't install the command line."
+        },
+        "api": {
+          "title": "Local API",
+          "description": "Lets other apps on this Mac transcribe audio with Owl.",
+          "busy": "Couldn't start the API. Another app is using its port.",
+          "address": "Address",
+          "addressDescription": "Where apps send audio.",
+          "token": "Token",
+          "tokenDescription": "Apps send this to prove they're allowed."
+        },
+        "mcp": {
+          "title": "AI agents",
+          "description": "Lets AI apps read your meetings and dictations. Run this in Terminal."
+        }
       },
       "lazyStreamClose": {
         "label": "전사 사이에 마이크 열어 두기",
@@ -824,6 +847,17 @@
       "retranscribe": "Transcribe again",
       "rename": "Rename",
       "listening": "Listening…",
+      "import": "Import audio",
+      "audioOrVideo": "Audio or video",
+      "unsupportedFormat": "This format isn't supported yet.",
+      "export": "Export",
+      "exported": "Saved",
+      "exportAs": {
+        "markdown": "Markdown",
+        "text": "Plain text",
+        "srt": "SRT subtitles",
+        "vtt": "VTT subtitles"
+      },
       "templates": {
         "title": "Note templates",
         "description": "What meeting notes contain.",

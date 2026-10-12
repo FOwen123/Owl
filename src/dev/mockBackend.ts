@@ -39,6 +39,8 @@ const settings: Record<string, unknown> = {
     },
   ],
   learn_from_edits: true,
+  local_api_enabled: false,
+  local_api_token: "",
   cleanup_level: "light",
   post_process_enabled: true,
   voice_commands_enabled: false,
@@ -138,6 +140,7 @@ const responses: Record<string, unknown> = {
   get_secure_input_status: { active: false },
   is_update_checks_locked: true,
   is_portable: false,
+  install_command_line: "/Users/you/.local/bin/owl",
   is_laptop: true,
   is_recording: false,
   get_app_dir_path: "~/Library/Application Support/com.hao.owl",
@@ -152,6 +155,12 @@ export function installMockBackend() {
   mockIPC(
     (cmd, payload) => {
       if (cmd in responses) return responses[cmd];
+      if (cmd === "change_local_api_setting") {
+        settings.local_api_enabled = (payload as { enabled: boolean }).enabled;
+        settings.local_api_token ||=
+          "owl_3f9c1a7e5b2d4c6f8a0e1b3d5f7a9c2e4b6d8f0a1c3e5a7b";
+        return null;
+      }
       if (cmd === "change_cleanup_level_setting") {
         settings.cleanup_level = (payload as { level: string }).level;
         return null;

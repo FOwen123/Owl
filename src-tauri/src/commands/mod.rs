@@ -25,6 +25,31 @@ pub fn is_portable() -> bool {
     crate::portable::is_portable()
 }
 
+/// Owl: turns the local transcription API on or off. Stays off when it
+/// can't start (its port is taken).
+#[tauri::command]
+#[specta::specta]
+pub fn change_local_api_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.local_api_enabled = enabled;
+    write_settings(&app, settings);
+    crate::local_api::sync(&app).map_err(|e| {
+        let mut settings = get_settings(&app);
+        settings.local_api_enabled = false;
+        write_settings(&app, settings);
+        e.to_string()
+    })
+}
+
+/// Owl: puts `owl` on the command line; returns where.
+#[tauri::command]
+#[specta::specta]
+pub fn install_command_line() -> Result<String, String> {
+    crate::owl_cli::install()
+        .map(|link| link.to_string_lossy().into_owned())
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn is_update_checks_locked() -> bool {

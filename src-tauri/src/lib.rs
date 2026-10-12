@@ -14,16 +14,20 @@ mod clipboard;
 mod commands;
 mod correction;
 mod correction_watch;
-mod diarization;
+pub mod diarization;
 mod dictionary;
 mod echo;
 pub mod engine_supervisor;
 mod helpers;
 mod input;
 mod llm_client;
+mod local_api;
 mod managers;
+pub mod mcp;
+mod media;
 mod memory;
 mod overlay;
+pub mod owl_cli;
 mod paste_tx;
 pub mod portable;
 mod secure_input;
@@ -38,6 +42,8 @@ mod tray_i18n;
 mod utils;
 
 pub use cli::CliArgs;
+/// Owl's app id (`tauri.conf.json`); its data lives in a folder of this name.
+pub const OWL_IDENTIFIER: &str = "com.hao.owl";
 #[cfg(debug_assertions)]
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use tauri_specta::{collect_commands, collect_events, Builder};
@@ -231,6 +237,9 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(history_manager.clone());
     app_handle.manage(meeting_manager);
     app_handle.manage(tray::TrayState::new());
+    if let Err(e) = local_api::sync(app_handle) {
+        log::warn!("Local API: {e:#}");
+    }
 
     // Note: Shortcuts are NOT initialized here.
     // The frontend is responsible for calling the `initialize_shortcuts` command
@@ -465,6 +474,20 @@ mod headless_guard_tests {
 /// failure, 2 bad input/usage).
 fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
     use std::time::Instant;
+
+    if let Some(owl_cli::OwlCommand::Transcribe { file }) = &args.command {
+        let meetings = app.state::<Arc<managers::meeting::MeetingManager>>();
+        return match meetings.import_and_wait(file.clone()) {
+            Ok(m) => {
+                println!("{}", owl_cli::meeting_text(&m, false, false));
+                0
+            }
+            Err(e) => {
+                eprintln!("error: {e}");
+                1
+            }
+        };
+    }
 
     // --list-devices: print registered compute devices (with indices) and exit.
     // Useful on multi-GPU machines to discover the index for --device-index.
@@ -756,6 +779,8 @@ pub fn run(cli_args: CliArgs) {
             show_main_window_command,
             commands::cancel_operation,
             commands::is_portable,
+            commands::change_local_api_setting,
+            commands::install_command_line,
             commands::is_update_checks_locked,
             commands::get_app_dir_path,
             commands::get_app_settings,
@@ -811,6 +836,8 @@ pub fn run(cli_args: CliArgs) {
             commands::meetings::delete_meeting,
             commands::meetings::summarize_meeting,
             commands::meetings::rename_speaker,
+            commands::meetings::import_meeting,
+            commands::meetings::export_meeting,
             commands::meetings::get_summary_options,
             commands::meetings::rename_meeting,
             commands::meetings::retranscribe_meeting,
@@ -843,8 +870,10 @@ pub fn run(cli_args: CliArgs) {
 
     // The headless path must run as its own instance (see the single-instance
     // note below), not forward to an already-running app.
-    let headless_mode =
-        cli_args.transcribe_file.is_some() || cli_args.list_devices || cli_args.list_models;
+    let headless_mode = cli_args.transcribe_file.is_some()
+        || cli_args.list_devices
+        || cli_args.list_models
+        || cli_args.command.is_some();
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
@@ -976,6 +1005,13 @@ pub fn run(cli_args: CliArgs) {
                 app_handle.manage(model_manager);
                 app_handle.manage(transcription_manager);
                 managers::transcription::apply_accelerator_settings(&app_handle);
+                // Owl: `owl transcribe` imports through the meeting pipeline,
+                // without touching meetings the app may be recording.
+                if cli_args.command.is_some() {
+                    let meetings = managers::meeting::MeetingManager::open(&app_handle)
+                        .expect("Failed to open meetings");
+                    app_handle.manage(Arc::new(meetings));
+                }
 
                 let handle = app_handle.clone();
                 let args = cli_args.clone();

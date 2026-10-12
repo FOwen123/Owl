@@ -811,6 +811,14 @@
       "copied": "已复制逐字稿",
       "systemAudioMissing": "Owl 无法收到系统音频，所以这份逐字稿只有你的麦克风。请到“系统设置 → 隐私与安全性 → 屏幕与系统音频录制”允许 Owl。",
       "micFailed": "会议中麦克风中断了，部分内容可能缺失。",
+      "speakerNumbered": "说话者 {{n}}",
+      "speakerName": "名字",
+      "speakerModel": {
+        "title": "说话者标签",
+        "description": "区分通话中的每个人。",
+        "download": "下载（139 MB）",
+        "downloading": "正在下载… {{percent}}%"
+      },
       "speaker": {
         "you": "你",
         "others": "其他人"

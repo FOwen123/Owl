@@ -9,6 +9,12 @@ import { SettingsGroup } from "../ui/SettingsGroup";
 import { Button } from "../ui/Button";
 import { Alert } from "../ui/Alert";
 import { MarkdownContent } from "../whats-new/MarkdownContent";
+import {
+  SpeakerChips,
+  SpeakerModelRow,
+  useFillSpeakers,
+  useSpeakerLabel,
+} from "./MeetingSpeakers";
 
 const clock = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -105,6 +111,7 @@ export const NotetakerPage: React.FC = () => {
             </Button>
           )}
         </div>
+        <SpeakerModelRow />
       </SettingsGroup>
 
       <SettingsGroup title={t("owl.notetaker.meetings")}>
@@ -147,10 +154,10 @@ const MeetingDetail: React.FC<{
   onBack: () => void;
 }> = ({ meeting, locale, onBack }) => {
   const { t } = useTranslation();
-  const speaker = (s: Meeting["transcript"][number]["speaker"]) =>
-    t(`owl.notetaker.speaker.${s}`);
+  const speaker = useSpeakerLabel(meeting.speaker_names);
+  const fillSpeakers = useFillSpeakers(meeting.speaker_names);
   const transcriptText = meeting.transcript
-    .map((l) => `[${clock(l.start_ms)}] ${speaker(l.speaker)}: ${l.text}`)
+    .map((l) => `[${clock(l.start_ms)}] ${speaker(l)}: ${l.text}`)
     .join("\n");
 
   const summarize = async () => {
@@ -192,7 +199,10 @@ const MeetingDetail: React.FC<{
 
       <div className="px-4">
         <h1 className="text-lg font-semibold">{when(meeting, locale)}</h1>
-        <p className="text-xs text-mid-gray">{clock(meeting.duration_ms)}</p>
+        <p className="text-xs text-mid-gray flex flex-wrap items-center gap-2">
+          {clock(meeting.duration_ms)}
+          <SpeakerChips meeting={meeting} />
+        </p>
       </div>
 
       {meeting.status === "failed" && (
@@ -208,7 +218,9 @@ const MeetingDetail: React.FC<{
       {meeting.status === "ready" && (
         <SettingsGroup title={t("owl.notetaker.summary")}>
           <div className="p-4 space-y-3">
-            {meeting.summary && <MarkdownContent markdown={meeting.summary} />}
+            {meeting.summary && (
+              <MarkdownContent markdown={fillSpeakers(meeting.summary)} />
+            )}
             <Button
               variant={meeting.summary ? "secondary" : "primary"}
               size="sm"
@@ -257,9 +269,9 @@ const MeetingDetail: React.FC<{
                     {clock(line.start_ms)}
                   </span>
                   <span
-                    className={`w-14 shrink-0 font-medium ${line.speaker === "you" ? "text-logo-primary" : ""}`}
+                    className={`w-20 shrink-0 font-medium truncate ${line.speaker === "you" ? "text-logo-primary" : ""}`}
                   >
-                    {speaker(line.speaker)}
+                    {speaker(line)}
                   </span>
                   <span className="flex-1 min-w-0">{line.text}</span>
                 </li>

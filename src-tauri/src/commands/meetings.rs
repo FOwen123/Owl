@@ -36,3 +36,32 @@ pub async fn summarize_meeting(app: AppHandle, id: i64) -> Result<String, String
     let meetings = app.state::<Arc<MeetingManager>>().inner().clone();
     meetings.summarize(id).await
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn rename_speaker(
+    meetings: State<Arc<MeetingManager>>,
+    id: i64,
+    voice: u32,
+    name: String,
+) -> Result<(), String> {
+    meetings
+        .rename_speaker(id, voice, &name)
+        .map_err(|e| e.to_string())
+}
+
+/// Whether the speaker model is installed; meetings work without it.
+#[tauri::command]
+#[specta::specta]
+pub fn speaker_model_installed(app: AppHandle) -> bool {
+    crate::diarization::is_installed(&app)
+}
+
+/// Downloads the speaker model, sending `speaker-model-progress` events.
+#[tauri::command]
+#[specta::specta]
+pub async fn download_speaker_model(app: AppHandle) -> Result<(), String> {
+    crate::diarization::download(&app)
+        .await
+        .map_err(|e| e.to_string())
+}

@@ -14,6 +14,7 @@ mod clipboard;
 mod commands;
 mod correction;
 mod correction_watch;
+mod diarization;
 mod dictionary;
 pub mod engine_supervisor;
 mod helpers;
@@ -808,6 +809,9 @@ pub fn run(cli_args: CliArgs) {
             commands::meetings::get_meetings,
             commands::meetings::delete_meeting,
             commands::meetings::summarize_meeting,
+            commands::meetings::rename_speaker,
+            commands::meetings::speaker_model_installed,
+            commands::meetings::download_speaker_model,
             commands::edits::accept_edit_suggestion,
             commands::edits::dismiss_edit_suggestion,
             commands::edits::change_learn_from_edits_setting,

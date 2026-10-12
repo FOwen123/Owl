@@ -1169,6 +1169,10 @@ export type Meeting = { id: number;
  */
 started_at: number; duration_ms: number; status: MeetingStatus; transcript: TranscriptLine[]; summary: string | null; 
 /**
+ * The AI is writing the summary right now.
+ */
+summarizing: boolean; 
+/**
  * Why it failed, or for a ready meeting a warning code the UI translates
  * (`system_audio_missing`).
  */

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { ArrowLeft, Copy, Sparkles, Square, Circle } from "lucide-react";
 import { commands, type Meeting } from "@/bindings";
@@ -8,6 +8,7 @@ import { formatDateTime } from "@/utils/dateFormat";
 import { SettingsGroup } from "../ui/SettingsGroup";
 import { Button } from "../ui/Button";
 import { Alert } from "../ui/Alert";
+import { MarkdownContent } from "../whats-new/MarkdownContent";
 
 const clock = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -146,7 +147,6 @@ const MeetingDetail: React.FC<{
   onBack: () => void;
 }> = ({ meeting, locale, onBack }) => {
   const { t } = useTranslation();
-  const [summarizing, setSummarizing] = useState(false);
   const speaker = (s: Meeting["transcript"][number]["speaker"]) =>
     t(`owl.notetaker.speaker.${s}`);
   const transcriptText = meeting.transcript
@@ -154,15 +154,16 @@ const MeetingDetail: React.FC<{
     .join("\n");
 
   const summarize = async () => {
-    setSummarizing(true);
     const result = await commands.summarizeMeeting(meeting.id);
-    setSummarizing(false);
-    if (result.status === "error") {
-      toast.error(
-        result.error === "no_provider"
-          ? t("owl.notetaker.summaryNeedsProvider")
-          : result.error,
-      );
+    if (result.status === "error" && result.error === "no_provider") {
+      toast(t("owl.notetaker.summaryNeedsProvider"), {
+        action: {
+          label: t("owl.notetaker.setUpAi"),
+          onClick: () => emit("show-section", "postprocessing"),
+        },
+      });
+    } else if (result.status === "error") {
+      toast.error(result.error);
     }
   };
 
@@ -204,18 +205,16 @@ const MeetingDetail: React.FC<{
       {meeting.status === "ready" && (
         <SettingsGroup title={t("owl.notetaker.summary")}>
           <div className="p-4 space-y-3">
-            {meeting.summary && (
-              <p className="text-sm whitespace-pre-wrap">{meeting.summary}</p>
-            )}
+            {meeting.summary && <MarkdownContent markdown={meeting.summary} />}
             <Button
               variant={meeting.summary ? "secondary" : "primary"}
               size="sm"
-              disabled={summarizing || meeting.transcript.length === 0}
+              disabled={meeting.summarizing || meeting.transcript.length === 0}
               onClick={summarize}
               className="inline-flex items-center gap-1.5"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              {summarizing
+              {meeting.summarizing
                 ? t("owl.notetaker.summarizing")
                 : meeting.summary
                   ? t("owl.notetaker.resummarize")

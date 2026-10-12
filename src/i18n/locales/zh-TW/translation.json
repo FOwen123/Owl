@@ -807,6 +807,7 @@
       "resummarize": "重新產生摘要",
       "summarizing": "正在產生摘要…",
       "summaryNeedsProvider": "請先在「後處理」頁面選擇 AI 供應商與模型。",
+      "setUpAi": "設定 AI",
       "transcript": "逐字稿",
       "noSpeech": "這段錄音中沒有偵測到說話內容。",
       "copy": "複製逐字稿",

@@ -98,10 +98,6 @@
         "name": "SenseVoice",
         "description": "Sangat cepat. Bahasa Mandarin, Inggris, Jepang, Korea, dan Kanton."
       },
-      "gigaam-v3-e2e-ctc": {
-        "name": "GigaAM v3",
-        "description": "Pengenalan ucapan bahasa Rusia. Cepat dan akurat."
-      },
       "canary-180m-flash": {
         "name": "Canary 180M Flash",
         "description": "Sangat cepat. Bahasa Inggris, Jerman, Spanyol, dan Prancis. Mendukung penerjemahan."

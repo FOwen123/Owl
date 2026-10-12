@@ -39,7 +39,6 @@ pub const KNOWN_ARCHES: &[&str] = &[
     "moonshine",
     "moonshine_streaming",
     "sensevoice",
-    "gigaam",
     "granite",
     "granite_speech",
     "granite_nar",

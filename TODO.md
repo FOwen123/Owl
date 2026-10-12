@@ -209,7 +209,7 @@ Like Glimpse and Muesli, but local-first and in Owl's shape. **Platform rule:** 
 ## Phase 6: Before open-sourcing (last)
 
 - [ ] Own model hosting: use the `owl-dictation` Hugging Face organization for models Owl converts or must host itself; use existing verified repositories for other downloads. Skip Cloudflare R2 for now. The public collection is for browsing; the bundled catalog controls the app.
-- [x] Replace 15 legacy download URLs with revision-pinned, checksum-matched Hugging Face sources; retain filenames and engines. Remove the unverified legacy GigaAM entry. No model copies uploaded; newer catalog GigaAM entries remain.
+- [x] Replace 15 legacy download URLs with revision-pinned, checksum-matched Hugging Face sources; retain filenames and engines. Remove all GigaAM entries and backend support, and exclude GigaAM from catalog regeneration. No model copies uploaded.
 - [ ] Update `AGENTS.md` "Target: macOS only" to the Phase 4 platform rule
 - [ ] Copy `breeze-asr-q5_k.bin` to `owl-dictation`: it no longer depends on Handy's server, but now comes from one person's Hugging Face repo (`alan314159/Breeze-ASR-25-whispercpp`)
 - [ ] Check the `vad-rs` license (cjpais copy has none; check `thewh1teagle/vad-rs`)

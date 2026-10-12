@@ -76,7 +76,7 @@ tar = "0.4.44"
 flate2 = "1.0"
 sha2 = "0.10"
 # Whisper-family models run through transcribe-cpp (GGUF/ggml, native backends);
-# transcribe-rs is now ONNX-only (Parakeet, Moonshine, SenseVoice, GigaAM,
+# transcribe-rs is now ONNX-only (Parakeet, Moonshine, SenseVoice,
 # Canary, Cohere). Per-platform backend features are added in the target tables.
 transcribe-rs = { version = "0.3.8", features = ["onnx"] }
 transcribe-cpp = { version = "0.3.0", default-features = false }

@@ -33,7 +33,6 @@ pub enum EngineType {
     Moonshine,
     MoonshineStreaming,
     SenseVoice,
-    GigaAM,
     Canary,
     Cohere,
 }
@@ -1134,9 +1133,6 @@ impl ModelManager {
         // Migrate any bundled models to user directory
         manager.migrate_bundled_models()?;
 
-        // Migrate GigaAM from single-file to directory format
-        manager.migrate_gigaam_to_directory()?;
-
         // Check which models are already downloaded
         manager.update_download_status()?;
 
@@ -1316,50 +1312,6 @@ impl ModelManager {
             }
         }
 
-        Ok(())
-    }
-
-    /// Migrate GigaAM from the old single-file format (giga-am-v3.int8.onnx)
-    /// to the new directory format (giga-am-v3-int8/model.int8.onnx + vocab.txt).
-    /// This was required by the transcribe-rs 0.3.x upgrade.
-    fn migrate_gigaam_to_directory(&self) -> Result<()> {
-        let old_file = self.models_dir.join("giga-am-v3.int8.onnx");
-        let new_dir = self.models_dir.join("giga-am-v3-int8");
-
-        if !old_file.exists() || new_dir.exists() {
-            return Ok(());
-        }
-
-        info!("Migrating GigaAM from single-file to directory format");
-
-        let vocab_path = self
-            .app_handle
-            .path()
-            .resolve(
-                "resources/models/gigaam_vocab.txt",
-                tauri::path::BaseDirectory::Resource,
-            )
-            .map_err(|e| anyhow::anyhow!("Failed to resolve GigaAM vocab path: {}", e))?;
-
-        info!(
-            "Resolved vocab path: {:?} (exists: {})",
-            vocab_path,
-            vocab_path.exists()
-        );
-        info!("Old file: {:?} (exists: {})", old_file, old_file.exists());
-        info!("New dir: {:?} (exists: {})", new_dir, new_dir.exists());
-
-        fs::create_dir_all(&new_dir)?;
-        fs::rename(&old_file, new_dir.join("model.int8.onnx"))?;
-        fs::copy(&vocab_path, new_dir.join("vocab.txt"))?;
-
-        // Clean up old partial file if it exists
-        let old_partial = self.models_dir.join("giga-am-v3.int8.onnx.partial");
-        if old_partial.exists() {
-            let _ = fs::remove_file(&old_partial);
-        }
-
-        info!("GigaAM migration complete");
         Ok(())
     }
 
@@ -1683,6 +1635,10 @@ impl ModelManager {
             } else {
                 CapabilityProbe::default()
             };
+            if probe.architecture.as_deref() == Some("gigaam") {
+                info!("Skipping unsupported GigaAM model: {}", filename);
+                continue;
+            }
             let caps = local_caps(&probe);
             let display_name = probed_display_name(&probe).unwrap_or(fallback_display_name);
 
@@ -1820,6 +1776,13 @@ impl ModelManager {
 
                 let path = snapshot.join(&fname);
                 let probe = prober.probe_file(&path);
+                if probe.architecture.as_deref() == Some("gigaam") {
+                    info!(
+                        "Skipping unsupported GigaAM model from HF cache: {}",
+                        model_id
+                    );
+                    continue;
+                }
                 // Only surface models transcribe-cpp recognises.
                 if probe.verdict != Compatibility::Compatible {
                     continue;

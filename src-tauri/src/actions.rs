@@ -1001,14 +1001,9 @@ impl ShortcutAction for TranscribeAction {
                                         return;
                                     }
 
-                                    if target.as_ref().is_some_and(|t| !still_there(t)) {
-                                        let _ = ah_clone.emit("edit-not-pasted", ());
-                                        utils::hide_recording_overlay(&ah_clone);
-                                        set_tray_state(&ah_clone, TrayIconState::Idle);
-                                        return;
-                                    }
-
-                                    match utils::paste(final_text.clone(), ah_clone.clone(), !edit)
+                                    let check = target.as_ref().map(|t| move || still_there(t));
+                                    let check = check.as_ref().map(|f| f as &dyn Fn() -> bool);
+                                    match utils::paste(final_text.clone(), ah_clone.clone(), check)
                                     {
                                         Ok(()) => {
                                             debug!(
@@ -1022,6 +1017,9 @@ impl ShortcutAction for TranscribeAction {
                                                     final_text,
                                                 );
                                             }
+                                        }
+                                        Err(e) if e == utils::TARGET_CHANGED => {
+                                            let _ = ah_clone.emit("edit-not-pasted", ());
                                         }
                                         Err(e) => {
                                             error!("Failed to paste transcription: {}", e);

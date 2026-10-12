@@ -176,7 +176,7 @@ fn link_to(exe: &Path, dir: &Path, link: &Path) -> Result<()> {
     // another program's link.
     if let Ok(target) = std::fs::read_link(link) {
         let ours = target == exe || app_of(&target).is_some_and(|app| Some(app) == app_of(exe));
-        if link.exists() && !ours {
+        if !ours {
             return Err(anyhow!("{} belongs to another program", link.display()));
         }
         std::fs::remove_file(link)?;
@@ -211,7 +211,12 @@ mod tests {
         std::os::unix::fs::symlink(&handy, &link).unwrap();
         assert!(link_to(exe, dir.path(), &link).is_err());
 
-        // A moved Owl, and a link to nothing, are replaced.
+        // A link to a missing program isn't Owl's either.
+        std::fs::remove_file(&link).unwrap();
+        std::os::unix::fs::symlink("/gone/handy", &link).unwrap();
+        assert!(link_to(exe, dir.path(), &link).is_err());
+
+        // A moved Owl is replaced, even once it's gone.
         let moved = dir.path().join("Old/Owl.app/Contents/MacOS/handy");
         std::fs::create_dir_all(moved.parent().unwrap()).unwrap();
         std::fs::write(&moved, "").unwrap();
@@ -220,7 +225,7 @@ mod tests {
         link_to(exe, dir.path(), &link).unwrap();
         assert_eq!(std::fs::read_link(&link).unwrap(), exe);
         std::fs::remove_file(&link).unwrap();
-        std::os::unix::fs::symlink("/gone/handy", &link).unwrap();
+        std::os::unix::fs::symlink("/gone/Owl.app/Contents/MacOS/handy", &link).unwrap();
         link_to(exe, dir.path(), &link).unwrap();
         assert_eq!(std::fs::read_link(&link).unwrap(), exe);
     }

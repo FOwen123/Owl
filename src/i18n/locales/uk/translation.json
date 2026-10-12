@@ -187,6 +187,10 @@
             "name": "Гаряча клавіша транскрипції",
             "description": "Комбінація клавіш для запису та транскрибування вашого голосу."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Гаряча клавіша скасування",
             "description": "Комбінація клавіш для скасування поточного запису."

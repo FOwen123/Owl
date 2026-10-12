@@ -207,6 +207,10 @@
             "name": "文字起こしのショートカット",
             "description": "音声を録音して文字起こしするためのキーボードショートカット。"
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "キャンセルのショートカット",
             "description": "現在の録音をキャンセルするためのキーボードショートカット。"

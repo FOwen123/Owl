@@ -207,6 +207,10 @@
             "name": "Phím tắt chuyển đổi",
             "description": "Phím tắt để ghi âm và chuyển đổi giọng nói của bạn."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Phím tắt hủy",
             "description": "Phím tắt để hủy bản ghi hiện tại."

@@ -187,6 +187,10 @@
             "name": "轉錄快捷鍵",
             "description": "用於錄製和轉錄語音的鍵盤快捷鍵"
           },
+          "edit_by_voice": {
+            "name": "語音編輯",
+            "description": "改寫選取的文字，或寫出你要的內容。"
+          },
           "cancel": {
             "name": "取消快捷鍵",
             "description": "用於取消目前錄製的鍵盤快捷鍵"

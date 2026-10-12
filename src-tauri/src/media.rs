@@ -98,7 +98,9 @@ fn decode_file(path: &Path, max_samples: usize) -> Result<Vec<f32>> {
             Err(SymphoniaError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                 break
             }
-            Err(SymphoniaError::ResetRequired) => break,
+            // A new stream mid-file (a chained Ogg): refuse rather than keep
+            // only the first part.
+            Err(SymphoniaError::ResetRequired) => return Err(anyhow!(UNSUPPORTED)),
             Err(e) => return Err(e.into()),
         };
         if packet.track_id() != track_id {

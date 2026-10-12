@@ -622,15 +622,35 @@ impl MeetingManager {
         std::thread::spawn(move || {
             // A microphone that failed while recording still failed.
             let kept = old.error.clone().filter(|e| e == "mic_failed");
-            let result = this.transcribe(id).and_then(|(lines, warning)| {
-                // Audio that reads as empty never replaces the lines kept.
-                if lines.is_empty() && !old.transcript.is_empty() {
-                    return Err(anyhow!(
-                        "This meeting's audio can't be read, so its transcript was kept."
-                    ));
-                }
-                Ok((lines, kept.or(warning)))
-            });
+            // Audio cut short (Owl quit or crashed before saving it all) never
+            // replaces lines that were transcribed live from more of it.
+            let saved_ms = ["mic.wav", "system.wav"]
+                .iter()
+                .filter_map(|f| hound::WavReader::open(folder.join(f)).ok())
+                .map(|r| r.duration() as i64 * 1000 / SAMPLE_RATE as i64)
+                .max()
+                .unwrap_or(0);
+            let said_ms = old
+                .transcript
+                .iter()
+                .map(|l| l.end_ms.max(l.start_ms))
+                .max()
+                .unwrap_or(0);
+            let result = if saved_ms + 1_000 < said_ms {
+                Err(anyhow!(
+                    "This meeting's audio is shorter than its transcript, so the transcript was kept."
+                ))
+            } else {
+                this.transcribe(id).and_then(|(lines, warning)| {
+                    // Audio that reads as empty never replaces the lines kept.
+                    if lines.is_empty() && !old.transcript.is_empty() {
+                        return Err(anyhow!(
+                            "This meeting's audio can't be read, so its transcript was kept."
+                        ));
+                    }
+                    Ok((lines, kept.or(warning)))
+                })
+            };
             match result {
                 // A ready meeting stays as it was, saying why nothing changed.
                 Err(e) if old.status == MeetingStatus::Ready => {

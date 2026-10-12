@@ -22,6 +22,11 @@ const settings: Record<string, unknown> = {
   push_to_talk: true,
   bindings: {
     transcribe: binding("transcribe", "Transcribe", "option+space"),
+    edit_by_voice: binding(
+      "edit_by_voice",
+      "Edit by voice",
+      "option+shift+space",
+    ),
     cancel: binding("cancel", "Cancel", "escape"),
   },
   custom_words: ["Owl", "Tauri", "Breeze"],

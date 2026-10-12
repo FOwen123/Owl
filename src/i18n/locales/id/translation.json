@@ -187,6 +187,10 @@
             "name": "Pintasan Transkripsi",
             "description": "Pintasan keyboard untuk merekam dan mentranskripsikan suara Anda."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Pintasan Batal",
             "description": "Pintasan keyboard untuk membatalkan perekaman saat ini."

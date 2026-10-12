@@ -187,6 +187,10 @@
             "name": "Бърз клавиш за транскрипция",
             "description": "Клавишната комбинация за запис и транскрибиране на гласа ви."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Бърз клавиш за отказ",
             "description": "Клавишната комбинация за отмяна на текущия запис."

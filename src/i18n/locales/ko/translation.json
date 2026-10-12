@@ -187,6 +187,10 @@
             "name": "음성 텍스트 변환 단축키",
             "description": "음성을 녹음하고 테스트로 변환하는 키보드 단축키입니다."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "취소 단축키",
             "description": "현재 녹음을 취소하는 키보드 단축키입니다."

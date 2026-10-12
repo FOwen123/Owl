@@ -207,6 +207,10 @@
             "name": "Raccourci de Transcription",
             "description": "Le raccourci clavier pour enregistrer et transcrire votre voix."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Raccourci d'Annulation",
             "description": "Le raccourci clavier pour annuler l'enregistrement en cours."

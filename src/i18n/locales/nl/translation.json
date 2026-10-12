@@ -187,6 +187,10 @@
             "name": "Sneltoets voor dicteren",
             "description": "De sneltoets om je stem op te nemen en te transcriberen."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Sneltoets voor annuleren",
             "description": "De sneltoets om de huidige opname te annuleren."

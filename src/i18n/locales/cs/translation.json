@@ -207,6 +207,10 @@
             "name": "Zkratka přepisu",
             "description": "Klávesová zkratka pro nahrávání a přepis vašeho hlasu."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Zkratka zrušení",
             "description": "Klávesová zkratka pro zrušení aktuálního nahrávání."

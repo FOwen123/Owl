@@ -989,14 +989,16 @@ pub fn get_default_settings() -> AppSettings {
         },
     );
     #[cfg(target_os = "windows")]
-    let default_post_process_shortcut = "ctrl+shift+space";
+    let default_edit_shortcut = "ctrl+shift+space";
     #[cfg(target_os = "macos")]
-    let default_post_process_shortcut = "option+shift+space";
+    let default_edit_shortcut = "option+shift+space";
     #[cfg(target_os = "linux")]
-    let default_post_process_shortcut = "ctrl+shift+space";
+    let default_edit_shortcut = "ctrl+shift+space";
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let default_post_process_shortcut = "alt+shift+space";
+    let default_edit_shortcut = "alt+shift+space";
 
+    // Owl: Post Process runs on the normal shortcut, so Handy's
+    // post-processing binding has no key; its key edits by voice.
     bindings.insert(
         "transcribe_with_post_process".to_string(),
         ShortcutBinding {
@@ -1004,8 +1006,18 @@ pub fn get_default_settings() -> AppSettings {
             name: "Transcribe with Post-Processing".to_string(),
             description: "Converts your speech into text and applies AI post-processing."
                 .to_string(),
-            default_binding: default_post_process_shortcut.to_string(),
-            current_binding: default_post_process_shortcut.to_string(),
+            default_binding: String::new(),
+            current_binding: String::new(),
+        },
+    );
+    bindings.insert(
+        "edit_by_voice".to_string(),
+        ShortcutBinding {
+            id: "edit_by_voice".to_string(),
+            name: "Edit by voice".to_string(),
+            description: "Changes the selected text, or writes what you ask for.".to_string(),
+            default_binding: default_edit_shortcut.to_string(),
+            current_binding: default_edit_shortcut.to_string(),
         },
     );
     bindings.insert(
@@ -1226,6 +1238,16 @@ fn apply_settings_migrations(
     settings_value: &serde_json::Value,
 ) -> bool {
     let mut updated = false;
+
+    // Owl: Option+Shift+Space moved from Handy's post-processing binding
+    // (never registered in Owl) to Edit by voice.
+    if let Some(old) = settings.bindings.get_mut("transcribe_with_post_process") {
+        if !old.current_binding.is_empty() || !old.default_binding.is_empty() {
+            old.current_binding.clear();
+            old.default_binding.clear();
+            updated = true;
+        }
+    }
 
     // One-time onboarding migration: users with an explicit selected model have
     // already made it through model selection. Users who merely have compatible
@@ -1882,6 +1904,30 @@ mod tests {
 
         assert!(apply_settings_migrations(&mut settings, &raw));
         assert_eq!(settings.overlay_style, OverlayStyle::None);
+    }
+
+    #[test]
+    fn option_shift_space_moves_from_post_processing_to_edit_by_voice() {
+        let mut settings = get_default_settings();
+        let old = settings
+            .bindings
+            .get_mut("transcribe_with_post_process")
+            .unwrap();
+        old.current_binding = "option+shift+space".into();
+        old.default_binding = "option+shift+space".into();
+
+        assert!(apply_settings_migrations(
+            &mut settings,
+            &serde_json::json!({})
+        ));
+        assert!(settings.bindings["transcribe_with_post_process"]
+            .current_binding
+            .is_empty());
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            settings.bindings["edit_by_voice"].current_binding,
+            "option+shift+space"
+        );
     }
 
     #[test]

@@ -153,6 +153,9 @@ pub struct LoadedInfo {
     pub on_gpu: bool,
     pub capabilities: Capabilities,
     pub supports_initial_prompt: bool,
+    /// Owl: whether `RunOptions::vocabulary` reaches the model (`Feature::Vocabulary`).
+    #[serde(default)]
+    pub supports_vocabulary: bool,
 }
 
 /// Encode one frame. Refuses a section the reader would refuse, so an

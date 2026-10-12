@@ -82,9 +82,13 @@ export const NotetakerPage: React.FC = () => {
     providers: [],
   });
 
+  // Replies can arrive out of order; only the newest request's counts.
+  const latest = useRef(0);
   const refresh = useCallback(async () => {
+    const request = ++latest.current;
     const result = await commands.getMeetings();
-    if (result.status === "ok") setMeetings(result.data);
+    if (request === latest.current && result.status === "ok")
+      setMeetings(result.data);
   }, []);
 
   useEffect(() => {

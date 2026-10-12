@@ -487,13 +487,16 @@ impl MeetingManager {
     fn run_model(&self, samples: &[f32]) -> Result<String> {
         let tm = self.app.state::<Arc<TranscriptionManager>>();
         let run = || {
-            // An ONNX model reads as unloaded while another caller runs it.
+            // An ONNX model reads as unloaded while another caller runs it,
+            // and a load already under way is waited for inside `transcribe`.
             if tm.get_current_model().is_none() {
-                let model = get_settings(&self.app).selected_model;
-                if model.is_empty() {
-                    return Err(anyhow!("Choose a speech model on the Models page first"));
+                if let Some(_loading) = tm.try_start_loading() {
+                    let model = get_settings(&self.app).selected_model;
+                    if model.is_empty() {
+                        return Err(anyhow!("Choose a speech model on the Models page first"));
+                    }
+                    tm.load_model(&model)?;
                 }
-                tm.load_model(&model)?;
             }
             tm.transcribe(samples.to_vec())
         };
@@ -634,7 +637,10 @@ impl MeetingManager {
                     log::warn!("Meeting {id}: transcribing again failed: {e:#}");
                     if let Ok(conn) = this.conn() {
                         let _ = conn.execute(
-                            "UPDATE meetings SET status = 'ready', error = ?1 WHERE id = ?2",
+                            // "mic_failed" can't be worked out again, so it stays.
+                            "UPDATE meetings SET status = 'ready',
+                             error = CASE WHEN error = 'mic_failed' THEN error ELSE ?1 END
+                             WHERE id = ?2",
                             params![e.to_string(), id],
                         );
                     }
@@ -997,8 +1003,9 @@ struct Track {
     consumer: rtrb::Consumer<f32>,
     resampler: FrameResampler,
     writer: hound::WavWriter<std::io::BufWriter<std::fs::File>>,
-    /// When the file's header last caught up with its audio.
-    saved: Instant,
+    /// When the file's header last caught up with its audio; None after a
+    /// checkpoint failed.
+    saved: Option<Instant>,
 }
 
 impl Track {
@@ -1013,7 +1020,7 @@ impl Track {
             consumer,
             resampler: FrameResampler::new(rate as usize, SAMPLE_RATE, Duration::from_millis(30)),
             writer: hound::WavWriter::create(path, spec)?,
-            saved: Instant::now(),
+            saved: Some(Instant::now()),
         })
     }
 
@@ -1030,9 +1037,13 @@ impl Track {
         self.write(&out);
         // A WAV's header gives its length, so update it now and then: if Owl
         // quits or crashes mid-meeting, the file still reads back.
-        if self.saved.elapsed() >= Duration::from_secs(5) {
-            let _ = self.writer.flush();
-            self.saved = Instant::now();
+        if self
+            .saved
+            .is_some_and(|t| t.elapsed() >= Duration::from_secs(5))
+        {
+            // A failed one can leave the file positioned inside its header,
+            // so there are no more after that.
+            self.saved = self.writer.flush().ok().map(|_| Instant::now());
         }
         out
     }
@@ -1588,7 +1599,7 @@ mod tests {
         for _ in 0..SAMPLE_RATE {
             producer.push(0.1).unwrap();
         }
-        track.saved -= Duration::from_secs(10);
+        track.saved = Some(Instant::now() - Duration::from_secs(10));
         track.drain();
         std::mem::forget(track); // as if Owl quit mid-meeting
         assert!(read_wav_samples(&path).unwrap().len() > SAMPLE_RATE * 9 / 10);

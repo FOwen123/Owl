@@ -86,6 +86,7 @@ const responses: Record<string, unknown> = {
       duration_ms: 1_520_000,
       status: "ready",
       summary: null,
+      summarizing: false,
       error: "system_audio_missing",
       transcript: [
         { start_ms: 2_000, speaker: "you", text: "好，我們開始今天的週會。" },

@@ -8,7 +8,8 @@ use crate::managers::model::ModelManager;
 use crate::managers::transcription::StreamWorkKind;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings::{
-    get_settings, AppSettings, CleanupLevel, OverlayStyle, APPLE_INTELLIGENCE_PROVIDER_ID,
+    get_settings, AppSettings, CleanupLevel, OverlayStyle, PostProcessProvider,
+    APPLE_INTELLIGENCE_PROVIDER_ID,
 };
 use crate::shortcut;
 use crate::tray::{set_tray_state, TrayIconState};
@@ -58,7 +59,20 @@ pub trait ShortcutAction: Send + Sync {
 // Transcribe Action
 struct TranscribeAction {
     post_process: bool,
+    /// Owl: Edit by voice. What's said is an instruction for the Post
+    /// Process AI, applied to the selected text or answered at the cursor.
+    edit: bool,
 }
+
+/// Owl (Edit by voice): the text selected when the shortcut went down.
+static EDIT_SELECTION: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+const EDIT_PROMPT: &str = "You edit text by voice. The user's spoken instruction is in <instruction>. \
+If <selected_text> is given, rewrite it as the instruction asks and reply with only the rewritten text, in its language unless the instruction asks for another. \
+If there is no selected text, reply with only the text the instruction asks for (an answer, a draft, a translation), ready to insert where the user is typing. \
+Never add explanations, quotes or code fences. \
+Keep the selected text's form: a sentence stays a sentence and a message never becomes a letter, so never add greetings, sign-offs or placeholders such as [Name] \
+(\"gonna be late, traffic's bad\" made formal is \"I will be late because the traffic is heavy.\").";
 
 /// Field name for structured output JSON schema
 const TRANSCRIPTION_FIELD: &str = "transcription";
@@ -404,6 +418,103 @@ pub(crate) async fn post_process_transcription(
     }
 }
 
+/// Owl: the Post Process AI and its model, as Summarize uses them.
+fn edit_ai(settings: &AppSettings) -> Option<(PostProcessProvider, String)> {
+    let provider = settings.active_post_process_provider()?;
+    let model = settings
+        .post_process_models
+        .get(&provider.id)
+        .filter(|m| !m.trim().is_empty())?;
+    Some((provider.clone(), model.clone()))
+}
+
+/// Owl: the selected text, through Accessibility or, in apps that hide it,
+/// Cmd+C. None when nothing is selected.
+fn selection(app: &AppHandle) -> Option<String> {
+    if let Some(text) = crate::correction_watch::selected_text() {
+        return Some(text).filter(|t| !t.trim().is_empty());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        // Keyboard layouts can only be read on the main thread.
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = app.clone();
+        app.run_on_main_thread(move || {
+            let _ = tx.send(crate::clipboard::copy_selection(&handle));
+        })
+        .ok()?;
+        rx.recv_timeout(Duration::from_secs(1)).ok().flatten()
+    }
+    #[cfg(not(target_os = "macos"))]
+    None
+}
+
+/// Owl: the AI's rewrite of `selection`, or its answer when there's none.
+async fn edit_text(
+    settings: &AppSettings,
+    instruction: &str,
+    selection: Option<&str>,
+) -> Result<String, String> {
+    let (provider, model) = edit_ai(settings).ok_or("Choose an AI on the Post Process page")?;
+    let mut user = format!("<instruction>\n{instruction}\n</instruction>");
+    if let Some(text) = selection {
+        user = format!("<selected_text>\n{text}\n</selected_text>\n{user}");
+    }
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    if provider.id == APPLE_INTELLIGENCE_PROVIDER_ID {
+        let token_limit = model.trim().parse::<i32>().unwrap_or(0);
+        return apple_intelligence::process_text_with_system_prompt(
+            EDIT_PROMPT,
+            &user,
+            token_limit,
+        )
+        .map(|t| strip_invisible_chars(&t).trim().to_string());
+    }
+    let api_key = settings
+        .post_process_api_keys
+        .get(&provider.id)
+        .cloned()
+        .unwrap_or_default();
+    let disable_reasoning = matches!(provider.id.as_str(), "custom" | "openrouter");
+    let reply = crate::llm_client::send_chat_completion_with_schema(
+        &provider,
+        api_key,
+        &model,
+        user,
+        Some(EDIT_PROMPT.to_string()),
+        None,
+        disable_reasoning,
+    )
+    .await?
+    .unwrap_or_default();
+    Ok(strip_invisible_chars(strip_think_block(&reply))
+        .trim()
+        .to_string())
+}
+
+/// Owl: what Edit by voice pastes. A failure is shown and nothing is pasted.
+async fn edited(
+    app: &AppHandle,
+    instruction: &str,
+    selection: Option<String>,
+) -> ProcessedTranscription {
+    let text = match is_blank_transcription(instruction) {
+        true => String::new(),
+        false => edit_text(&get_settings(app), instruction, selection.as_deref())
+            .await
+            .unwrap_or_else(|e| {
+                error!("Edit by voice failed: {e}");
+                let _ = app.emit("transcription-error", e);
+                String::new()
+            }),
+    };
+    ProcessedTranscription {
+        post_processed_text: Some(text.clone()).filter(|t| !t.is_empty()),
+        final_text: text,
+        post_process_prompt: None,
+    }
+}
+
 pub(crate) struct ProcessedTranscription {
     pub final_text: String,
     pub post_processed_text: Option<String>,
@@ -476,6 +587,15 @@ impl ShortcutAction for TranscribeAction {
     fn start(&self, app: &AppHandle, binding_id: &str, _shortcut_str: &str) {
         let start_time = Instant::now();
         debug!("TranscribeAction::start called for binding: {}", binding_id);
+
+        if self.edit {
+            if edit_ai(&get_settings(app)).is_none() {
+                crate::show_main_window(app);
+                let _ = app.emit("edit-needs-ai", ());
+                return;
+            }
+            *EDIT_SELECTION.lock().unwrap_or_else(|e| e.into_inner()) = selection(app);
+        }
 
         // Load model in the background
         let tm = app.state::<Arc<TranscriptionManager>>();
@@ -682,6 +802,7 @@ impl ShortcutAction for TranscribeAction {
 
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = wants_post_process(self.post_process, ai_cleanup_on(&get_settings(app)));
+        let edit = self.edit;
         let cancel_generation = rm.cancel_generation();
 
         tauri::async_runtime::spawn(async move {
@@ -779,17 +900,28 @@ impl ShortcutAction for TranscribeAction {
                                 utils::redact_text(&transcription)
                             );
 
-                            if post_process {
+                            if post_process || edit {
                                 if use_streaming_overlay {
                                     tm.emit_stream_working(StreamWorkKind::Polishing);
                                 } else {
                                     show_processing_overlay(&ah);
                                 }
                             }
-                            let Some(processed) = complete_unless_cancelled(
-                                process_transcription_output(&ah, &transcription, post_process),
-                                || rm.was_cancelled_since(cancel_generation),
-                            )
+                            let output = async {
+                                if edit {
+                                    let selection = EDIT_SELECTION
+                                        .lock()
+                                        .unwrap_or_else(|e| e.into_inner())
+                                        .take();
+                                    edited(&ah, &transcription, selection).await
+                                } else {
+                                    process_transcription_output(&ah, &transcription, post_process)
+                                        .await
+                                }
+                            };
+                            let Some(processed) = complete_unless_cancelled(output, || {
+                                rm.was_cancelled_since(cancel_generation)
+                            })
                             .await
                             else {
                                 debug!("Transcription operation cancelled during output handling");
@@ -840,10 +972,13 @@ impl ShortcutAction for TranscribeAction {
                                                 "Text pasted successfully in {:?}",
                                                 paste_time.elapsed()
                                             );
-                                            crate::correction_watch::start(
-                                                ah_clone.clone(),
-                                                final_text,
-                                            );
+                                            // An edit's result isn't a dictation to learn from.
+                                            if !edit {
+                                                crate::correction_watch::start(
+                                                    ah_clone.clone(),
+                                                    final_text,
+                                                );
+                                            }
                                         }
                                         Err(e) => {
                                             error!("Failed to paste transcription: {}", e);
@@ -950,11 +1085,22 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
         "transcribe".to_string(),
         Arc::new(TranscribeAction {
             post_process: false,
+            edit: false,
         }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
         "transcribe_with_post_process".to_string(),
-        Arc::new(TranscribeAction { post_process: true }) as Arc<dyn ShortcutAction>,
+        Arc::new(TranscribeAction {
+            post_process: true,
+            edit: false,
+        }) as Arc<dyn ShortcutAction>,
+    );
+    map.insert(
+        "edit_by_voice".to_string(),
+        Arc::new(TranscribeAction {
+            post_process: false,
+            edit: true,
+        }) as Arc<dyn ShortcutAction>,
     );
     map.insert(
         "cancel".to_string(),
@@ -970,17 +1116,42 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
 #[cfg(test)]
 mod tests {
     use super::{
-        ai_cleanup_on, complete_unless_cancelled, is_blank_transcription, legacy_prompt,
+        ai_cleanup_on, complete_unless_cancelled, edit_text, is_blank_transcription, legacy_prompt,
         prompt_for_level, prompt_messages, should_use_streaming_overlay, strip_think_block,
         wants_post_process, LIST_RULE,
     };
     use crate::settings::OverlayStyle;
-    use crate::settings::{get_default_settings, CleanupLevel};
+    use crate::settings::{get_default_settings, AppSettings, CleanupLevel};
     use std::future;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
+
+    /// Calls the AI set up in a settings_store.json:
+    /// `OWL_TEST_SETTINGS=… cargo test --lib edit_by_voice_real -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn edit_by_voice_real_ai_rewrites_translates_and_answers() {
+        let path = std::env::var("OWL_TEST_SETTINGS").expect("OWL_TEST_SETTINGS");
+        let store: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let settings: AppSettings = serde_json::from_value(store["settings"].clone()).unwrap();
+        let edit = |instruction: &str, selection: Option<&str>| {
+            let text = tauri::async_runtime::block_on(edit_text(&settings, instruction, selection))
+                .unwrap();
+            println!("{instruction} -> {text}");
+            text
+        };
+        let formal = edit(
+            "make it formal",
+            Some("hey can u send me the file tmrw thx"),
+        );
+        assert!(formal.contains("file") && !formal.contains(" u "));
+        let english = edit("翻成英文", Some("我們明天下午三點開會"));
+        assert!(english.to_lowercase().contains("meet"));
+        assert!(edit("what's the capital of France", None).contains("Paris"));
+    }
 
     #[test]
     fn blank_transcription_is_detected() {

@@ -207,6 +207,10 @@
             "name": "Горячая клавиша транскрипции",
             "description": "Сочетание клавиш для записи и транскрибирования вашего голоса."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Горячая клавиша отмены",
             "description": "Сочетание клавиш для отмены текущей записи."

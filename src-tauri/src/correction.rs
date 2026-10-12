@@ -200,7 +200,7 @@ fn english_fix(
     let [to] = new else { return None };
     let from = old.join(" ");
     let plausible = if old.len() == 1 {
-        single_word_fix(&from, to)
+        single_word_fix(&from, to) || capitalized_name(&from, to, is_word)
     } else {
         joined_words_fix(old, to)
     };
@@ -218,6 +218,16 @@ fn english_fix(
         from,
         to: to.clone(),
     })
+}
+
+/// "depick" → "Depick": a capital on a word the spell checker doesn't know
+/// marks a name. "then" → "Then" is just the start of a sentence.
+fn capitalized_name(from: &str, to: &str, is_word: &dyn Fn(&str) -> bool) -> bool {
+    from != to
+        && from.to_lowercase() == to.to_lowercase()
+        && to.chars().next().is_some_and(char::is_uppercase)
+        && !is_common(from)
+        && !is_word(to)
 }
 
 fn is_common(word: &str) -> bool {
@@ -451,6 +461,7 @@ mod tests {
         );
         one("I work at openai now", "I work at OpenAI now", "", "OpenAI");
         one("I used depict today", "I used depick today", "", "depick");
+        one("we use depick daily", "we use Depick daily", "", "Depick");
         none("then we left early", "Then we left early");
     }
 

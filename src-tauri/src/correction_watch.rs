@@ -42,6 +42,18 @@ pub fn char_before_cursor() -> Option<char> {
     None
 }
 
+/// The selected text in the focused text box, `Some("")` when nothing is
+/// selected, and None for password fields and apps that hide their text.
+#[cfg(target_os = "macos")]
+pub fn selected_text() -> Option<String> {
+    mac::selected_text()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn selected_text() -> Option<String> {
+    None
+}
+
 #[cfg(target_os = "macos")]
 mod mac {
     use crate::correction::{edited_span, suggest};
@@ -174,9 +186,8 @@ mod mac {
         );
     }
 
-    /// The focused text box and its text, unless it's a password field or
-    /// doesn't expose its text.
-    fn focused_text() -> Option<(CFRetained<AXUIElement>, String)> {
+    /// The focused element, unless it's a password field.
+    fn focused_field() -> Option<CFRetained<AXUIElement>> {
         unsafe {
             let system = AXUIElement::new_system_wide();
             // A hung app must not stall the watcher.
@@ -187,9 +198,21 @@ mod mac {
             if string_attribute(&focused, "AXSubrole").as_deref() == Some("AXSecureTextField") {
                 return None;
             }
-            let text = string_attribute(&focused, "AXValue")?;
-            Some((focused, text))
+            Some(focused)
         }
+    }
+
+    /// The focused text box and its text, unless it's a password field or
+    /// doesn't expose its text.
+    fn focused_text() -> Option<(CFRetained<AXUIElement>, String)> {
+        let focused = focused_field()?;
+        let text = unsafe { string_attribute(&focused, "AXValue")? };
+        Some((focused, text))
+    }
+
+    pub fn selected_text() -> Option<String> {
+        let focused = focused_field()?;
+        unsafe { string_attribute(&focused, "AXSelectedText") }
     }
 
     pub fn char_before_cursor() -> Option<char> {

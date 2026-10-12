@@ -187,6 +187,10 @@
             "name": "ट्रान्सक्राइब सर्टकट",
             "description": "तपाईंको आवाज रेकर्ड गरी ट्रान्सक्राइब गर्ने किबोर्ड सर्टकट।"
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "रद्द सर्टकट",
             "description": "हालको रेकर्डिङ रद्द गर्ने किबोर्ड सर्टकट।"

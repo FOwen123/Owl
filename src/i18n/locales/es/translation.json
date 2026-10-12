@@ -207,6 +207,10 @@
             "name": "Atajo de transcripción",
             "description": "El atajo de teclado para grabar y transcribir tu voz."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Atajo de cancelar",
             "description": "El atajo de teclado para cancelar la grabación actual."

@@ -187,6 +187,10 @@
             "name": "קיצור מקשים לתמלול",
             "description": "קיצור המקלדת להקלטה ולתמלול הקול שלך."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "קיצור מקשים לביטול",
             "description": "קיצור המקלדת לביטול ההקלטה הנוכחית."

@@ -207,6 +207,10 @@
             "name": "转录快捷键",
             "description": "用于录制和转录语音的键盘快捷键。"
           },
+          "edit_by_voice": {
+            "name": "语音编辑",
+            "description": "改写选中的文字，或写出你要的内容。"
+          },
           "cancel": {
             "name": "取消快捷键",
             "description": "用于取消当前录制的键盘快捷键。"

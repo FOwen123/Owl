@@ -187,6 +187,10 @@
             "name": "Transskriptionsgenvej",
             "description": "Tastaturgenvejen til at optage og transskribere din stemme."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Annulleringsgenvej",
             "description": "Tastaturgenvejen til at annullere den aktuelle optagelse."

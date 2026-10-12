@@ -207,6 +207,10 @@
             "name": "Transkriptions-Tastenkürzel",
             "description": "Das Tastenkürzel zum Aufnehmen und Transkribieren deiner Stimme."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Abbrechen-Tastenkürzel",
             "description": "Das Tastenkürzel zum Abbrechen der aktuellen Aufnahme."

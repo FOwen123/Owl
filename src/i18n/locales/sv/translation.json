@@ -187,6 +187,10 @@
             "name": "Kortkommando för transkribering",
             "description": "Kortkommandot för att spela in och transkribera din röst."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Kortkommando för att avbryta",
             "description": "Kortkommandot för att avbryta den aktuella inspelningen."

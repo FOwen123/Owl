@@ -187,6 +187,10 @@
             "name": "Drecera de transcripció",
             "description": "La drecera de teclat per enregistrar i transcriure la vostra veu."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Drecera de cancel·lació",
             "description": "La drecera de teclat per cancel·lar l'enregistrament actual."

@@ -28,6 +28,30 @@ fn with_enigo<T>(
     f(&mut enigo)
 }
 
+/// Owl (Edit by voice): the selection in an app that hides it from
+/// Accessibility, copied with Cmd+C; the clipboard's text is put back after.
+/// None when nothing was copied. Runs on the main thread, like paste.
+#[cfg(target_os = "macos")]
+pub fn copy_selection(app_handle: &AppHandle) -> Option<String> {
+    let board = objc2_app_kit::NSPasteboard::generalPasteboard();
+    let before = board.changeCount();
+    let saved = app_handle.clipboard().read_text().ok();
+    with_enigo(app_handle, input::send_copy).ok()?;
+    // Apps copy asynchronously; give it up to 300 ms.
+    let copied = (0..10).any(|_| {
+        std::thread::sleep(Duration::from_millis(30));
+        board.changeCount() != before
+    });
+    if !copied {
+        return None;
+    }
+    let text = app_handle.clipboard().read_text().ok();
+    if let Some(saved) = saved {
+        let _ = write_text_to_clipboard(app_handle, &saved);
+    }
+    text.filter(|t| !t.trim().is_empty())
+}
+
 fn write_text_to_clipboard(app_handle: &AppHandle, text: &str) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     if is_wayland() && is_wl_copy_available() {

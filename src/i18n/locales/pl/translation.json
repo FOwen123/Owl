@@ -207,6 +207,10 @@
             "name": "Skrót transkrypcji",
             "description": "Skrót klawiaturowy do nagrywania i transkrypcji głosu."
           },
+          "edit_by_voice": {
+            "name": "Edit by Voice",
+            "description": "Rewrites the selected text, or writes what you ask for."
+          },
           "cancel": {
             "name": "Skrót anulowania",
             "description": "Skrót klawiaturowy do anulowania bieżącego nagrywania."

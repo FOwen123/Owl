@@ -498,10 +498,11 @@ pub fn remove_echoed_words(text: &str, words: &[String]) -> String {
         c.is_alphanumeric()
             && !matches!(c, '\u{3040}'..='\u{30ff}' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}' | '\u{f900}'..='\u{faff}')
     };
-    // `i` doesn't fall inside a word ("Claude" in "SuperClaude").
-    let boundary = |i: usize| {
-        !(text[..i].chars().next_back().is_some_and(spaced)
-            && text[i..].chars().next().is_some_and(spaced))
+    // A letter or digit against the match makes it part of a longer word
+    // ("Claude" in "SuperClaude", ".NET" in "ASP.NET"), unless the Word's own
+    // end there is Chinese or Japanese.
+    let glued = |outside: Option<char>, edge: Option<char>| {
+        outside.is_some_and(spaced) && !edge.is_some_and(|c| c.is_alphanumeric() && !spaced(c))
     };
     let word_at = |i: usize, k: usize| {
         let word = words[k].trim();
@@ -510,8 +511,8 @@ pub fn remove_echoed_words(text: &str, words: &[String]) -> String {
             && text
                 .get(i..end)
                 .is_some_and(|s| s.eq_ignore_ascii_case(word))
-            && boundary(i)
-            && boundary(end))
+            && !glued(text[..i].chars().next_back(), word.chars().next())
+            && !glued(text[end..].chars().next(), word.chars().next_back()))
         .then_some(end)
     };
     // Word `k` after `end`, past spaces and punctuation, which may also start
@@ -555,6 +556,10 @@ pub fn remove_echoed_words(text: &str, words: &[String]) -> String {
     }
     if kept.len() == text.len() {
         return text.to_string();
+    }
+    // Only a removed leak's separators are left ("MCP, json file, svg.").
+    if !kept.chars().any(char::is_alphanumeric) {
+        return String::new();
     }
     MULTI_SPACE_PATTERN
         .replace_all(&kept, " ")
@@ -1051,6 +1056,7 @@ mod tests {
         assert_eq!(remove_echoed_words("MCP — json file — svg", &words), "");
         let dotted: Vec<String> = ["C++", "C#", ".NET"].map(String::from).to_vec();
         assert_eq!(remove_echoed_words("C++ C# .NET", &dotted), "");
+        assert_eq!(remove_echoed_words("MCP, json file, svg.", &words), "");
         // Speech that mentions Words, even two in list order, stays.
         for said in [
             "I asked Claude about DePick.Bot and supabase.",
@@ -1062,5 +1068,14 @@ mod tests {
         }
         let brand: Vec<String> = ["Go", "Pro", "Max"].map(String::from).to_vec();
         assert_eq!(remove_echoed_words("GoPro Max", &brand), "GoPro Max");
+        let code: Vec<String> = [".NET", "MCP", "svg", "Rust", "C#", "C++"]
+            .map(String::from)
+            .to_vec();
+        for said in [
+            "Use ASP.NET MCP svg today.",
+            "Try Rust C# C++Builder today.",
+        ] {
+            assert_eq!(remove_echoed_words(said, &code), said);
+        }
     }
 }

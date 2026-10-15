@@ -126,6 +126,22 @@ pub fn change_meeting_template_setting(app: AppHandle, template: String) -> Resu
     Ok(())
 }
 
+/// Opens the floating live-transcript window (`meeting_window.rs`).
+#[tauri::command]
+#[specta::specta]
+pub fn show_meeting_window(app: AppHandle) {
+    crate::meeting_window::show(&app, true);
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_meeting_detection_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.meeting_detection = enabled;
+    write_settings(&app, settings);
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn rename_speaker(

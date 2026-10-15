@@ -888,11 +888,19 @@
         "transcribing": "转录中…",
         "ready": "完成",
         "failed": "失败"
-      }
+      },
+      "detectLabel": "通话开始时询问",
+      "detectDescription": "加入通话时提议帮你记笔记。",
+      "popOut": "弹出窗口"
     },
     "editByVoice": {
       "cantSeeText": "Owl 看不到这个应用里的文字，所以无法用语音编辑。",
       "selectionChanged": "Owl 处理时选取的文字变了，所以没有贴上修改。"
+    },
+    "meetingWindow": {
+      "ask": "在开会吗？",
+      "notNow": "暂不",
+      "takeNotes": "记笔记"
     }
   }
 }

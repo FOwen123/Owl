@@ -1423,6 +1423,8 @@ pub fn change_app_language_setting(app: AppHandle, language: String) -> Result<(
 
     // Refresh the tray menu with the new language
     tray::update_tray_menu(&app);
+    // Owl: the floating notetaker window follows too (src/meeting/)
+    let _ = app.emit("app-language-changed", &language);
 
     Ok(())
 }

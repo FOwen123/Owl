@@ -72,6 +72,13 @@ pub fn expose_text(pid: i32) {
 #[cfg(not(target_os = "macos"))]
 pub fn expose_text(_pid: i32) {}
 
+/// The titles of an app's windows (a browser's: each window's open tab).
+/// Empty without the Accessibility permission.
+#[cfg(target_os = "macos")]
+pub fn window_titles(pid: i32) -> Vec<String> {
+    mac::window_titles(pid)
+}
+
 #[cfg(target_os = "macos")]
 mod mac {
     use crate::correction::{edited_span, suggest};
@@ -79,7 +86,7 @@ mod mac {
     use crate::settings::{self, Replacement};
     use log::debug;
     use objc2_application_services::{AXError, AXUIElement, AXValue, AXValueType};
-    use objc2_core_foundation::{CFBoolean, CFRange, CFRetained, CFString, CFType};
+    use objc2_core_foundation::{CFArray, CFBoolean, CFRange, CFRetained, CFString, CFType};
     use std::ptr::NonNull;
     use std::sync::atomic::Ordering;
     use std::thread::sleep;
@@ -245,6 +252,23 @@ mod mac {
                 &CFString::from_str("AXManualAccessibility"),
                 CFBoolean::new(true),
             );
+        }
+    }
+
+    pub fn window_titles(pid: i32) -> Vec<String> {
+        unsafe {
+            let app = AXUIElement::new_application(pid);
+            let Some(windows) =
+                attribute(&app, "AXWindows").and_then(|w| w.downcast::<CFArray>().ok())
+            else {
+                return Vec::new();
+            };
+            (0..windows.count())
+                .filter_map(|i| {
+                    let window = windows.value_at_index(i) as *const AXUIElement;
+                    string_attribute(window.as_ref()?, "AXTitle")
+                })
+                .collect()
         }
     }
 

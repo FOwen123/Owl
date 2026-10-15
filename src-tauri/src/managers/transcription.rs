@@ -1,6 +1,6 @@
 use crate::audio_toolkit::{
     apply_custom_words_guarded, detect_output_language, normalize_transcription_output,
-    remove_filler_words, OutputLanguageEvidence,
+    remove_echoed_words, remove_filler_words, OutputLanguageEvidence,
 };
 use crate::chinese_script::{convert_chinese_script, ChineseVariety};
 use crate::engine_supervisor::{
@@ -1322,8 +1322,14 @@ impl TranscriptionManager {
                 ));
             }
         };
+        // Some models ignore the hint when translating, so leave those alone.
+        let text = if words_prompted && !output_was_translated {
+            remove_echoed_words(&transcript.text, &settings.custom_words)
+        } else {
+            transcript.text
+        };
         Ok(RunOutcome {
-            text: transcript.text,
+            text,
             languages,
             applied_language_hint,
             output_was_translated,

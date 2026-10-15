@@ -2,6 +2,7 @@
 // `bun run dev`, then open http://localhost:1420/?mock. Never runs in a real
 // build (guarded by import.meta.env.DEV and the ?mock query).
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
+import { emit } from "@tauri-apps/api/event";
 
 const binding = (id: string, name: string, keys: string) => ({
   id,
@@ -44,6 +45,7 @@ const settings: Record<string, unknown> = {
     },
   ],
   learn_from_edits: true,
+  meeting_detection: true,
   local_api_enabled: false,
   local_api_token: "",
   cleanup_level: "light",
@@ -165,6 +167,25 @@ export function installMockBackend() {
         settings.local_api_token ||=
           "owl_3f9c1a7e5b2d4c6f8a0e1b3d5f7a9c2e4b6d8f0a1c3e5a7b";
         return null;
+      }
+      if (cmd === "start_meeting" || cmd === "stop_meeting") {
+        // New arrays, so React sees the change.
+        const meetings = responses.get_meetings as Record<string, unknown>[];
+        responses.get_meetings =
+          cmd === "start_meeting"
+            ? [
+                {
+                  ...meetings[meetings.length - 1],
+                  status: "recording",
+                  started_at: Date.now() - 754_000,
+                  title: null,
+                  summary: null,
+                },
+                ...meetings,
+              ]
+            : [{ ...meetings[0], status: "ready" }, ...meetings.slice(1)];
+        setTimeout(() => emit("meetings-updated"));
+        return 1;
       }
       if (cmd === "change_cleanup_level_setting") {
         settings.cleanup_level = (payload as { level: string }).level;

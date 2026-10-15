@@ -153,6 +153,8 @@ const settingUpdaters: {
     commands.changeVoiceCommandsSetting(value as boolean),
   learn_from_edits: (value) =>
     commands.changeLearnFromEditsSetting(value as boolean),
+  meeting_detection: (value) =>
+    commands.changeMeetingDetectionSetting(value as boolean),
   word_correction_threshold: (value) =>
     commands.changeWordCorrectionThresholdSetting(value as number),
   paste_delay_ms: (value) =>

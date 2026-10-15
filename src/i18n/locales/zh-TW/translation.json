@@ -888,11 +888,20 @@
         "transcribing": "轉錄中…",
         "ready": "完成",
         "failed": "失敗"
-      }
+      },
+      "detectLabel": "通話開始時詢問",
+      "detectDescription": "加入通話時提議幫你做筆記。",
+      "popOut": "彈出視窗"
     },
     "editByVoice": {
       "cantSeeText": "Owl 看不到這個 App 裡的文字，所以無法用語音編輯。",
       "selectionChanged": "Owl 處理時選取的文字變了，所以沒有貼上修改。"
+    },
+    "meetingWindow": {
+      "ask": "在開會嗎？",
+      "askDescription": "Owl 可以幫你做筆記。",
+      "notNow": "先不用",
+      "takeNotes": "做筆記"
     }
   }
 }

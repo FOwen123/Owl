@@ -819,7 +819,16 @@
       "learnLabel": "Learn from my edits",
       "learnDescription": "Adds words you correct after dictating to your dictionary."
     },
+    "meetingWindow": {
+      "ask": "In a call?",
+      "askDescription": "Owl can take notes for you.",
+      "notNow": "Not now",
+      "takeNotes": "Take notes"
+    },
     "notetaker": {
+      "detectLabel": "Ask when a call starts",
+      "detectDescription": "Offers to take notes when you join a call.",
+      "popOut": "Pop out",
       "title": "Notetaker",
       "description": "Records your microphone and the system audio. Wear headphones so Owl can tell you apart from everyone else.",
       "start": "Start meeting",

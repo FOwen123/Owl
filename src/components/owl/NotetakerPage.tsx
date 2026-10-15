@@ -1,17 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { emit, listen } from "@tauri-apps/api/event";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowUp,
   Copy,
   Sparkles,
-  Square,
-  Circle,
   MoreHorizontal,
   Download,
-  PictureInPicture2,
+  X,
 } from "lucide-react";
 import {
   commands,
@@ -46,25 +46,26 @@ export const clock = (ms: number) => {
 const when = (m: Meeting, locale: string) =>
   formatDateTime(String(Math.floor(m.started_at / 1000)), locale);
 
-/** What Import accepts; Owl can't decode Opus (WebM, .opus) yet. */
-const AUDIO_AND_VIDEO = [
-  "mp3",
-  "m4a",
-  "aac",
-  "wav",
-  "flac",
-  "ogg",
-  "mp4",
-  "mov",
-  "m4v",
-];
-
 const EXPORT_FORMATS: { format: ExportFormat; extension: string }[] = [
   { format: "markdown", extension: "md" },
   { format: "text", extension: "txt" },
   { format: "srt", extension: "srt" },
   { format: "vtt", extension: "vtt" },
 ];
+
+/** An AI error; `no_provider` offers to set one up. */
+const aiError = (error: string, t: TFunction) => {
+  if (error === "no_provider") {
+    toast(t("owl.notetaker.summaryNeedsProvider"), {
+      action: {
+        label: t("owl.notetaker.setUpAi"),
+        onClick: () => emit("show-section", "postprocessing"),
+      },
+    });
+  } else {
+    toast.error(error);
+  }
+};
 
 /** The notes' first sentence, without Markdown, for the meeting list. */
 const firstLine = (markdown: string) =>
@@ -119,37 +120,6 @@ export const NotetakerPage: React.FC = () => {
     setBusy(false);
   };
 
-  if (recording) {
-    return (
-      <LiveMeeting
-        elapsed={now - recording.started_at}
-        busy={busy}
-        onStop={() => run(commands.stopMeeting)}
-      />
-    );
-  }
-
-  const importFile = async () => {
-    const path = await open({
-      multiple: false,
-      filters: [
-        {
-          name: t("owl.notetaker.audioOrVideo"),
-          extensions: AUDIO_AND_VIDEO,
-        },
-      ],
-    });
-    if (typeof path !== "string") return;
-    const result = await commands.importMeeting(path);
-    if (result.status === "error") {
-      toast.error(
-        result.error === "unsupported_format"
-          ? t("owl.notetaker.unsupportedFormat")
-          : result.error,
-      );
-    }
-  };
-
   const openMeeting = meetings.find((m) => m.id === openId);
   if (openMeeting) {
     return (
@@ -169,14 +139,13 @@ export const NotetakerPage: React.FC = () => {
           <p className="text-sm text-mid-gray">
             {t("owl.notetaker.description")}
           </p>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button variant="secondary" disabled={busy} onClick={importFile}>
-              {t("owl.notetaker.import")}
-            </Button>
-            <Button disabled={busy} onClick={() => run(commands.startMeeting)}>
-              {t("owl.notetaker.start")}
-            </Button>
-          </div>
+          <Button
+            disabled={busy || !!recording}
+            onClick={() => run(commands.startMeeting)}
+            className="shrink-0"
+          >
+            {t("owl.notetaker.start")}
+          </Button>
         </div>
         <SpeakerModelRow />
         <ToggleSwitch
@@ -201,6 +170,7 @@ export const NotetakerPage: React.FC = () => {
               key={m.id}
               meeting={m}
               locale={i18n.language}
+              elapsed={now - m.started_at}
               onOpen={() => setOpenId(m.id)}
             />
           ))
@@ -208,48 +178,79 @@ export const NotetakerPage: React.FC = () => {
       </SettingsGroup>
 
       <MeetingTemplates builtIn={options.built_in_templates} />
+
+      <AskMeetings />
     </div>
   );
 };
 
-/** While recording: the timer, Pop out and Stop. The transcript is in the
- * floating window (src/meeting/). */
-const LiveMeeting: React.FC<{
-  elapsed: number;
-  busy: boolean;
-  onStop: () => void;
-}> = ({ elapsed, busy, onStop }) => {
+/** Ask the AI about the meetings, the one being recorded included. */
+const AskMeetings: React.FC = () => {
   const { t } = useTranslation();
+  const [question, setQuestion] = useState("");
+  const [asked, setAsked] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<string | null>(null);
+
+  const ask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = question.trim();
+    if (!q || (asked && !answer)) return;
+    setAsked(q);
+    setAnswer(null);
+    setQuestion("");
+    const result = await commands.askMeetings(q);
+    if (result.status === "ok") return setAnswer(result.data);
+    // Give the question back, to ask again once the AI is set up.
+    setAsked(null);
+    setQuestion(q);
+    aiError(result.error, t);
+  };
+
   return (
-    <div className="max-w-3xl w-full mx-auto space-y-6">
-      <SettingsGroup title={t("owl.notetaker.title")}>
-        <div className="flex items-center justify-between gap-4 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Circle className="w-3 h-3 fill-logo-primary text-logo-primary animate-pulse" />
-            {t("owl.notetaker.recording")}
-            <span className="font-mono text-mid-gray">{clock(elapsed)}</span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="ghost"
-              onClick={() => commands.showMeetingWindow()}
-              className="inline-flex items-center gap-2"
+    <div className="sticky bottom-0 -mx-4 px-4 pb-1 pt-2 bg-background space-y-2">
+      {asked && (
+        <div className="max-h-80 overflow-y-auto rounded-xl border border-border bg-surface p-4 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-medium">{asked}</p>
+            <button
+              type="button"
+              aria-label={t("common.close")}
+              onClick={() => setAsked(null)}
+              className="text-mid-gray hover:text-text cursor-pointer"
             >
-              <PictureInPicture2 className="w-3.5 h-3.5" />
-              {t("owl.notetaker.popOut")}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={onStop}
-              className="inline-flex items-center gap-2"
-            >
-              <Square className="w-3.5 h-3.5" />
-              {t("owl.notetaker.stop")}
-            </Button>
+              <X className="w-4 h-4" />
+            </button>
           </div>
+          {answer ? (
+            <MarkdownContent markdown={answer} />
+          ) : (
+            <p className="text-sm text-mid-gray animate-pulse">
+              {t("owl.notetaker.thinking")}
+            </p>
+          )}
         </div>
-      </SettingsGroup>
+      )}
+      <form
+        onSubmit={ask}
+        className="flex items-center gap-2 rounded-full border border-border bg-surface ps-4 pe-1.5 py-1.5 shadow-sm"
+      >
+        <input
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder={t("owl.notetaker.askPlaceholder")}
+          aria-label={t("owl.notetaker.askPlaceholder")}
+          className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-mid-gray"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!question.trim() || (!!asked && !answer)}
+          aria-label={t("owl.notetaker.askSend")}
+          className="rounded-full! p-1.5!"
+        >
+          <ArrowUp className="w-4 h-4" />
+        </Button>
+      </form>
     </div>
   );
 };
@@ -257,18 +258,21 @@ const LiveMeeting: React.FC<{
 const MeetingRow: React.FC<{
   meeting: Meeting;
   locale: string;
+  /** How long it has been recording. */
+  elapsed: number;
   onOpen: () => void;
-}> = ({ meeting: m, locale, onOpen }) => {
+}> = ({ meeting: m, locale, elapsed, onOpen }) => {
   const { t } = useTranslation();
   const fillSpeakers = useFillSpeakers(m.speaker_names);
   const preview = m.summary
     ? firstLine(fillSpeakers(m.summary))
     : (m.transcript[0]?.text ?? t(`owl.notetaker.status.${m.status}`));
+  const recording = m.status === "recording";
   return (
     <button
       type="button"
-      disabled={m.status === "recording"}
-      onClick={onOpen}
+      // Stop lives in the floating window; clicking brings it back.
+      onClick={recording ? () => commands.showMeetingWindow() : onOpen}
       className="w-full flex items-center justify-between gap-4 px-4 py-3 text-start hover:bg-mid-gray/10 disabled:cursor-default cursor-pointer"
     >
       <div className="min-w-0">
@@ -277,12 +281,25 @@ const MeetingRow: React.FC<{
         </p>
         <p className="text-xs text-mid-gray truncate">{preview}</p>
       </div>
-      <span className="text-xs text-mid-gray shrink-0 text-end">
-        {m.title && <span className="block">{when(m, locale)}</span>}
-        {m.status === "ready"
-          ? clock(m.duration_ms)
-          : t(`owl.notetaker.status.${m.status}`)}
-      </span>
+      {recording ? (
+        <span className="flex items-center gap-2 shrink-0 font-mono text-sm text-accent">
+          <span className="mw-bars" aria-hidden>
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          {clock(elapsed)}
+        </span>
+      ) : (
+        <span className="text-xs text-mid-gray shrink-0 text-end">
+          {m.title && <span className="block">{when(m, locale)}</span>}
+          {m.status === "ready"
+            ? clock(m.duration_ms)
+            : t(`owl.notetaker.status.${m.status}`)}
+        </span>
+      )}
     </button>
   );
 };
@@ -411,16 +428,7 @@ const MeetingDetail: React.FC<{
       shownTemplate,
       shownProvider,
     );
-    if (result.status === "error" && result.error === "no_provider") {
-      toast(t("owl.notetaker.summaryNeedsProvider"), {
-        action: {
-          label: t("owl.notetaker.setUpAi"),
-          onClick: () => emit("show-section", "postprocessing"),
-        },
-      });
-    } else if (result.status === "error") {
-      toast.error(result.error);
-    }
+    if (result.status === "error") aiError(result.error, t);
   };
 
   const exportAs = async (format: ExportFormat, extension: string) => {

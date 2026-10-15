@@ -419,6 +419,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     utils::create_recording_overlay(app_handle);
 
     // Owl: ask to take notes when a call starts
+    meeting_window::create(app_handle);
     #[cfg(target_os = "macos")]
     meeting_detect::start(app_handle.clone());
 }

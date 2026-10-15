@@ -821,7 +821,6 @@
     },
     "meetingWindow": {
       "ask": "In a call?",
-      "askDescription": "Owl can take notes for you.",
       "notNow": "Not now",
       "takeNotes": "Take notes"
     },

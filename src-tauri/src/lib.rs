@@ -25,6 +25,9 @@ mod local_api;
 mod managers;
 pub mod mcp;
 mod media;
+#[cfg(target_os = "macos")]
+mod meeting_detect;
+mod meeting_window;
 mod memory;
 mod overlay;
 pub mod owl_cli;
@@ -399,6 +402,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     let app_handle_for_menu = app_handle.clone();
     app_handle.listen("meetings-updated", move |_| {
         app_menu::refresh(&app_handle_for_menu);
+        meeting_window::sync(&app_handle_for_menu);
     });
 
     // Refresh tray menu when model state changes
@@ -413,6 +417,10 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
     // Create the recording overlay window (hidden by default)
     utils::create_recording_overlay(app_handle);
+
+    // Owl: ask to take notes when a call starts
+    #[cfg(target_os = "macos")]
+    meeting_detect::start(app_handle.clone());
 }
 
 #[tauri::command]
@@ -849,6 +857,8 @@ pub fn run(cli_args: CliArgs) {
             commands::meetings::change_meeting_template_setting,
             commands::meetings::speaker_model_installed,
             commands::meetings::download_speaker_model,
+            commands::meetings::change_meeting_detection_setting,
+            commands::meetings::show_meeting_window,
             commands::edits::accept_edit_suggestion,
             commands::edits::dismiss_edit_suggestion,
             commands::edits::change_learn_from_edits_setting,

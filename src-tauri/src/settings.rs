@@ -503,6 +503,10 @@ pub struct AppSettings {
     /// Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
     #[serde(default = "default_learn_from_edits")]
     pub learn_from_edits: bool,
+    /// Owl: ask to take notes when another app starts using the microphone
+    /// (`meeting_detect.rs`).
+    #[serde(default = "default_meeting_detection")]
+    pub meeting_detection: bool,
     /// Owl: the local transcription API (`local_api.rs`), off by default.
     #[serde(default)]
     pub local_api_enabled: bool,
@@ -734,6 +738,10 @@ fn default_meeting_template() -> String {
 }
 
 fn default_learn_from_edits() -> bool {
+    true
+}
+
+fn default_meeting_detection() -> bool {
     true
 }
 
@@ -1062,6 +1070,7 @@ pub fn get_default_settings() -> AppSettings {
         meeting_templates: Vec::new(),
         meeting_template: default_meeting_template(),
         learn_from_edits: default_learn_from_edits(),
+        meeting_detection: default_meeting_detection(),
         local_api_enabled: false,
         local_api_token: Secret::default(),
         cleanup_level: CleanupLevel::default(),

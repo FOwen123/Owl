@@ -11,6 +11,7 @@ import {
   Circle,
   MoreHorizontal,
   Download,
+  PictureInPicture2,
 } from "lucide-react";
 import {
   commands,
@@ -23,6 +24,7 @@ import { SettingsGroup } from "../ui/SettingsGroup";
 import { Button } from "../ui/Button";
 import { Alert } from "../ui/Alert";
 import { Dropdown } from "../ui/Dropdown";
+import { ToggleSwitch } from "../ui/ToggleSwitch";
 import { MarkdownContent } from "../whats-new/MarkdownContent";
 import {
   SpeakerChips,
@@ -33,7 +35,7 @@ import {
 import { MeetingTemplates, useTemplateOptions } from "./MeetingTemplates";
 import { useSettings } from "../../hooks/useSettings";
 
-const clock = (ms: number) => {
+export const clock = (ms: number) => {
   const total = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
@@ -73,6 +75,7 @@ const firstLine = (markdown: string) =>
 
 export const NotetakerPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { getSetting, updateSetting, isUpdating } = useSettings();
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [openId, setOpenId] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -119,7 +122,6 @@ export const NotetakerPage: React.FC = () => {
   if (recording) {
     return (
       <LiveMeeting
-        meeting={recording}
         elapsed={now - recording.started_at}
         busy={busy}
         onStop={() => run(commands.stopMeeting)}
@@ -177,6 +179,15 @@ export const NotetakerPage: React.FC = () => {
           </div>
         </div>
         <SpeakerModelRow />
+        <ToggleSwitch
+          checked={getSetting("meeting_detection") ?? true}
+          onChange={(enabled) => updateSetting("meeting_detection", enabled)}
+          isUpdating={isUpdating("meeting_detection")}
+          label={t("owl.notetaker.detectLabel")}
+          description={t("owl.notetaker.detectDescription")}
+          descriptionMode="inline"
+          grouped
+        />
       </SettingsGroup>
 
       <SettingsGroup title={t("owl.notetaker.meetings")}>
@@ -201,61 +212,43 @@ export const NotetakerPage: React.FC = () => {
   );
 };
 
-/** While recording: the transcript as it arrives, with Stop. */
+/** While recording: the timer, Pop out and Stop. The transcript is in the
+ * floating window (src/meeting/). */
 const LiveMeeting: React.FC<{
-  meeting: Meeting;
   elapsed: number;
   busy: boolean;
   onStop: () => void;
-}> = ({ meeting, elapsed, busy, onStop }) => {
+}> = ({ elapsed, busy, onStop }) => {
   const { t } = useTranslation();
-  const speaker = useSpeakerLabel(meeting.speaker_names);
-  const end = useRef<HTMLDivElement>(null);
-  const lines = meeting.transcript.length;
-  useEffect(() => {
-    end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [lines]);
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
-      <div className="flex items-center justify-between gap-4 px-4">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Circle className="w-3 h-3 fill-logo-primary text-logo-primary animate-pulse" />
-          {t("owl.notetaker.recording")}
-          <span className="font-mono text-mid-gray">{clock(elapsed)}</span>
+      <SettingsGroup title={t("owl.notetaker.title")}>
+        <div className="flex items-center justify-between gap-4 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Circle className="w-3 h-3 fill-logo-primary text-logo-primary animate-pulse" />
+            {t("owl.notetaker.recording")}
+            <span className="font-mono text-mid-gray">{clock(elapsed)}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              onClick={() => commands.showMeetingWindow()}
+              className="inline-flex items-center gap-2"
+            >
+              <PictureInPicture2 className="w-3.5 h-3.5" />
+              {t("owl.notetaker.popOut")}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={onStop}
+              className="inline-flex items-center gap-2"
+            >
+              <Square className="w-3.5 h-3.5" />
+              {t("owl.notetaker.stop")}
+            </Button>
+          </div>
         </div>
-        <Button
-          variant="secondary"
-          disabled={busy}
-          onClick={onStop}
-          className="inline-flex items-center gap-2 shrink-0"
-        >
-          <Square className="w-3.5 h-3.5" />
-          {t("owl.notetaker.stop")}
-        </Button>
-      </div>
-      <SettingsGroup title={t("owl.notetaker.transcript")}>
-        {lines === 0 ? (
-          <p className="p-4 text-sm text-mid-gray">
-            {t("owl.notetaker.listening")}
-          </p>
-        ) : (
-          <ul className="p-4 space-y-2">
-            {meeting.transcript.map((line, i) => (
-              <li key={i} className="flex gap-3 text-sm">
-                <span className="font-mono text-xs text-mid-gray w-12 shrink-0 pt-0.5">
-                  {clock(line.start_ms)}
-                </span>
-                <span
-                  className={`w-20 shrink-0 font-medium truncate ${line.speaker === "you" ? "text-logo-primary" : ""}`}
-                >
-                  {speaker(line)}
-                </span>
-                <span className="flex-1 min-w-0">{line.text}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div ref={end} />
       </SettingsGroup>
     </div>
   );

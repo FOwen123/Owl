@@ -888,11 +888,20 @@
         "transcribing": "Transcribing…",
         "ready": "Ready",
         "failed": "Failed"
-      }
+      },
+      "detectLabel": "Ask when a call starts",
+      "detectDescription": "Offers to take notes when you join a call.",
+      "popOut": "Pop out"
     },
     "editByVoice": {
       "cantSeeText": "Owl can't see the text in this app, so it can't edit it by voice.",
       "selectionChanged": "The selection changed while Owl was working, so the edit wasn't pasted."
+    },
+    "meetingWindow": {
+      "ask": "In a call?",
+      "askDescription": "Owl can take notes for you.",
+      "notNow": "Not now",
+      "takeNotes": "Take notes"
     }
   }
 }

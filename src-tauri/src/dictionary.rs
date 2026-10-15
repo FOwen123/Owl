@@ -1,7 +1,31 @@
 //! Owl dictionary replacements: "heard this → write that".
 
-use crate::settings::Replacement;
+use crate::settings::{AppSettings, Replacement};
 use regex::{Captures, Regex};
+
+/// Tells an AI the user's Words and Dictionary terms, so it can fix one the
+/// speech model misheard as a sound-alike ("ask cloud to review" → "ask
+/// Claude to review"). None when there are none.
+pub fn spelling_rule(settings: &AppSettings) -> Option<String> {
+    let mut spellings: Vec<&str> = settings
+        .replacements
+        .iter()
+        .map(|r| r.to.trim())
+        .chain(settings.custom_words.iter().map(|w| w.trim()))
+        .filter(|w| !w.is_empty())
+        .collect();
+    spellings.sort_unstable();
+    spellings.dedup();
+    (!spellings.is_empty()).then(|| {
+        format!(
+            "The speaker often says these names and terms: {}. Speech recognition can \
+             mishear one as an ordinary word that sounds alike. Where such a word makes no \
+             sense in the sentence but one of these terms does, write the term. Otherwise \
+             leave the word as it is.",
+            spellings.join(", ")
+        )
+    })
+}
 
 /// Applies every replacement in order. English (ASCII) terms match whole
 /// words, ignoring case; other scripts such as Chinese match exactly, since

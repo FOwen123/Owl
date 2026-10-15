@@ -1281,7 +1281,13 @@ impl TranscriptionManager {
         // Qwen3-ASR, FunASR-Nano, Granite, MOSS); transcribe.cpp formats them
         // per model. The rest (Nemotron, Parakeet) get the fuzzy fix-up.
         let vocabulary = if info.supports_vocabulary {
-            settings.custom_words.clone()
+            let mut words = settings.custom_words.clone();
+            // Qwen3-ASR heeds the start of the list most ("Owl" was heard first
+            // of 51, missed last), so the newest words go first.
+            if active_model.to_lowercase().contains("qwen3-asr") {
+                words.reverse();
+            }
+            words
         } else {
             Vec::new()
         };

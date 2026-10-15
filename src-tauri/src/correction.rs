@@ -209,7 +209,12 @@ fn english_fix(
         joined_words_fix(old, to)
     };
     if !plausible {
-        return None;
+        // A Word only nudges the speech model, so it's safe where a
+        // replacement ("all" → "Owl") would rewrite every "all".
+        return (old.len() == 1 && misheard_name(&from, to)).then(|| Replacement {
+            from: String::new(),
+            to: to.clone(),
+        });
     }
     if has_strong_signal(to) || !is_word(to) {
         // A name or term ("iPhone", "depick"): learn the spelling as a Word.
@@ -232,6 +237,28 @@ fn capitalized_name(from: &str, to: &str, is_word: &dyn Fn(&str) -> bool) -> boo
         && to.chars().next().is_some_and(char::is_uppercase)
         && !is_common(from)
         && !is_word(to)
+}
+
+/// "all" → "Owl": a name the speech model wrote as an everyday word that
+/// sounds the same.
+// shortcut: compares consonants only, not real phonetics; use a metaphone
+// crate if it starts suggesting unrelated names.
+fn misheard_name(from: &str, to: &str) -> bool {
+    let sound = |w: &str| {
+        let mut out = String::new();
+        for c in w.to_lowercase().chars() {
+            if c.is_ascii_alphabetic() && !"aeiouwhy".contains(c) && !out.ends_with(c) {
+                out.push(c);
+            }
+        }
+        out
+    };
+    to.chars().next().is_some_and(char::is_uppercase)
+        && !from.chars().any(char::is_uppercase)
+        && from.to_lowercase() != to.to_lowercase()
+        && !is_common(to)
+        && !sound(from).is_empty()
+        && sound(from) == sound(to)
 }
 
 fn is_common(word: &str) -> bool {
@@ -405,6 +432,18 @@ mod tests {
 
     fn none(pasted: &str, edited: &str) {
         assert_eq!(pairs(pasted, edited), vec![], "{pasted:?} -> {edited:?}");
+    }
+
+    #[test]
+    fn a_name_heard_as_an_everyday_word_becomes_a_word() {
+        one(
+            "compare it with the current state of all",
+            "compare it with the current state of Owl",
+            "",
+            "Owl",
+        );
+        none("the dog is good", "the dog is Great");
+        none("then we left early", "Then we left early");
     }
 
     // --- Finding the edited copy of the pasted text -----------------------

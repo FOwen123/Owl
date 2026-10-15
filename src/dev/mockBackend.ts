@@ -95,7 +95,24 @@ const responses: Record<string, unknown> = {
   get_available_output_devices: [
     { index: "0", name: "MacBook Pro Speakers", is_default: true },
   ],
-  get_history_entries: [],
+  get_history_entries: {
+    entries: [
+      {
+        id: 1,
+        file_name: "handy-1.wav",
+        timestamp: Math.floor(Date.now() / 1000) - 120,
+        saved: false,
+        title: "",
+        transcription_text:
+          "um so compare it with the current state of all and uh check the backend",
+        post_processed_text:
+          "Compare it with the current state of Owl and check the backend.",
+        post_process_prompt: null,
+        post_process_requested: true,
+      },
+    ],
+    has_more: false,
+  },
   get_meetings: [
     {
       id: 1,

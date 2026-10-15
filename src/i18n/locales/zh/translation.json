@@ -899,7 +899,6 @@
     },
     "meetingWindow": {
       "ask": "在开会吗？",
-      "askDescription": "Owl 可以帮你记笔记。",
       "notNow": "暂不",
       "takeNotes": "记笔记"
     }

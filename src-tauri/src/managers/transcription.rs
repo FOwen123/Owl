@@ -1322,7 +1322,8 @@ impl TranscriptionManager {
                 ));
             }
         };
-        let text = if words_prompted {
+        // Some models ignore the hint when translating, so leave those alone.
+        let text = if words_prompted && !output_was_translated {
             remove_echoed_words(&transcript.text, &settings.custom_words)
         } else {
             transcript.text

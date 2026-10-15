@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Square } from "lucide-react";
+import { NotebookPen, Square } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { commands, type Meeting } from "@/bindings";
 import { Button } from "@/components/ui/Button";
-import { OwlMark } from "@/components/icons/OwlLogo";
 import { clock } from "@/components/owl/NotetakerPage";
 import { useSpeakerLabel } from "@/components/owl/MeetingSpeakers";
+import { syncLanguageFromSettings } from "@/i18n";
+import { getLanguageDirection } from "@/lib/utils/rtl";
 
 type Mode = "prompt" | "live";
 
@@ -30,7 +31,12 @@ export const MeetingWindow: React.FC = () => {
     refresh();
     const unlisten = [
       listen("meetings-updated", refresh),
-      listen<Mode>("meeting-window-mode", (e) => setMode(e.payload)),
+      // A hidden window keeps running, so read the language on every show.
+      listen<Mode>("meeting-window-mode", async (e) => {
+        await syncLanguageFromSettings();
+        setMode(e.payload);
+      }),
+      listen("app-language-changed", syncLanguageFromSettings),
     ];
     return () => unlisten.forEach((p) => p.then((fn) => fn()));
   }, [refresh]);
@@ -53,8 +59,9 @@ export const MeetingWindow: React.FC = () => {
   );
 };
 
+/** "In a call?", styled as the overlay's "Adding to dictionary" card. */
 const Prompt: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
   const start = async () => {
     setBusy(true);
@@ -63,29 +70,33 @@ const Prompt: React.FC = () => {
     setBusy(false);
   };
   return (
-    <div data-tauri-drag-region className="mw-card mw-pop p-4 gap-3">
-      <div data-tauri-drag-region className="flex items-center gap-3">
-        <span className="mw-halo">
-          <OwlMark size={32} />
+    <div dir={getLanguageDirection(i18n.language)} className="ov-stage">
+      <div className="scard ssug mw-ask">
+        <span className="ssug-book" aria-hidden="true">
+          <NotebookPen />
         </span>
-        <div data-tauri-drag-region className="min-w-0">
-          <p className="text-sm font-medium">{t("owl.meetingWindow.ask")}</p>
-          <p className="text-xs text-text-muted">
-            {t("owl.meetingWindow.askDescription")}
-          </p>
+        <div className="ssug-text">
+          <span className="ssug-pair">
+            <span className="ssug-to">{t("owl.meetingWindow.ask")}</span>
+          </span>
         </div>
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => getCurrentWindow().hide()}
-        >
-          {t("owl.meetingWindow.notNow")}
-        </Button>
-        <Button size="sm" disabled={busy} onClick={start}>
+        <Button size="sm" disabled={busy} onClick={start} className="shrink-0">
           {t("owl.meetingWindow.takeNotes")}
         </Button>
+        <button
+          className="sx"
+          aria-label={t("owl.meetingWindow.notNow")}
+          onClick={() => getCurrentWindow().hide()}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M4 4 L12 12 M12 4 L4 12"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
       </div>
     </div>
   );

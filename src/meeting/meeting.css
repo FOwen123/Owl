@@ -1,4 +1,6 @@
 @import "../App.css";
+/* The prompt reuses the overlay's card (`.scard.ssug`, `.sx`). */
+@import "../overlay/RecordingOverlay.css";
 
 /* The window is transparent (meeting_window.rs) so the card can be rounded. */
 :root,
@@ -29,29 +31,10 @@ body {
   }
 }
 
-/* "Take notes?": a soft ring breathes around the owl. */
-.mw-halo {
-  position: relative;
-  display: inline-flex;
-  border-radius: 9999px;
-}
-.mw-halo::after {
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border-radius: inherit;
-  border: 2px solid var(--color-accent);
-  animation: mw-halo 1.8s ease-out infinite;
-}
-@keyframes mw-halo {
-  from {
-    opacity: 0.7;
-    transform: scale(0.9);
-  }
-  to {
-    opacity: 0;
-    transform: scale(1.35);
-  }
+/* "In a call?": the dictionary card, its edge a plain border (it has no
+   countdown ring). */
+.scard.ssug.mw-ask {
+  border: 1px solid var(--s-border);
 }
 
 /* Recording: five bars dancing like a level meter. */
@@ -129,7 +112,6 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .mw-pop,
-  .mw-halo::after,
   .mw-bars i,
   .mw-line,
   .mw-listening {

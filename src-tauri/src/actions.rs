@@ -260,7 +260,12 @@ pub(crate) async fn post_process_transcription(
         debug!("Post-processing skipped because the selected prompt is empty");
         return None;
     }
-    let prompt = prompt_for_level(&prompt, settings.cleanup_level);
+    let mut prompt = prompt_for_level(&prompt, settings.cleanup_level);
+    // Owl: the speech model only hears Words as hints; the AI can still fix
+    // one it missed from context.
+    if let Some(rule) = crate::dictionary::spelling_rule(settings) {
+        prompt.push_str(&format!("\n{rule}"));
+    }
 
     debug!(
         "Starting LLM post-processing with provider '{}' (model: {})",

@@ -287,20 +287,8 @@ fn summary_prompt(
         }
         ChineseScript::AsTranscribed => {}
     }
-    let mut spellings: Vec<&str> = settings
-        .replacements
-        .iter()
-        .map(|r| r.to.trim())
-        .chain(settings.custom_words.iter().map(|w| w.trim()))
-        .filter(|w| !w.is_empty())
-        .collect();
-    spellings.sort_unstable();
-    spellings.dedup();
-    if !spellings.is_empty() {
-        prompt.push_str(&format!(
-            "\nWhere the transcript clearly means one of these, spell it this way: {}.",
-            spellings.join(", ")
-        ));
+    if let Some(rule) = crate::dictionary::spelling_rule(settings) {
+        prompt.push_str(&format!("\n{rule}"));
     }
     prompt
 }
@@ -1791,8 +1779,8 @@ mod tests {
         }];
         let prompt = summary_prompt(&settings, "general", false, "[0:00] Me: 我們明天開會");
         assert!(prompt.contains("\"Others\" is everyone else"));
-        assert!(prompt.ends_with(
-            "If you write Chinese, use Traditional characters.\nWhere the transcript clearly means one of these, spell it this way: Depick."
+        assert!(prompt.contains(
+            "If you write Chinese, use Traditional characters.\nThe speaker often says these names and terms: Depick."
         ));
         let english = summary_prompt(&settings, "general", false, "[0:00] Me: we meet tomorrow");
         assert!(!english.contains("Traditional"));

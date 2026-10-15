@@ -42,7 +42,7 @@ use std::ptr::NonNull;
 const RING_SECONDS: usize = 10;
 
 /// Read one fixed-size property of a Core Audio object.
-unsafe fn get_property<T: Copy>(
+pub(crate) unsafe fn get_property<T: Copy>(
     object: AudioObjectID,
     selector: AudioObjectPropertySelector,
     qualifier: Option<&i32>,

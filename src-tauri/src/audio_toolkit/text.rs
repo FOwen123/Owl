@@ -492,29 +492,48 @@ pub fn remove_filler_words(
 /// that order, so such runs go.
 pub fn remove_echoed_words(text: &str, words: &[String]) -> String {
     const RUN: usize = 3;
+    // Letters of scripts that put spaces between words; Chinese and Japanese
+    // run on, so a Word can end right where the next one starts.
+    let spaced = |c: char| {
+        c.is_alphanumeric()
+            && !matches!(c, '\u{3040}'..='\u{30ff}' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}' | '\u{f900}'..='\u{faff}')
+    };
+    // `i` doesn't fall inside a word ("Claude" in "SuperClaude").
+    let boundary = |i: usize| {
+        !(text[..i].chars().next_back().is_some_and(spaced)
+            && text[i..].chars().next().is_some_and(spaced))
+    };
     let word_at = |i: usize, k: usize| {
         let word = words[k].trim();
         let end = i + word.len();
         (!word.is_empty()
             && text
                 .get(i..end)
-                .is_some_and(|s| s.eq_ignore_ascii_case(word)))
+                .is_some_and(|s| s.eq_ignore_ascii_case(word))
+            && boundary(i)
+            && boundary(end))
         .then_some(end)
     };
-    let skip_gap = |i: usize| {
-        let gap = text[i..]
-            .find(|c: char| {
-                !(c.is_whitespace() || c.is_ascii_punctuation() || "，、。；：！？".contains(c))
-            })
-            .unwrap_or(text.len() - i);
-        i + gap
+    // Word `k` after `end`, past spaces and punctuation, which may also start
+    // it (".NET").
+    let next_at = |end: usize, k: usize| {
+        let mut i = end;
+        loop {
+            if let Some(e) = word_at(i, k) {
+                return Some(e);
+            }
+            match text[i..].chars().next() {
+                Some(c) if !c.is_alphanumeric() => i += c.len_utf8(),
+                _ => return None,
+            }
+        }
     };
     // How many listed Words follow one another from `i`, starting at Word `k`.
     let run_from = |i: usize, k: usize| {
         let mut end = word_at(i, k)?;
         let mut count = 1;
         for next in k + 1..words.len() {
-            match word_at(skip_gap(end), next) {
+            match next_at(end, next) {
                 Some(e) => (end, count) = (e, count + 1),
                 None => break,
             }
@@ -1029,13 +1048,19 @@ mod tests {
         );
         assert_eq!(remove_echoed_words(&format!("拜{leak}"), &words), "拜");
         assert_eq!(remove_echoed_words("mcp, JSON FILE、svg", &words), "");
+        assert_eq!(remove_echoed_words("MCP — json file — svg", &words), "");
+        let dotted: Vec<String> = ["C++", "C#", ".NET"].map(String::from).to_vec();
+        assert_eq!(remove_echoed_words("C++ C# .NET", &dotted), "");
         // Speech that mentions Words, even two in list order, stays.
         for said in [
             "I asked Claude about DePick.Bot and supabase.",
             "Claude, Wispr Flow 都很好用。",
             "svg MCP 台語",
+            "Ask SuperClaude MCP json filer today.",
         ] {
             assert_eq!(remove_echoed_words(said, &words), said);
         }
+        let brand: Vec<String> = ["Go", "Pro", "Max"].map(String::from).to_vec();
+        assert_eq!(remove_echoed_words("GoPro Max", &brand), "GoPro Max");
     }
 }

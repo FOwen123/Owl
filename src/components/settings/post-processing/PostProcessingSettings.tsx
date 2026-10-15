@@ -309,6 +309,7 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
                 {t("settings.postProcessing.prompts.promptInstructions")}
               </label>
               <Textarea
+                rows={16}
                 value={draftText}
                 onChange={(e) => setDraftText(e.target.value)}
                 placeholder={t(
@@ -376,6 +377,7 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
                 {t("settings.postProcessing.prompts.promptInstructions")}
               </label>
               <Textarea
+                rows={16}
                 value={draftText}
                 onChange={(e) => setDraftText(e.target.value)}
                 placeholder={t(

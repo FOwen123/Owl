@@ -132,6 +132,8 @@ const responses: Record<string, unknown> = {
     },
   ],
   speaker_model_installed: false,
+  ask_meetings:
+    "In **Beta launch plan**, Harry said the beta build is ready, and QA still has **12 open bugs**. You agreed to ship it to the team on Friday.",
   get_summary_options: {
     built_in_templates: [
       "general",
@@ -176,6 +178,7 @@ export function installMockBackend() {
             ? [
                 {
                   ...meetings[meetings.length - 1],
+                  id: meetings.length + 1,
                   status: "recording",
                   started_at: Date.now() - 754_000,
                   title: null,

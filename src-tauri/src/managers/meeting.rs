@@ -5,7 +5,7 @@
 
 use crate::audio_toolkit::audio::{read_wav_samples, FrameResampler};
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::{get_settings, AppSettings, ChineseScript};
+use crate::settings::{get_settings, AppSettings, ChineseScript, PostProcessProvider};
 use anyhow::{anyhow, Result};
 use rusqlite::{params, Connection};
 use rusqlite_migration::{Migrations, M};
@@ -171,6 +171,84 @@ fn transcript_text(lines: &[TranscriptLine]) -> (String, bool) {
         .collect::<Vec<_>>()
         .join("\n");
     (text, labelled)
+}
+
+/// The Post Process AI that writes about meetings: `provider` (default: the
+/// one picked on the Post Process page), its model and API key.
+/// `no_provider` when none is set up; the UI turns that into a prompt.
+fn meeting_ai<'a>(
+    settings: &'a AppSettings,
+    provider: Option<&str>,
+) -> Result<(&'a PostProcessProvider, &'a str, String), String> {
+    let provider = match provider {
+        Some(id) => settings.post_process_provider(id),
+        None => settings.active_post_process_provider(),
+    }
+    .ok_or("no_provider")?;
+    let model = settings
+        .post_process_models
+        .get(&provider.id)
+        .map(|m| m.trim())
+        .filter(|m| !m.is_empty())
+        .ok_or("no_provider")?;
+    if provider.id == crate::settings::APPLE_INTELLIGENCE_PROVIDER_ID {
+        return Err("Apple Intelligence can't read a whole meeting. Choose another AI on the Post Process page.".into());
+    }
+    let api_key = settings
+        .post_process_api_keys
+        .get(&provider.id)
+        .cloned()
+        .unwrap_or_default();
+    Ok((provider, model, api_key))
+}
+
+const ASK_PROMPT: &str = "You answer the user's questions about their meetings. \
+Their meetings are below, newest first: each one's notes, or its transcript when it has none. \
+\"Me\" is the user; a meeting marked live is still going on, so its transcript is what has been said so far. \
+Answer only from these meetings, briefly, in the language of the question. \
+If they don't say, tell the user so.";
+
+/// Roughly 50k tokens: fits every model Post Process offers, with room for the answer.
+const ASK_CONTEXT_CHARS: usize = 200_000;
+
+/// The meetings for `ask`, newest first, with people's names filled in.
+// shortcut: only the newest meetings that fit in ASK_CONTEXT_CHARS; search
+// the meetings first if questions about older ones go unanswered.
+fn ask_context(meetings: &[Meeting]) -> String {
+    let mut context = String::new();
+    for m in meetings {
+        let body = match &m.summary {
+            Some(notes) => notes.clone(),
+            None => transcript_text(&m.transcript).0,
+        };
+        let body = m.speaker_names.iter().fold(body, |text, (n, name)| {
+            text.replace(&format!("<@speaker:{n}>"), name)
+                .replace(&format!("Speaker {n}:"), &format!("{name}:"))
+        });
+        if body.trim().is_empty() {
+            continue;
+        }
+        let date = chrono::DateTime::from_timestamp_millis(m.started_at)
+            .map(|d| {
+                d.with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M")
+                    .to_string()
+            })
+            .unwrap_or_default();
+        let live = if m.status == MeetingStatus::Recording {
+            " live"
+        } else {
+            ""
+        };
+        let title = m.title.as_deref().unwrap_or("Untitled");
+        let entry =
+            format!("<meeting date=\"{date}\" title=\"{title}\"{live}>\n{body}\n</meeting>\n\n");
+        if !context.is_empty() && context.len() + entry.len() > ASK_CONTEXT_CHARS {
+            break;
+        }
+        context.push_str(&entry);
+    }
+    context
 }
 
 /// Whether most of a transcript is Chinese, counting a character as a word.
@@ -904,19 +982,7 @@ impl MeetingManager {
         provider: Option<String>,
     ) -> Result<String, String> {
         let settings = get_settings(&self.app);
-        let provider = match provider {
-            Some(id) => settings.post_process_provider(&id),
-            None => settings.active_post_process_provider(),
-        }
-        .ok_or("no_provider")?;
-        let model = settings
-            .post_process_models
-            .get(&provider.id)
-            .filter(|m| !m.trim().is_empty())
-            .ok_or("no_provider")?;
-        if provider.id == crate::settings::APPLE_INTELLIGENCE_PROVIDER_ID {
-            return Err("Apple Intelligence can't read a whole meeting. Choose another AI on the Post Process page.".into());
-        }
+        let (provider, model, api_key) = meeting_ai(&settings, provider.as_deref())?;
         let meeting = self.get(id).map_err(|e| e.to_string())?;
         let template = template
             .or(meeting.template)
@@ -941,11 +1007,6 @@ impl MeetingManager {
         if transcript.is_empty() {
             return Err("Nothing was said in this meeting.".into());
         }
-        let api_key = settings
-            .post_process_api_keys
-            .get(&provider.id)
-            .cloned()
-            .unwrap_or_default();
 
         // One summary per meeting at a time, so two can't overwrite each other.
         if !self.summarizing.lock().unwrap().insert(id) {
@@ -992,6 +1053,33 @@ impl MeetingManager {
         self.summarizing.lock().unwrap().remove(&id);
         self.changed();
         result
+    }
+
+    /// Answers a question about the meetings, the one being recorded included,
+    /// from their notes (or transcript, when a meeting has none). Errors as
+    /// for `summarize`.
+    pub async fn ask(&self, question: &str) -> Result<String, String> {
+        let settings = get_settings(&self.app);
+        let (provider, model, api_key) = meeting_ai(&settings, None)?;
+        let meetings = self.list().map_err(|e| e.to_string())?;
+        let reply = crate::llm_client::send_chat_completion_with_schema(
+            provider,
+            api_key,
+            model,
+            format!(
+                "{}<question>\n{question}\n</question>",
+                ask_context(&meetings)
+            ),
+            Some(ASK_PROMPT.to_string()),
+            None,
+            false,
+        )
+        .await?
+        .unwrap_or_default();
+        match crate::actions::strip_think_block(&reply).trim() {
+            "" => Err("The AI sent back an empty answer.".into()),
+            answer => Ok(answer.to_string()),
+        }
     }
 
     pub fn get(&self, id: i64) -> Result<Meeting> {
@@ -1591,6 +1679,40 @@ fn is_loud(frame: &[f32]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ask_context_names_people_and_marks_the_live_meeting() {
+        let meeting = |id, status, summary: Option<&str>| Meeting {
+            id,
+            title: None,
+            template: None,
+            started_at: 0,
+            duration_ms: 0,
+            status,
+            transcript: vec![TranscriptLine {
+                start_ms: 0,
+                end_ms: 0,
+                speaker: Speaker::Others,
+                voice: Some(1),
+                text: "QA has twelve open bugs.".into(),
+            }],
+            summary: summary.map(String::from),
+            speaker_names: HashMap::from([(1, "Harry".to_string())]),
+            summarizing: false,
+            error: None,
+        };
+        let context = ask_context(&[
+            meeting(2, MeetingStatus::Recording, None),
+            meeting(
+                1,
+                MeetingStatus::Ready,
+                Some("<@speaker:1> will ship Friday."),
+            ),
+        ]);
+        assert!(context.contains(" live>\nHarry: QA has twelve open bugs."));
+        assert!(context.contains("\">\nHarry will ship Friday."));
+        assert!(!context.contains("Speaker 1"));
+    }
 
     fn tone(seconds: f32) -> Vec<f32> {
         let n = (seconds * SAMPLE_RATE as f32) as usize;

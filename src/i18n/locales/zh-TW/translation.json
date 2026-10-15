@@ -852,8 +852,6 @@
       "retranscribe": "重新轉寫",
       "rename": "重新命名",
       "listening": "正在聆聽…",
-      "import": "匯入音訊",
-      "audioOrVideo": "音訊或影片",
       "unsupportedFormat": "目前還不支援這種格式。",
       "importTooLong": "這個檔案超過 4 小時，Owl 無法匯入。",
       "export": "匯出",
@@ -891,7 +889,9 @@
       },
       "detectLabel": "通話開始時詢問",
       "detectDescription": "加入通話時提議幫你做筆記。",
-      "popOut": "彈出視窗"
+      "askPlaceholder": "問問你的會議…",
+      "askSend": "提問",
+      "thinking": "思考中…"
     },
     "editByVoice": {
       "cantSeeText": "Owl 看不到這個 App 裡的文字，所以無法用語音編輯。",

@@ -848,6 +848,7 @@ pub fn run(cli_args: CliArgs) {
             commands::meetings::get_meetings,
             commands::meetings::delete_meeting,
             commands::meetings::summarize_meeting,
+            commands::meetings::ask_meetings,
             commands::meetings::rename_speaker,
             commands::meetings::import_meeting,
             commands::meetings::export_meeting,

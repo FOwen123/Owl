@@ -107,13 +107,15 @@ As drawn on the proposed board, in both themes.
 ## Recording overlay
 
 - Pill on `surface` with a `border`, no shadow in dark mode.
-- Recording: an `accent` dot and level meter, with a `text-muted` label.
-- Transcribing: a short bar filled with the signature gradient, with a `text-muted` label. This is the only control-sized element that may carry the gradient.
+- Cancel on the left, the menu-bar owl on the right, in `text` with its eyes cut out (`scripts/owl-icons/build-icons.swift` writes its layers).
+- Recording: an `accent` level meter. The owl is sleepy until the mic is live, then blinks and glances around.
+- Transcribing: a `text-muted` label; the owl looks side to side.
+- Every motion runs in one loop per screen refresh; with reduced motion the owl stays still.
 - No other colors.
 
 ## Signature gradient
 
-`linear-gradient(135deg, #182676 0%, #1f4195 35%, #3269bd 70%, #70b1ff 100%)`, sampled from T3 Code's sidebar header. Use it for the sidebar header, the onboarding welcome ("Welcome to Owl") and the About page, with white text. Never on buttons or other controls (the transcribing bar above is the one exception), and at most once per screen.
+`linear-gradient(135deg, #182676 0%, #1f4195 35%, #3269bd 70%, #70b1ff 100%)`, sampled from T3 Code's sidebar header. Use it for the sidebar header, the onboarding welcome ("Welcome to Owl") and the About page, with white text. Never on buttons or other controls, and at most once per screen.
 
 ## Migration
 

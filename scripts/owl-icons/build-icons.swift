@@ -64,6 +64,44 @@ for r in regions.dropFirst(2) where eyes.contains(where: {
     for i in r.pixels { ink[i] = true }
 }
 
+// Each whole eye (white plus pupil): what a flood from the edge of the eye's
+// box can't reach without crossing the eye white. Lets the overlay move the
+// pupils and close the lids (RecordingOverlay).
+var eyeHole = [Bool](repeating: false, count: w * h)
+for e in eyes {
+    let white = Set(e.pixels)
+    let x0 = max(e.minX - 2, 0), x1 = min(e.maxX + 2, w - 1)
+    let y0 = max(e.minY - 2, 0), y1 = min(e.maxY + 2, h - 1)
+    var reached = Set<Int>()
+    stack = []
+    for x in x0...x1 { stack += [y0 * w + x, y1 * w + x] }
+    for y in y0...y1 { stack += [y * w + x0, y * w + x1] }
+    while let i = stack.popLast() {
+        let x = i % w, y = i / w
+        if x < x0 || x > x1 || y < y0 || y > y1 || reached.contains(i) || white.contains(i) { continue }
+        reached.insert(i)
+        stack += [i - 1, i + 1, i - w, i + w]
+    }
+    for y in y0...y1 { for x in x0...x1 where !reached.contains(y * w + x) { eyeHole[y * w + x] = true } }
+}
+// The pupils: the two largest ink blobs in the eyes. Stray brush specks along
+// the eye edges stay on the body, so they don't slide when the owl glances.
+var blobs: [[Int]] = []
+var visited = [Bool](repeating: false, count: w * h)
+for start in 0..<(w * h) where eyeHole[start] && ink[start] && !visited[start] {
+    var blob: [Int] = []
+    stack = [start]
+    while let i = stack.popLast() {
+        if visited[i] || !eyeHole[i] || !ink[i] { continue }
+        visited[i] = true
+        blob.append(i)
+        stack += [i - 1, i + 1, i - w, i + w]
+    }
+    blobs.append(blob)
+}
+var pupil = [Bool](repeating: false, count: w * h)
+for blob in blobs.sorted(by: { $0.count > $1.count }).prefix(2) { for i in blob { pupil[i] = true } }
+
 // Square crop around the owl with a little breathing room.
 var minX = w, minY = h, maxX = 0, maxY = 0
 for y in 0..<h { for x in 0..<w where !outside[y * w + x] {
@@ -121,6 +159,37 @@ func save(_ rep: NSBitmapImageRep, _ p: String) {
     try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: p))
     print("wrote", p)
 }
+
+/// One layer of the cropped owl as a white-on-transparent mask.
+func layer(_ include: (Int) -> Bool) -> NSBitmapImageRep {
+    let rep = owl(ink: .white, paper: nil)
+    let data = rep.bitmapData!
+    for y in 0..<side { for x in 0..<side {
+        let sx = cx - side / 2 + x, sy = cy - side / 2 + y
+        if sx < 0 || sy < 0 || sx >= w || sy >= h || !include(sy * w + sx) {
+            for k in 0..<4 { data[(y * side + x) * 4 + k] = 0 }
+        } else {
+            for k in 0..<4 { data[(y * side + x) * 4 + k] = 255 }
+        }
+    } }
+    return rep
+}
+
+// --- Overlay owl: the menu-bar mascot in three masks, so it can blink and look around.
+let parts = path("src/overlay/owl")
+try! FileManager.default.createDirectory(atPath: parts, withIntermediateDirectories: true)
+save(canvas(128) { r in layer { ink[$0] && !pupil[$0] }.over(r) }, "\(parts)/body.png")
+// The eye mask reaches a little past the eye edge, so a closed lid overlaps
+// the body instead of leaving a faint seam.
+var eyeMask = eyeHole
+for _ in 0..<12 {
+    let prev = eyeMask
+    for i in (w + 1)..<(w * h - w - 1) where !prev[i] && (prev[i - 1] || prev[i + 1] || prev[i - w] || prev[i + w]) {
+        eyeMask[i] = true
+    }
+}
+save(canvas(128) { r in layer { eyeMask[$0] }.over(r) }, "\(parts)/eyes.png")
+save(canvas(128) { r in layer { pupil[$0] }.over(r) }, "\(parts)/pupils.png")
 
 // --- In-app mark ---------------------------------------------------------------
 save(canvas(512) { r in owl(ink: .black, paper: .white).over(r) }, path("src/assets/owl-mark.png"))

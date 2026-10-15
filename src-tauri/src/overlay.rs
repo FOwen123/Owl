@@ -44,7 +44,7 @@ tauri_panel! {
 // scale (see windows_text_scale_factor), which WebView2 applies as a zoom.
 //
 // Compact overlay (Minimal / transcribing / processing): the 34h pill animates
-// width from 112 (--ov-rest-w) to 176 (--ov-work-w) and expands from center, so
+// width from 124 (--ov-rest-w) to 176 (--ov-work-w) and expands from center, so
 // the window must fit the widest state plus a little slack.
 const OVERLAY_WIDTH: f64 = 200.0;
 const OVERLAY_HEIGHT: f64 = 44.0;

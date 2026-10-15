@@ -9,6 +9,14 @@ import {
 } from "@/lib/utils/theme";
 import type { Theme } from "@/bindings";
 import "@/i18n";
+import { installMockBackend } from "@/dev/mockBackend";
+import { playMockOverlay } from "@/dev/mockOverlay";
+
+// Owl: `?mock` plays the overlay in a browser without the Rust backend (dev only).
+if (import.meta.env.DEV && location.search.includes("mock")) {
+  installMockBackend();
+  playMockOverlay();
+}
 
 // A separate webview from the settings window, so the overlay has to set
 // `data-theme` on its own document: last-known theme before render (shared

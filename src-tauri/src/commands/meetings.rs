@@ -48,6 +48,14 @@ pub async fn summarize_meeting(
     meetings.summarize(id, template, provider).await
 }
 
+/// Answers a question about the meetings with the Post Process AI.
+#[tauri::command]
+#[specta::specta]
+pub async fn ask_meetings(app: AppHandle, question: String) -> Result<String, String> {
+    let meetings = app.state::<Arc<MeetingManager>>().inner().clone();
+    meetings.ask(&question).await
+}
+
 /// An AI that can write meeting notes: a Post Process provider with a model.
 #[derive(Serialize, Type)]
 pub struct SummaryProvider {

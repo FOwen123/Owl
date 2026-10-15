@@ -254,7 +254,7 @@ fn is_mouse_within_monitor(
 /// converts PhysicalPosition using the scale factor of the monitor the window
 /// is *currently* on, which is wrong when moving cross-monitor. Windows uses
 /// `place_windows_overlay` instead (no single logical space across mixed DPI).
-fn calculate_overlay_position(
+pub(crate) fn calculate_overlay_position(
     app_handle: &AppHandle,
     width: f64,
     height: f64,

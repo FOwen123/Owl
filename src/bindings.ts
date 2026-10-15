@@ -970,6 +970,9 @@ async stopMeeting() : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Async, so reading every meeting never blocks the main thread.
+ */
 async getMeetings() : Promise<Result<Meeting[], string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_meetings") };
@@ -1077,6 +1080,20 @@ async downloadSpeakerModel() : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async changeMeetingDetectionSetting(enabled: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_meeting_detection_setting", { enabled }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Opens the floating live-transcript window (`meeting_window.rs`).
+ */
+async showMeetingWindow() : Promise<void> {
+    await TAURI_INVOKE("show_meeting_window");
+},
 async acceptEditSuggestion(suggestion: Replacement) : Promise<void> {
     await TAURI_INVOKE("accept_edit_suggestion", { suggestion });
 },
@@ -1181,6 +1198,11 @@ meeting_template?: string;
  * Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
  */
 learn_from_edits?: boolean; 
+/**
+ * Owl: ask to take notes when another app starts using the microphone
+ * (`meeting_detect.rs`).
+ */
+meeting_detection?: boolean; 
 /**
  * Owl: the local transcription API (`local_api.rs`), off by default.
  */

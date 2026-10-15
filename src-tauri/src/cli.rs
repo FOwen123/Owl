@@ -64,4 +64,9 @@ pub struct CliArgs {
     /// Emit --transcribe-file results as JSON.
     #[arg(long)]
     pub json: bool,
+
+    /// Also run the dictation output step on the --transcribe-file text
+    /// (snippets, AI cleanup, dictionary), as the post-process shortcut does.
+    #[arg(long)]
+    pub post_process: bool,
 }

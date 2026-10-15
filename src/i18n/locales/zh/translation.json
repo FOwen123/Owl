@@ -852,8 +852,6 @@
       "retranscribe": "重新转写",
       "rename": "重命名",
       "listening": "正在聆听…",
-      "import": "导入音频",
-      "audioOrVideo": "音频或视频",
       "unsupportedFormat": "暂不支持这种格式。",
       "importTooLong": "这个文件超过 4 小时，Owl 无法导入。",
       "export": "导出",
@@ -891,7 +889,9 @@
       },
       "detectLabel": "通话开始时询问",
       "detectDescription": "加入通话时提议帮你记笔记。",
-      "popOut": "弹出窗口"
+      "askPlaceholder": "问问你的会议…",
+      "askSend": "提问",
+      "thinking": "思考中…"
     },
     "editByVoice": {
       "cantSeeText": "Owl 看不到这个应用里的文字，所以无法用语音编辑。",

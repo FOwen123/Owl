@@ -486,6 +486,63 @@ pub fn remove_filler_words(
     filtered
 }
 
+/// Owl: removes the Words list read back as speech. Given Words as a hint, a
+/// model can "transcribe" the hint itself on near-silent audio: Words in the
+/// order they're listed. People hardly ever say three of them back to back in
+/// that order, so such runs go.
+pub fn remove_echoed_words(text: &str, words: &[String]) -> String {
+    const RUN: usize = 3;
+    let word_at = |i: usize, k: usize| {
+        let word = words[k].trim();
+        let end = i + word.len();
+        (!word.is_empty()
+            && text
+                .get(i..end)
+                .is_some_and(|s| s.eq_ignore_ascii_case(word)))
+        .then_some(end)
+    };
+    let skip_gap = |i: usize| {
+        let gap = text[i..]
+            .find(|c: char| {
+                !(c.is_whitespace() || c.is_ascii_punctuation() || "，、。；：！？".contains(c))
+            })
+            .unwrap_or(text.len() - i);
+        i + gap
+    };
+    // How many listed Words follow one another from `i`, starting at Word `k`.
+    let run_from = |i: usize, k: usize| {
+        let mut end = word_at(i, k)?;
+        let mut count = 1;
+        for next in k + 1..words.len() {
+            match word_at(skip_gap(end), next) {
+                Some(e) => (end, count) = (e, count + 1),
+                None => break,
+            }
+        }
+        Some((count, end))
+    };
+
+    let mut kept = String::with_capacity(text.len());
+    let mut i = 0;
+    while let Some(c) = text[i..].chars().next() {
+        let longest = (0..words.len()).filter_map(|k| run_from(i, k)).max();
+        match longest {
+            Some((count, end)) if count >= RUN => i = end,
+            _ => {
+                kept.push(c);
+                i += c.len_utf8();
+            }
+        }
+    }
+    if kept.len() == text.len() {
+        return text.to_string();
+    }
+    MULTI_SPACE_PATTERN
+        .replace_all(&kept, " ")
+        .trim()
+        .to_string()
+}
+
 /// Applies non-filler transcription cleanup.
 ///
 /// Kept separate from [`remove_filler_words`] so disabling filler deletion
@@ -944,5 +1001,41 @@ mod tests {
         let custom_words = vec!["你号".to_string()];
         let result = apply_custom_words(text, &custom_words, 1.0);
         assert_eq!(result, text);
+    }
+
+    #[test]
+    fn the_words_list_read_back_is_removed() {
+        let words: Vec<String> = [
+            "Claude",
+            "Wispr Flow",
+            "supabase",
+            "台語",
+            "MCP",
+            "json file",
+            "svg",
+            "DePick.Bot",
+            "ca-dashboard",
+            "configuration.service.ts",
+            "claire",
+        ]
+        .map(String::from)
+        .to_vec();
+        let leak = "台語 MCP json file svg DePick.Bot ca-dashboard configuration.service.ts claire";
+        // From 14 Oct meetings: alone, before speech, after speech.
+        assert_eq!(remove_echoed_words(leak, &words), "");
+        assert_eq!(
+            remove_echoed_words(&format!("{leak} 和 Robik released notice."), &words),
+            "和 Robik released notice."
+        );
+        assert_eq!(remove_echoed_words(&format!("拜{leak}"), &words), "拜");
+        assert_eq!(remove_echoed_words("mcp, JSON FILE、svg", &words), "");
+        // Speech that mentions Words, even two in list order, stays.
+        for said in [
+            "I asked Claude about DePick.Bot and supabase.",
+            "Claude, Wispr Flow 都很好用。",
+            "svg MCP 台語",
+        ] {
+            assert_eq!(remove_echoed_words(said, &words), said);
+        }
     }
 }

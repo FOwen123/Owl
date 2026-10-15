@@ -39,6 +39,10 @@ const IconButton: React.FC<{
 
 const PAGE_SIZE = 30;
 
+/** Owl: what was pasted (after AI cleanup or a snippet), not the raw transcript. */
+const pastedText = (entry: HistoryEntry) =>
+  entry.post_processed_text ?? entry.transcription_text;
+
 interface OpenRecordingsButtonProps {
   onClick: () => void;
   label: string;
@@ -251,7 +255,7 @@ export const HistorySettings: React.FC = () => {
                 key={entry.id}
                 entry={entry}
                 onToggleSaved={() => toggleSaved(entry.id)}
-                onCopyText={() => copyToClipboard(entry.transcription_text)}
+                onCopyText={() => copyToClipboard(pastedText(entry))}
                 getAudioUrl={getAudioUrl}
                 deleteAudio={deleteAudioEntry}
                 retryTranscription={retryHistoryEntry}
@@ -411,6 +415,12 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
       </div>
 
       <p
+        // Hover shows what the speech model heard, when cleanup changed it.
+        title={
+          hasTranscription && pastedText(entry) !== entry.transcription_text
+            ? entry.transcription_text
+            : undefined
+        }
         className={`italic text-sm pb-2 ${
           retrying
             ? ""
@@ -435,7 +445,7 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
         {retrying
           ? t("settings.history.transcribing")
           : hasTranscription
-            ? entry.transcription_text
+            ? pastedText(entry)
             : t("settings.history.transcriptionFailed")}
       </p>
 

@@ -1000,6 +1000,17 @@ async summarizeMeeting(id: number, template: string | null, provider: string | n
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Answers a question about the meetings with the Post Process AI.
+ */
+async askMeetings(question: string) : Promise<Result<string, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("ask_meetings", { question }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async renameSpeaker(id: number, voice: number, name: string) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("rename_speaker", { id, voice, name }) };

@@ -13,6 +13,9 @@ import type {
 import i18n, { syncLanguageFromSettings } from "@/i18n";
 import type { ModelStateEvent } from "@/lib/types/events";
 import { getLanguageDirection } from "@/lib/utils/rtl";
+import owlBody from "./owl/body.png";
+import owlEyes from "./owl/eyes.png";
+import owlPupils from "./owl/pupils.png";
 
 type OverlayState =
   | "recording"
@@ -37,6 +40,14 @@ interface EditSuggestion {
 const WAVE_BARS = 9;
 // Taller in the middle, like a voice, so even uneven levels read as one shape.
 const WAVE_ENVELOPE = [0.5, 0.68, 0.84, 0.96, 1, 0.96, 0.84, 0.68, 0.5];
+
+// Owl mascot layers (scripts/owl-icons/build-icons.swift), drawn as masks so
+// the owl takes the text color, like the menu-bar icon.
+const mask = (url: string): React.CSSProperties => ({
+  WebkitMaskImage: `url(${url})`,
+  maskImage: `url(${url})`,
+});
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 // Only call out a model load in the Live preview once it has run this long.
 // Warm loads finish in well under this (~0.2s on Apple Silicon, ~1.5s on a
@@ -63,7 +74,6 @@ const RecordingOverlay: React.FC = () => {
   // Latched per Live session: once the loading notice has opened the panel, keep
   // it open after the load so it doesn't collapse and reopen when text arrives.
   const [loadNoticeShown, setLoadNoticeShown] = useState(false);
-  const [levels, setLevels] = useState<number[]>(Array(WAVE_BARS).fill(0));
   const [streamText, setStreamText] = useState<StreamTextEvent>({
     committed: "",
     tentative: "",
@@ -83,7 +93,15 @@ const RecordingOverlay: React.FC = () => {
   const [suggestion, setSuggestion] = useState<EditSuggestion | null>(null);
   const [suggestionAdded, setSuggestionAdded] = useState(false);
 
-  const smoothedLevelsRef = useRef<number[]>(Array(16).fill(0));
+  // Latest mic levels, read by the animation loop below. Kept out of React state
+  // so ~24 level events a second don't re-render the overlay.
+  const levelsRef = useRef<number[]>(Array(16).fill(0));
+  // What the animation loop needs to know, refreshed on every render.
+  const motionRef = useRef({ ready: false, working: false });
+  const barsRef = useRef<(HTMLElement | null)[]>([]);
+  const owlRef = useRef<HTMLSpanElement>(null);
+  const pupilsRef = useRef<HTMLSpanElement>(null);
+  const lidRef = useRef<HTMLSpanElement>(null);
   // Live-text scroll-back: the text region "sticks" to the newest line while the
   // user is at the bottom; if they scroll up to read history, auto-follow pauses
   // until they scroll back down.
@@ -100,8 +118,7 @@ const RecordingOverlay: React.FC = () => {
         // them would overwrite that event and leave the overlay stuck arming.
         if (overlayState === "recording" || overlayState === "streaming") {
           setCaptureReady(false);
-          smoothedLevelsRef.current = Array(16).fill(0);
-          setLevels(Array(WAVE_BARS).fill(0));
+          levelsRef.current = Array(16).fill(0);
           setStreamText({ committed: "", tentative: "" });
         }
 
@@ -153,17 +170,7 @@ const RecordingOverlay: React.FC = () => {
       });
 
       const unlistenLevel = await listen<number[]>("mic-level", (event) => {
-        const newLevels = event.payload as number[];
-        // Smoothing across the 16 buckets, then take the first N bars for the
-        // shared waveform. Rise quickly and fall slowly so the bars flow
-        // instead of flickering.
-        const smoothed = smoothedLevelsRef.current.map((prev, i) => {
-          const target = newLevels[i] || 0;
-          const keep = target > prev ? 0.45 : 0.82;
-          return prev * keep + target * (1 - keep);
-        });
-        smoothedLevelsRef.current = smoothed;
-        setLevels(smoothed.slice(0, WAVE_BARS));
+        levelsRef.current = event.payload;
       });
 
       const unlistenStream = await events.streamTextEvent.listen((event) => {
@@ -220,6 +227,78 @@ const RecordingOverlay: React.FC = () => {
     setupEventListeners();
   }, []);
 
+  // One loop, once per screen refresh, eases the waveform toward the latest mic
+  // levels and animates the owl. Writing styles directly (no re-render, no CSS
+  // transition restarted by every level event) is what keeps it smooth.
+  useEffect(() => {
+    if (!isVisible || state === "suggestion") return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const shown = Array(WAVE_BARS).fill(0);
+    let last = performance.now();
+    let voice = 0;
+    let lid = 0;
+    let blinkAt = last + rand(1500, 4000);
+    let glanceAt = last + rand(2500, 5000);
+    let glanceEnd = 0;
+    let look = { x: 0, y: 0 };
+    const eye = { x: 0, y: 0 };
+    // Moves `from` toward `to`, `rate` per second, frame-rate independent.
+    const ease = (from: number, to: number, rate: number, dt: number) =>
+      from + (to - from) * (1 - Math.exp(-rate * dt));
+
+    let raf = requestAnimationFrame(function tick(now) {
+      const dt = Math.min(now - last, 100) / 1000;
+      last = now;
+      const { ready, working } = motionRef.current;
+
+      // Waveform: rise fast, fall slowly, so bars flow instead of flickering,
+      // plus a slow ripple so a pause never looks frozen.
+      let loudest = 0;
+      for (let i = 0; i < WAVE_BARS; i++) {
+        const target = ready ? levelsRef.current[i] || 0 : 0;
+        shown[i] = ease(shown[i], target, target > shown[i] ? 18 : 5, dt);
+        loudest = Math.max(loudest, shown[i]);
+        const ripple = still ? 1 : 1 + 0.12 * Math.sin(now / 220 - i * 0.6);
+        const level =
+          (0.3 + Math.pow(shown[i], 0.7) * 0.6 * WAVE_ENVELOPE[i]) * ripple;
+        const bar = barsRef.current[i];
+        if (bar) bar.style.transform = `scaleY(${Math.min(1, level)})`;
+      }
+
+      // Owl: sleepy until the mic is live, blinks now and then, glances around
+      // while you're quiet, looks side to side while transcribing.
+      voice = ease(voice, loudest, 10, dt);
+      let lidTarget = ready || working ? 0 : 0.5;
+      if (!still && now >= blinkAt) {
+        const t = (now - blinkAt) / 200;
+        if (t < 1) lidTarget = Math.max(lidTarget, 1 - Math.abs(2 * t - 1));
+        else blinkAt = now + (Math.random() < 0.2 ? 150 : rand(2500, 6000));
+      }
+      lid = ease(lid, lidTarget, 40, dt);
+      if (working) {
+        look = { x: still ? 0 : 0.06 * Math.sin(now / 450), y: 0 };
+      } else if (!still && voice < 0.15 && now >= glanceAt) {
+        look = { x: rand(-0.06, 0.06), y: rand(-0.03, 0.03) };
+        glanceEnd = now + rand(600, 1400);
+        glanceAt = now + rand(3000, 7000);
+      } else if (now >= glanceEnd || voice >= 0.15) {
+        look = { x: 0, y: 0 };
+      }
+      eye.x = ease(eye.x, look.x, 12, dt);
+      eye.y = ease(eye.y, look.y, 12, dt);
+
+      const breath = still ? 1 : 1 + 0.025 * Math.sin(now / 600);
+      if (owlRef.current)
+        owlRef.current.style.transform = `translateY(${-voice * 1.5}px) scale(${breath})`;
+      if (pupilsRef.current)
+        pupilsRef.current.style.transform = `translate(${eye.x * 100}%, ${eye.y * 100}%)`;
+      if (lidRef.current) lidRef.current.style.transform = `scaleY(${lid})`;
+
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [isVisible, state]);
+
   // Elapsed capture timer starts only once microphone samples are flowing.
   useEffect(() => {
     if (state !== "streaming" || !isVisible || !captureReady) return;
@@ -249,6 +328,14 @@ const RecordingOverlay: React.FC = () => {
     setOverflowing(false);
   }, [session]);
 
+  motionRef.current = {
+    ready: captureReady,
+    working:
+      state === "transcribing" ||
+      state === "processing" ||
+      (state === "streaming" && phase === "working"),
+  };
+
   if (!isVisible) return null;
 
   // Re-pin when the user is within ~a line of the bottom; unpin otherwise.
@@ -268,16 +355,30 @@ const RecordingOverlay: React.FC = () => {
   // ---- Shared building blocks (one visual language for every overlay form) ----
   const waveform = (
     <div className={`swave ${captureReady ? "ready" : "arming"}`}>
-      {levels.map((v, i) => (
+      {Array.from({ length: WAVE_BARS }, (_, i) => (
         <i
           key={i}
-          style={{
-            // Max 0.8: the idle ripple (x1.25 in the CSS) must stay inside the pill.
-            transform: `scaleY(${Math.min(0.8, 0.3 + Math.pow(v, 0.7) * 0.5 * WAVE_ENVELOPE[i])})`,
+          ref={(el) => {
+            barsRef.current[i] = el;
           }}
         />
       ))}
     </div>
+  );
+
+  // The menu-bar owl: body, then pupils and lids clipped to the eye openings.
+  const owl = (
+    <span className="sowl" ref={owlRef} aria-hidden="true">
+      <span className="sowl-layer" style={mask(owlBody)} />
+      <span className="sowl-layer sowl-eyes" style={mask(owlEyes)}>
+        <span
+          className="sowl-layer sowl-ink"
+          ref={pupilsRef}
+          style={mask(owlPupils)}
+        />
+        <span className="sowl-layer sowl-ink sowl-lid" ref={lidRef} />
+      </span>
+    </span>
   );
 
   const cancelBtn = (
@@ -297,7 +398,7 @@ const RecordingOverlay: React.FC = () => {
     </button>
   );
 
-  // cancel (left) | waveform (center) | timer + dot (right) — same structure
+  // cancel (left) | waveform (center) | timer + owl (right) — same structure
   // for pill & panel, so the Live morph is a pure width change.
   const listeningRow = (showTimer: boolean, showCancel: boolean) => (
     <div className="sbase">
@@ -305,20 +406,18 @@ const RecordingOverlay: React.FC = () => {
       {waveform}
       <div className="sbase-r">
         {showTimer && <span className="stimer">{fmtTime(elapsed)}</span>}
-        <span className={`sdot ${captureReady ? "ready" : "arming"}`} />
+        {owl}
       </div>
     </div>
   );
 
-  // cancel (left) | label (center) | spinner (right) — same 3-zone grid as the
-  // listening row, so the cancel button stays put and the label is centered.
+  // cancel (left) | label (center) | owl (right) — same 3-zone grid as the
+  // listening row, so the cancel button and owl stay put and the label is centered.
   const workingRow = (label: string, showCancel: boolean) => (
     <div className="sbase">
       <div className="sbase-l">{showCancel && cancelBtn}</div>
       <span className="swork-label">{label}</span>
-      <div className="sbase-r">
-        <span className="sspinner" />
-      </div>
+      <div className="sbase-r">{owl}</div>
     </div>
   );
 

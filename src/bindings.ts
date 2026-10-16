@@ -1105,6 +1105,12 @@ async changeMeetingDetectionSetting(enabled: boolean) : Promise<Result<null, str
 async showMeetingWindow() : Promise<void> {
     await TAURI_INVOKE("show_meeting_window");
 },
+/**
+ * Resume on "Meeting finished": the meeting carries on (`meeting_detect.rs`).
+ */
+async resumeMeeting() : Promise<void> {
+    await TAURI_INVOKE("resume_meeting");
+},
 async acceptEditSuggestion(suggestion: Replacement) : Promise<void> {
     await TAURI_INVOKE("accept_edit_suggestion", { suggestion });
 },

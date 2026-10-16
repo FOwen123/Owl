@@ -31,10 +31,27 @@ body {
   }
 }
 
-/* "In a call?": the dictionary card, its edge a plain border (it has no
-   countdown ring). */
+/* The meeting cards: icon, question, button, X. The X sits as far in from
+   the right end as the icon from the left; buttons share a width, so the two
+   cards line up when one follows the other. Wider than the dictionary card
+   (CARD_WIDTH in MeetingWindow.tsx), so "Meeting finished?" fits. */
 .scard.ssug.mw-ask {
-  border: 1px solid var(--s-border);
+  width: 320px;
+  padding: 0 16px 0 10px;
+}
+.mw-ask-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mw-ask-btn {
+  flex: none;
+  min-width: 84px;
 }
 
 /* Each new line arrives out of a slight blur. */

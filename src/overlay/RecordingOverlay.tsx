@@ -24,9 +24,12 @@ type OverlayState =
   | "processing"
   | "suggestion";
 
-// The suggestion card's edge (300x52 pill, 1px in so a 2px stroke stays
-// inside), starting at the top center and running clockwise.
-const RING = "M150 1H274A25 25 0 0 1 274 51H26A25 25 0 0 1 26 1Z";
+// A card's edge (a `width`x52 pill, 1px in so a 2px stroke stays inside),
+// starting at the top center and running clockwise.
+export const ring = (width: number) =>
+  `M${width / 2} 1H${width - 26}A25 25 0 0 1 ${width - 26} 51H26A25 25 0 0 1 26 1Z`;
+// The suggestion card is 300 wide.
+const RING = ring(300);
 
 // Owl learn-from-edits: a fix offered with a countdown (correction_watch.rs).
 interface EditSuggestion {

@@ -820,9 +820,12 @@
       "learnDescription": "Adds words you correct after dictating to your dictionary."
     },
     "meetingWindow": {
-      "ask": "In a call?",
+      "ask": "In a meeting?",
       "notNow": "Not now",
-      "takeNotes": "Take notes"
+      "takeNotes": "Take notes",
+      "ended": "Meeting finished?",
+      "finishNow": "Finish now",
+      "resume": "Resume"
     },
     "notetaker": {
       "detectLabel": "Ask when a call starts",

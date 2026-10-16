@@ -4,18 +4,29 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { NotebookPen, Square } from "lucide-react";
 import { toast, Toaster } from "sonner";
-import { commands, type Meeting } from "@/bindings";
+import { commands, type Meeting, type Result } from "@/bindings";
 import { Button } from "@/components/ui/Button";
 import { clock } from "@/components/owl/NotetakerPage";
 import { useSpeakerLabel } from "@/components/owl/MeetingSpeakers";
+import { ring } from "@/overlay/RecordingOverlay";
 import { syncLanguageFromSettings } from "@/i18n";
 import { getLanguageDirection } from "@/lib/utils/rtl";
 
-type Mode = "prompt" | "live";
+type Mode = "prompt" | "live" | "ended";
+
+/** The cards' width (`.mw-ask` in meeting.css). */
+const CARD_WIDTH = 320;
+const RING = ring(CARD_WIDTH);
+/** How long "In a meeting?" waits before going away by itself. */
+const ASK_SECONDS = 15;
+/** How long "Meeting finished" waits for Resume (GRACE in meeting_detect.rs). */
+const ENDED_SECONDS = 8;
 
 /** The floating notetaker window (meeting_window.rs). */
 export const MeetingWindow: React.FC = () => {
   const [mode, setMode] = useState<Mode | null>(null);
+  // Counts each time Rust shows the window, so a card's countdown starts over.
+  const [shows, setShows] = useState(0);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
 
   // Replies can arrive out of order; only the newest request's counts.
@@ -35,6 +46,7 @@ export const MeetingWindow: React.FC = () => {
       listen<Mode>("meeting-window-mode", async (e) => {
         await syncLanguageFromSettings();
         setMode(e.payload);
+        setShows((n) => n + 1);
       }),
       listen("app-language-changed", syncLanguageFromSettings),
     ];
@@ -51,22 +63,65 @@ export const MeetingWindow: React.FC = () => {
         recording ? (
           <Live meeting={recording} />
         ) : null
+      ) : shown === "ended" ? (
+        <Ended key={shows} />
       ) : (
-        <Prompt />
+        <Prompt key={shows} />
       )}
       <Toaster theme="system" position="bottom-center" />
     </>
   );
 };
 
-/** "In a call?", styled as the overlay's "Adding to dictionary" card. */
+/** "In a meeting?", styled as the overlay's "Adding to dictionary" card. */
 const Prompt: React.FC = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const hide = () => getCurrentWindow().hide();
+  return (
+    <Card
+      text={t("owl.meetingWindow.ask")}
+      action={t("owl.meetingWindow.takeNotes")}
+      onAction={commands.startMeeting}
+      close={t("owl.meetingWindow.notNow")}
+      onClose={hide}
+      seconds={ASK_SECONDS}
+      onDone={hide}
+    />
+  );
+};
+
+/** The call ended: the notes stop soon, unless this was a false alarm. */
+const Ended: React.FC = () => {
+  const { t } = useTranslation();
+  return (
+    <Card
+      text={t("owl.meetingWindow.ended")}
+      action={t("owl.meetingWindow.resume")}
+      onAction={commands.resumeMeeting}
+      close={t("owl.meetingWindow.finishNow")}
+      onClose={commands.stopMeeting}
+      seconds={ENDED_SECONDS}
+    />
+  );
+};
+
+/** Icon, question, a button and X, the edge counting down `seconds` like
+ * the dictionary card's. */
+const Card: React.FC<{
+  text: string;
+  action: string;
+  onAction: () => Promise<Result<unknown, string> | void>;
+  close: string;
+  onClose: () => unknown;
+  seconds: number;
+  onDone?: () => void;
+}> = ({ text, action, onAction, close, onClose, seconds, onDone }) => {
+  const { i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
-  const start = async () => {
+  const act = async () => {
     setBusy(true);
-    const result = await commands.startMeeting();
-    if (result.status === "error") toast.error(result.error);
+    const result = await onAction();
+    if (result?.status === "error") toast.error(result.error);
     setBusy(false);
   };
   return (
@@ -75,19 +130,11 @@ const Prompt: React.FC = () => {
         <span className="ssug-book" aria-hidden="true">
           <NotebookPen />
         </span>
-        <div className="ssug-text">
-          <span className="ssug-pair">
-            <span className="ssug-to">{t("owl.meetingWindow.ask")}</span>
-          </span>
-        </div>
-        <Button size="sm" disabled={busy} onClick={start} className="shrink-0">
-          {t("owl.meetingWindow.takeNotes")}
+        <span className="mw-ask-text">{text}</span>
+        <Button size="sm" disabled={busy} onClick={act} className="mw-ask-btn">
+          {action}
         </Button>
-        <button
-          className="sx"
-          aria-label={t("owl.meetingWindow.notNow")}
-          onClick={() => getCurrentWindow().hide()}
-        >
+        <button className="sx" aria-label={close} onClick={onClose}>
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path
               d="M4 4 L12 12 M12 4 L4 12"
@@ -97,6 +144,20 @@ const Prompt: React.FC = () => {
             />
           </svg>
         </button>
+        <svg
+          className="ssug-ring"
+          viewBox={`0 0 ${CARD_WIDTH} 52`}
+          aria-hidden="true"
+        >
+          <path className="ssug-track" d={RING} pathLength={100} />
+          <path
+            className="ssug-countdown"
+            d={RING}
+            pathLength={100}
+            style={{ animationDuration: `${seconds}s` }}
+            onAnimationEnd={onDone}
+          />
+        </svg>
       </div>
     </div>
   );

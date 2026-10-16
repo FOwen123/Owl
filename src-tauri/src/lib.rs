@@ -861,6 +861,7 @@ pub fn run(cli_args: CliArgs) {
             commands::meetings::download_speaker_model,
             commands::meetings::change_meeting_detection_setting,
             commands::meetings::show_meeting_window,
+            commands::meetings::resume_meeting,
             commands::edits::accept_edit_suggestion,
             commands::edits::dismiss_edit_suggestion,
             commands::edits::change_learn_from_edits_setting,

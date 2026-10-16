@@ -138,6 +138,10 @@ pub fn change_meeting_template_setting(app: AppHandle, template: String) -> Resu
 #[tauri::command]
 #[specta::specta]
 pub fn show_meeting_window(app: AppHandle) {
+    // "Meeting finished?" is up and counting down: leave Resume in reach.
+    if crate::meeting_detect::ending() {
+        return;
+    }
     crate::meeting_window::show(&app, "live");
 }
 

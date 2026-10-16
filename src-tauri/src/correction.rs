@@ -172,7 +172,7 @@ fn shares_context(a: &[String], b: &[String], matched: usize) -> bool {
         && jaro_winkler(&a.concat().to_lowercase(), &b.concat().to_lowercase()) >= MIN_SIMILARITY
 }
 
-// --- English ------------------------------------------------------------
+// --- English -------------------------------------------------------------
 
 fn english_fixes(
     old: &[String],
@@ -470,7 +470,7 @@ mod tests {
         assert_eq!(edited_span("abc", "abc", "missing"), None);
     }
 
-    // --- English -------------------------------------------------------
+    // --- English --------------------------------------------------------
 
     #[test]
     fn similar_spelling_is_a_fix() {

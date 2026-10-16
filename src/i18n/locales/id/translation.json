@@ -898,9 +898,12 @@
       "selectionChanged": "The selection changed while Owl was working, so the edit wasn't pasted."
     },
     "meetingWindow": {
-      "ask": "In a call?",
+      "ask": "In a meeting?",
       "notNow": "Not now",
-      "takeNotes": "Take notes"
+      "takeNotes": "Take notes",
+      "ended": "Meeting finished?",
+      "finishNow": "Finish now",
+      "resume": "Resume"
     }
   }
 }

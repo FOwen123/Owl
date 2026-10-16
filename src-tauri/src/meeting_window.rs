@@ -1,11 +1,12 @@
 //! Owl: the floating notetaker window (`src/meeting/`). During a meeting it
 //! shows the live transcript with Stop always in reach; when a call seems to
-//! start it asks whether to take notes (`meeting_detect.rs`). Like Wispr
-//! Flow's, it's hidden from screen sharing and screen recordings.
+//! start it asks whether to take notes, and when it ends, offers to carry on
+//! (`meeting_detect.rs`). Like Wispr Flow's, it's hidden from screen sharing
+//! and screen recordings.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use tauri::{AppHandle, Emitter, LogicalSize, Manager, WebviewUrl};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewUrl};
 
 use crate::managers::meeting::MeetingManager;
 
@@ -14,8 +15,8 @@ use tauri_nspanel::{
     tauri_panel, CollectionBehavior, ManagerExt, PanelBuilder, PanelLevel, StyleMask,
 };
 
-// A panel, like the recording overlay's, so it can sit over a call that's in
-// full screen; an ordinary window stays on its own desktop.
+// A panel, like the recording overlay's, so its cards can sit over a call
+// that's in full screen; an ordinary window stays on its own desktop.
 #[cfg(target_os = "macos")]
 tauri_panel! {
     panel!(MeetingPanel {
@@ -36,6 +37,10 @@ const MARGIN: f64 = 16.0;
 
 /// Whether a meeting was being recorded at the last `sync`.
 static WAS_RECORDING: AtomicBool = AtomicBool::new(false);
+/// Whether the window shows the transcript (rather than a card).
+static SHOWING_LIVE: AtomicBool = AtomicBool::new(false);
+/// Where the transcript was when "Meeting finished" took its place, for Resume.
+static LIVE_SPOT: Mutex<Option<PhysicalPosition<i32>>> = Mutex::new(None);
 
 /// Builds the window hidden at startup, as the recording overlay does: a
 /// panel built and shown in one go doesn't appear the first time.
@@ -49,19 +54,17 @@ pub fn create(app: &AppHandle) {
     }
 }
 
-/// Shows the window as the live transcript (`live`) or the "Take notes?" prompt.
-pub fn show(app: &AppHandle, live: bool) {
+/// Shows the window as `mode`: the live transcript (`"live"`), the "Take
+/// notes?" card (`"prompt"`) or the "Meeting finished" card (`"ended"`).
+pub fn show(app: &AppHandle, mode: &'static str) {
     // Panels are only safe to build and show from the main thread.
     let handle = app.clone();
-    let _ = app.run_on_main_thread(move || show_on_main(&handle, live));
+    let _ = app.run_on_main_thread(move || show_on_main(&handle, mode));
 }
 
-fn show_on_main(app: &AppHandle, live: bool) {
-    let (mode, height) = if live {
-        ("live", LIVE_HEIGHT)
-    } else {
-        ("prompt", PROMPT_HEIGHT)
-    };
+fn show_on_main(app: &AppHandle, mode: &'static str) {
+    let live = mode == "live";
+    let height = if live { LIVE_HEIGHT } else { PROMPT_HEIGHT };
     if app.get_webview_window(LABEL).is_some() {
         let _ = app.emit_to(LABEL, "meeting-window-mode", mode);
     } else if let Err(e) = build(app, height) {
@@ -70,26 +73,70 @@ fn show_on_main(app: &AppHandle, live: bool) {
     let Some(window) = app.get_webview_window(LABEL) else {
         return;
     };
+    if mode == "ended" && SHOWING_LIVE.load(Ordering::SeqCst) {
+        *LIVE_SPOT.lock().unwrap() = window.outer_position().ok();
+    }
+    SHOWING_LIVE.store(live, Ordering::SeqCst);
     let _ = window.set_size(LogicalSize::new(WIDTH, height));
-    // The question sits where dictation's overlay does; the transcript top right.
+    // The cards sit where dictation's overlay does; the transcript top right,
+    // or back where it was before "Meeting finished".
+    let back = live.then(|| LIVE_SPOT.lock().unwrap().take()).flatten();
     let spot = if live {
         top_right(app)
     } else {
         crate::overlay::calculate_overlay_position(app, WIDTH, height)
     };
-    if let Some((x, y)) = spot {
+    if let Some(at) = back {
+        let _ = window.set_position(at);
+    } else if let Some((x, y)) = spot {
         let _ = window.set_position(tauri::LogicalPosition::new(x, y));
     }
-    // Ordering the panel front leaves a full-screen call on screen; a plain
-    // show would switch to Owl's desktop.
     #[cfg(target_os = "macos")]
     if let Ok(panel) = app.get_webview_panel(LABEL) {
-        return panel.show();
+        // The cards float over everything, on every desktop. The transcript
+        // is an ordinary window, like Wispr Flow's: it joins every desktop
+        // just long enough to open on this one, then stays there, so it can
+        // be moved to another.
+        let level = if live {
+            PanelLevel::Normal
+        } else {
+            PanelLevel::Status
+        };
+        panel.set_level(level.value());
+        panel.set_collection_behavior(every_desktop().value());
+        // Ordering the panel front leaves a full-screen call on screen; a
+        // plain show would switch to Owl's desktop.
+        panel.show();
+        if live {
+            let handle = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                let main = handle.clone();
+                let _ = handle.run_on_main_thread(move || {
+                    if !SHOWING_LIVE.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    if let Ok(panel) = main.get_webview_panel(LABEL) {
+                        let one = CollectionBehavior::new().managed().full_screen_auxiliary();
+                        panel.set_collection_behavior(one.value());
+                    }
+                });
+            });
+        }
+        return;
     }
     let _ = window.show();
 }
 
+#[cfg(target_os = "macos")]
+fn every_desktop() -> CollectionBehavior {
+    CollectionBehavior::new()
+        .can_join_all_spaces()
+        .full_screen_auxiliary()
+}
+
 pub fn hide(app: &AppHandle) {
+    LIVE_SPOT.lock().unwrap().take();
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         #[cfg(target_os = "macos")]
@@ -110,7 +157,7 @@ pub fn sync(app: &AppHandle) {
         .is_some_and(|m| m.active_id().is_some());
     if WAS_RECORDING.swap(recording, Ordering::SeqCst) != recording {
         if recording {
-            show(app, true);
+            show(app, "live");
         } else {
             hide(app);
         }
@@ -140,11 +187,7 @@ fn build(app: &AppHandle, height: f64) -> tauri::Result<()> {
         // Clicks work without taking focus from the call.
         .no_activate(true)
         .style_mask(StyleMask::empty().borderless().nonactivating_panel())
-        .collection_behavior(
-            CollectionBehavior::new()
-                .can_join_all_spaces()
-                .full_screen_auxiliary(),
-        )
+        .collection_behavior(every_desktop())
         .with_window(|w| {
             w.decorations(false)
                 .transparent(true)

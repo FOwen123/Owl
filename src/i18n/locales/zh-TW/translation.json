@@ -900,7 +900,10 @@
     "meetingWindow": {
       "ask": "在開會嗎？",
       "notNow": "先不用",
-      "takeNotes": "做筆記"
+      "takeNotes": "做筆記",
+      "ended": "會議結束了？",
+      "finishNow": "現在結束",
+      "resume": "繼續"
     }
   }
 }

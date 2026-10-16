@@ -656,6 +656,10 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
         }
         times_ms.push(t.elapsed().as_millis() as u64);
     }
+    let post_processed = args.post_process.then(|| {
+        tauri::async_runtime::block_on(actions::process_transcription_output(app, &text, true))
+            .final_text
+    });
     let best_ms = times_ms.iter().copied().min().unwrap_or(0);
     let rtf = if best_ms > 0 {
         audio_secs / (best_ms as f64 / 1000.0)
@@ -676,6 +680,7 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
                 "best_ms": best_ms,
                 "rtf": rtf,
                 "text": text,
+                "post_processed": post_processed,
             })
         );
     } else {
@@ -690,6 +695,9 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
             rtf,
         );
         println!("text: {}", text);
+        if let Some(post_processed) = &post_processed {
+            println!("post_processed: {}", post_processed);
+        }
     }
     0
 }

@@ -34,6 +34,8 @@ const GRACE: Duration = Duration::from_secs(8);
 
 /// The meeting being recorded, as far as its call goes.
 struct Watch {
+    /// Which meeting; a new one starts the watch over.
+    id: Option<i64>,
     /// A call has been on the microphone: only then can it ending stop the
     /// notes (an in-person meeting never stops by itself).
     in_call: bool,
@@ -43,11 +45,14 @@ struct Watch {
     ending: Option<Instant>,
 }
 
-static WATCH: Mutex<Watch> = Mutex::new(Watch {
+const IDLE: Watch = Watch {
+    id: None,
     in_call: false,
     off: 0,
     ending: None,
-});
+};
+
+static WATCH: Mutex<Watch> = Mutex::new(IDLE);
 
 pub fn start(app: AppHandle) {
     std::thread::spawn(move || {
@@ -57,16 +62,12 @@ pub fn start(app: AppHandle) {
         loop {
             std::thread::sleep(POLL);
             let meetings = app.state::<Arc<MeetingManager>>();
-            if meetings.active_id().is_some() {
+            if let Some(id) = meetings.active_id() {
                 held = ASK_AFTER;
-                watch_end(&app, &meetings);
+                watch_end(&app, &meetings, id);
                 continue;
             }
-            *WATCH.lock().unwrap() = Watch {
-                in_call: false,
-                off: 0,
-                ending: None,
-            };
+            *WATCH.lock().unwrap() = IDLE;
             if !get_settings(&app).meeting_detection {
                 // Turned off while asking: take the question away and start
                 // fresh, so the next call is asked about once it's on again.
@@ -76,7 +77,7 @@ pub fn start(app: AppHandle) {
                 held = 0;
                 continue;
             }
-            if call_on_mic() {
+            if call_on_mic(false) {
                 held += 1;
                 if held == ASK_AFTER {
                     meeting_window::show(&app, "prompt");
@@ -94,8 +95,20 @@ pub fn start(app: AppHandle) {
 
 /// Shows "Meeting finished" once the call has been off a few polls, and
 /// stops the notes when nobody pressed Resume in time.
-fn watch_end(app: &AppHandle, meetings: &Arc<MeetingManager>) {
-    let on = call_on_mic();
+fn watch_end(app: &AppHandle, meetings: &Arc<MeetingManager>, id: i64) {
+    let in_call = {
+        let mut watch = WATCH.lock().unwrap();
+        // Stopped and started again between polls: the old meeting's watch
+        // doesn't carry over.
+        if watch.id != Some(id) {
+            *watch = Watch {
+                id: Some(id),
+                ..IDLE
+            };
+        }
+        watch.in_call
+    };
+    let on = call_on_mic(in_call);
     let mut watch = WATCH.lock().unwrap();
     if on {
         watch.in_call = true;
@@ -120,6 +133,11 @@ fn watch_end(app: &AppHandle, meetings: &Arc<MeetingManager>) {
             meeting_window::show(app, "ended");
         }
     }
+}
+
+/// Whether "Meeting finished" is up, counting down.
+pub fn ending() -> bool {
+    WATCH.lock().unwrap().ending.is_some()
 }
 
 /// Resume on "Meeting finished": the notes carry on, and stop by themselves
@@ -171,10 +189,12 @@ fn one_of(list: &[&str], bundle: &str) -> bool {
 }
 
 /// Whether a call is on the microphone.
-fn call_on_mic() -> bool {
+/// `in_call`: a call is being recorded, so any browser on the microphone
+/// still counts; another tab shown over the call hides its title.
+fn call_on_mic(in_call: bool) -> bool {
     let holders = mic_holders();
     holders.iter().any(|b| one_of(CALL_APPS, b))
-        || (holders.iter().any(|b| one_of(BROWSERS, b)) && call_tab_open())
+        || (holders.iter().any(|b| one_of(BROWSERS, b)) && (in_call || call_tab_open()))
 }
 
 /// Lowercase bundle ids of the apps recording from a microphone.

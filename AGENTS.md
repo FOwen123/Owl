@@ -15,6 +15,7 @@ This repo is **Owl**, a personal fork of [Handy](https://github.com/cjpais/Handy
 - **UI without the backend:** `bun run dev`, then open `http://localhost:1420/?mock` (`src/dev/mockBackend.ts`, dev builds only). Add fake responses there when a page needs them.
 - **Translations:** every new key goes into all locales (`bun run check:translations` fails otherwise). Write real `en`, `zh` and `zh-TW` strings; other locales get the English text.
 - **Logo and icons:** one hand-drawn source, `scripts/owl-icons/owl-source.png`. `swift scripts/owl-icons/build-icons.swift` writes the in-app mark (`src/assets/owl-mark.png`), the menu-bar icons (`src-tauri/resources/*.png`) and `/tmp/owl-app-icon.png`; then run `bun run tauri icon /tmp/owl-app-icon.png`.
+- **Dictation eval:** `scripts/eval/` scores a build on the owner's past Wispr Flow dictations (`build_set.py` once, then `run.py BINARY NAME`, then `compare.py OLD NEW`). Clips, keys and results live in `~/Documents/Projects/Owl-evals/`, never in git.
 - **Before calling a change done:** `bun run lint`, `bunx tsc --noEmit`, `bun run check:translations`, `cd src-tauri && cargo test && cargo clippy`.
 
 ## Development Commands

@@ -16,7 +16,8 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::thread;
 use transcribe_cpp::{
-    Backend, BackendMask, DeviceType, Feature, Model, ModelOptions, Session, Stream,
+    Backend, BackendMask, DeviceType, Error, Feature, Model, ModelOptions, RunOptions, Session,
+    Stream, Transcript,
 };
 
 /// Prefix on worker log lines so the parent can tell them apart from raw
@@ -115,7 +116,7 @@ pub fn run() -> i32 {
             Request::Run { options } => match session.as_mut() {
                 Some((session, info)) => {
                     inject_fault("run", info.on_gpu);
-                    match session.run(&pcm, &options) {
+                    match run_in_parts(session, &pcm, &options) {
                         Ok(transcript) => Response::Transcript(transcript),
                         Err(e) => Response::Error(e.to_string()),
                     }
@@ -250,6 +251,70 @@ fn serve_stream(
 
 fn not_loaded() -> Response {
     Response::Error("no model loaded".to_string())
+}
+
+/// Below this many samples (5 s at 16 kHz) a part is not split again.
+const MIN_PART: usize = 80_000;
+
+/// Owl: Qwen3-ASR can fall into a loop on a long clip (a 47 s dictation
+/// stopped after its first 76 tokens) while each half decodes fine. So a
+/// decode that loops or runs out of budget is retried in two halves, split at
+/// the quietest moment near the middle. A part too short to split keeps the
+/// text decoded before the loop.
+fn run_in_parts(
+    session: &mut Session,
+    pcm: &[f32],
+    options: &RunOptions,
+) -> Result<Transcript, Error> {
+    match session.run(pcm, options) {
+        Err(e @ (Error::OutputRepetition { .. } | Error::OutputTruncated { .. })) => {
+            if pcm.len() < 2 * MIN_PART {
+                warn!("Decode stopped early on a short part; keeping the partial transcript");
+                return e.partial().cloned().ok_or(e);
+            }
+            warn!("Decode stopped early ({e}); retrying in two halves");
+            let mid = quietest_near_middle(pcm);
+            let first = run_in_parts(session, &pcm[..mid], options)?;
+            let second = run_in_parts(session, &pcm[mid..], options)?;
+            Ok(Transcript {
+                text: join_parts(&first.text, &second.text),
+                raw_text: join_parts(&first.raw_text, &second.raw_text),
+                language: first.language,
+                // Timings and rows would be relative to each half; no caller
+                // of a batch run reads them.
+                ..Default::default()
+            })
+        }
+        other => other,
+    }
+}
+
+/// The start of the quietest 100 ms window in the middle third of `pcm`.
+fn quietest_near_middle(pcm: &[f32]) -> usize {
+    const WINDOW: usize = 1_600;
+    (pcm.len() / 3..2 * pcm.len() / 3 - WINDOW)
+        .step_by(WINDOW / 2)
+        .min_by(|&a, &b| {
+            let energy = |i: usize| pcm[i..i + WINDOW].iter().map(|x| x * x).sum::<f32>();
+            energy(a).total_cmp(&energy(b))
+        })
+        .unwrap_or(pcm.len() / 2)
+}
+
+/// Joins two transcript parts, without a space between Chinese or Japanese
+/// characters.
+fn join_parts(a: &str, b: &str) -> String {
+    let (a, b) = (a.trim_end(), b.trim_start());
+    let cjk = |c: Option<char>| {
+        c.is_some_and(|c| {
+            ('\u{2E80}'..='\u{9FFF}').contains(&c) || ('\u{FF00}'..='\u{FFEF}').contains(&c)
+        })
+    };
+    if a.is_empty() || b.is_empty() || cjk(a.chars().last()) || cjk(b.chars().next()) {
+        format!("{a}{b}")
+    } else {
+        format!("{a} {b}")
+    }
 }
 
 fn load(

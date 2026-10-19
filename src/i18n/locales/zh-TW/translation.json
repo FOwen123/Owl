@@ -837,6 +837,7 @@
       "noSpeech": "這段錄音中沒有偵測到說話內容。",
       "copy": "複製逐字稿",
       "copied": "已複製逐字稿",
+      "notesCopied": "筆記已複製",
       "systemAudioMissing": "Owl 無法收到系統音訊，所以這份逐字稿只有你的麥克風。請到「系統設定 → 隱私權與安全性 → 螢幕與系統音訊錄製」允許 Owl。",
       "micFailed": "會議中麥克風中斷了，部分內容可能遺失。",
       "speakerNumbered": "說話者 {{n}}",

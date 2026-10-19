@@ -519,7 +519,25 @@ const MeetingDetail: React.FC<{
         <SettingsGroup title={t("owl.notetaker.notes")}>
           <div className="p-4 space-y-3">
             {meeting.summary && (
-              <MarkdownContent markdown={fillSpeakers(meeting.summary)} />
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <MarkdownContent markdown={fillSpeakers(meeting.summary)} />
+                </div>
+                <button
+                  type="button"
+                  aria-label={t("common.copy")}
+                  title={t("common.copy")}
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(
+                      fillSpeakers(meeting.summary ?? ""),
+                    );
+                    toast.success(t("owl.notetaker.notesCopied"));
+                  }}
+                  className="text-mid-gray hover:text-text cursor-pointer"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
             )}
             <div className="flex flex-wrap items-center gap-2">
               <Dropdown

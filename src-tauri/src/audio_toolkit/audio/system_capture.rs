@@ -124,6 +124,7 @@ unsafe extern "C-unwind" fn io_proc(
     if first.mData.is_null() {
         return 0;
     }
+    let mut lost = 0;
     if buffers.len() == 1 {
         // Interleaved (or mono): one buffer with every channel.
         let channels = first.mNumberChannels.max(1) as usize;
@@ -136,7 +137,7 @@ unsafe extern "C-unwind" fn io_proc(
                 .push(frame.iter().sum::<f32>() / channels as f32)
                 .is_err()
             {
-                callback.lost.fetch_add(1, Ordering::Relaxed);
+                lost += 1;
             }
         }
     } else {
@@ -150,9 +151,12 @@ unsafe extern "C-unwind" fn io_proc(
                 }
             }
             if producer.push(sum / buffers.len() as f32).is_err() {
-                callback.lost.fetch_add(1, Ordering::Relaxed);
+                lost += 1;
             }
         }
+    }
+    if lost > 0 {
+        callback.lost.fetch_add(lost, Ordering::Relaxed);
     }
     0
 }

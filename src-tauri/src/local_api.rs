@@ -24,6 +24,8 @@ const MAX_HEADERS: usize = 16 * 1024;
 const DEADLINE: Duration = Duration::from_secs(20);
 /// Longer audio is refused while it's decoded.
 const MAX_SECONDS: usize = 60 * 60;
+/// Connections waiting while one is answered; more get a 503.
+const QUEUE: usize = 4;
 
 /// The running server: its stop flag, its address, and word that its
 /// listener has closed.
@@ -70,7 +72,8 @@ pub fn sync(app: &AppHandle) -> Result<()> {
 }
 
 /// Answers connections on `listener` one at a time, on its own thread,
-/// until `stop_server`.
+/// until `stop_server`. Accepting runs on a second thread, so stopping frees
+/// the port at once even while a request is still being answered.
 fn start_server(
     listener: TcpListener,
     handle: impl Fn(TcpStream) + Send + 'static,
@@ -78,6 +81,16 @@ fn start_server(
     let stop = Arc::new(AtomicBool::new(false));
     let (closed, closed_rx) = mpsc::channel();
     let addr = listener.local_addr()?;
+    let (queue, waiting) = mpsc::sync_channel::<TcpStream>(QUEUE);
+    let stop_flag = stop.clone();
+    std::thread::spawn(move || {
+        for stream in waiting {
+            if stop_flag.load(Ordering::SeqCst) {
+                break;
+            }
+            handle(stream);
+        }
+    });
     let stop_flag = stop.clone();
     std::thread::spawn(move || {
         for stream in listener.incoming() {
@@ -85,7 +98,11 @@ fn start_server(
                 break;
             }
             if let Ok(stream) = stream {
-                handle(stream);
+                if let Err(mpsc::TrySendError::Full(mut stream)) = queue.try_send(stream) {
+                    let _ = stream.write_all(
+                        b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    );
+                }
             }
         }
         drop(listener);
@@ -99,12 +116,12 @@ fn start_server(
 }
 
 /// Stops the server and waits for its port to be free, so the API can be
-/// turned on again at once; a request still being answered is let go after
-/// three seconds.
+/// turned on again at once. A request already being answered finishes on
+/// its own.
 fn stop_server(server: Server) {
     server.stop.store(true, Ordering::SeqCst);
     let _ = TcpStream::connect(server.addr); // wakes the waiting accept
-    let _ = server.closed.recv_timeout(Duration::from_secs(3));
+    let _ = server.closed.recv_timeout(Duration::from_secs(1));
 }
 
 fn new_token() -> Result<String> {
@@ -496,7 +513,18 @@ Content-Type: multipart/form-data; boundary=b\r\nContent-Length: 999999999999\r\
     fn the_port_is_free_as_soon_as_the_server_stops() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        stop_server(start_server(listener, |_| {}).unwrap());
+        // A request still being answered doesn't hold the port.
+        let server =
+            start_server(listener, |_| std::thread::sleep(Duration::from_secs(5))).unwrap();
+        let _busy = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        let started = Instant::now();
+        stop_server(server);
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "{:?}",
+            started.elapsed()
+        );
         TcpListener::bind(("127.0.0.1", port)).expect("the old listener has closed");
     }
 

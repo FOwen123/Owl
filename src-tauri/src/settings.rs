@@ -2,10 +2,9 @@ use log::{debug, warn};
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use specta::Type;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
 
@@ -426,6 +425,11 @@ impl std::ops::DerefMut for SecretMap {
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
 #[serde(default)]
 pub struct AppSettings {
+    /// Owl: these settings as `get_settings` read them, so `write_settings`
+    /// can tell which fields the caller changed. Never stored.
+    #[serde(skip)]
+    #[specta(skip)]
+    pub read_as: Option<Arc<serde_json::Value>>,
     /// Internal settings schema marker for one-time migrations. Fresh installs
     /// start at the current version; existing stores missing this key are
     /// treated as version 0 and migrated forward.
@@ -1042,6 +1046,7 @@ pub fn get_default_settings() -> AppSettings {
     );
 
     AppSettings {
+        read_as: None,
         settings_schema_version: default_settings_schema_version(),
         bindings,
         shortcut_activation: ShortcutActivation::default(),
@@ -1158,12 +1163,6 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
     settings
 }
 
-thread_local! {
-    /// Owl: what this thread last read, so `write_settings` can tell which
-    /// fields its caller changed.
-    static LAST_READ: RefCell<Option<AppSettings>> = const { RefCell::new(None) };
-}
-
 /// Owl: one writer at a time; see `write_settings`.
 static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -1217,7 +1216,7 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
         store.set("settings", serde_json::to_value(&settings).unwrap());
     }
 
-    LAST_READ.with(|last| *last.borrow_mut() = Some(settings.clone()));
+    settings.read_as = Some(Arc::new(serde_json::to_value(&settings).unwrap()));
     settings
 }
 
@@ -1540,10 +1539,11 @@ pub fn dismiss_edit_suggestion(settings: &mut AppSettings, suggestion: &Replacem
 }
 
 /// Owl: one writer at a time, and only the fields the caller changed since
-/// its thread last read are written. Every caller reads, changes a field and
-/// writes back, so a write from another thread in between (a learned fix, a
-/// menu click) would otherwise be undone.
-pub fn write_settings(app: &AppHandle, settings: AppSettings) {
+/// it read are written. Every caller reads, changes a field and writes back,
+/// so a write from another thread in between (a learned fix, a menu click)
+/// would otherwise be undone. Settings not from `get_settings` (a reset to
+/// defaults) are written whole.
+pub fn write_settings(app: &AppHandle, mut settings: AppSettings) {
     let store = app
         .store(crate::portable::store_path(SETTINGS_STORE_PATH))
         .expect("Failed to initialize store");
@@ -1551,11 +1551,9 @@ pub fn write_settings(app: &AppHandle, settings: AppSettings) {
     let one_writer = WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let new = serde_json::to_value(&settings).unwrap();
     let previous = store.get("settings");
-    let base = LAST_READ.with(|last| last.borrow_mut().take());
+    let base = settings.read_as.take();
     let value = match (base, previous.clone()) {
-        (Some(base), Some(current)) => {
-            merge_changed(&serde_json::to_value(&base).unwrap(), new, current)
-        }
+        (Some(base), Some(current)) => merge_changed(&base, new, current),
         _ => new,
     };
     // The menu bar shows a few settings; it's rebuilt only when one changed.
@@ -1569,22 +1567,34 @@ pub fn write_settings(app: &AppHandle, settings: AppSettings) {
 }
 
 /// `new` as the caller wants it, over `current` as the store has it: only
-/// the fields that differ from `base` (what the caller read) are taken from
-/// `new`, so fields another thread changed meanwhile survive.
+/// what differs from `base` (what the caller read) is taken from `new`, key
+/// by key down into maps, so changes another thread made meanwhile survive.
 fn merge_changed(
     base: &serde_json::Value,
     new: serde_json::Value,
     current: serde_json::Value,
 ) -> serde_json::Value {
     use serde_json::Value::Object;
+    if *base == new {
+        return current;
+    }
     match (base, new, current) {
-        (Object(base), Object(new), Object(mut current)) => {
-            for (key, value) in new {
-                if base.get(&key) != Some(&value) {
-                    current.insert(key, value);
+        (Object(base), Object(mut new), Object(mut current)) => {
+            let keys: std::collections::BTreeSet<String> =
+                new.keys().chain(current.keys()).cloned().collect();
+            let mut merged = serde_json::Map::new();
+            for key in keys {
+                let (n, c) = (new.remove(&key), current.remove(&key));
+                let kept = match (base.get(&key), n, c) {
+                    (b, n, c) if b == n.as_ref() => c, // the caller left it alone
+                    (Some(b), Some(n), Some(c)) => Some(merge_changed(b, n, c)),
+                    (_, n, _) => n, // the caller set or removed it
+                };
+                if let Some(value) = kept {
+                    merged.insert(key, value);
                 }
             }
-            Object(current)
+            Object(merged)
         }
         (_, new, _) => new,
     }
@@ -1630,6 +1640,14 @@ mod tests {
             json!({ "a": 9, "b": 2, "c": [1] }),
         );
         assert_eq!(merged, json!({ "a": 9, "b": 3, "c": [1], "d": true }));
+        // Maps merge key by key: another thread's edit to one binding
+        // survives this caller's edit to another, and removals stick.
+        let merged = merge_changed(
+            &json!({ "m": { "x": 1, "y": 1, "z": 1 } }),
+            json!({ "m": { "x": 2, "y": 1 } }),
+            json!({ "m": { "x": 1, "y": 5, "z": 1, "w": 1 } }),
+        );
+        assert_eq!(merged, json!({ "m": { "x": 2, "y": 5, "w": 1 } }));
         // Anything but objects is written as given.
         assert_eq!(merge_changed(&json!(1), json!(2), json!(3)), json!(2));
     }

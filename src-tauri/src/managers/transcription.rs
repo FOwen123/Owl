@@ -134,6 +134,9 @@ pub struct StreamRouter {
     /// True while a stream is pending or active (channel is open). The audio
     /// callback checks this first to avoid the mutex lock when no stream runs.
     open: Arc<AtomicBool>,
+    /// Set when the stream is given up (cancelled, or too far behind), so
+    /// the worker stops at its next frame instead of decoding the backlog.
+    abandoned: AtomicBool,
 }
 
 impl StreamRouter {
@@ -141,6 +144,7 @@ impl StreamRouter {
         Self {
             tx: Mutex::new(None),
             open: Arc::new(AtomicBool::new(false)),
+            abandoned: AtomicBool::new(false),
         }
     }
 
@@ -150,6 +154,7 @@ impl StreamRouter {
     fn open(&self) -> mpsc::Receiver<StreamCmd> {
         let (tx, rx) = mpsc::sync_channel::<StreamCmd>(STREAM_QUEUE);
         *self.tx.lock().unwrap() = Some(tx);
+        self.abandoned.store(false, Ordering::Relaxed);
         self.open.store(true, Ordering::Relaxed);
         rx
     }
@@ -182,6 +187,7 @@ impl StreamRouter {
             // The worker hasn't kept up for a minute: stop feeding it, so
             // memory stays bounded; finalize then falls back to batch.
             warn!("Streaming worker is too far behind; abandoning the live stream");
+            self.abandoned.store(true, Ordering::Relaxed);
             self.open.store(false, Ordering::Relaxed);
             *tx = None;
         }
@@ -997,6 +1003,7 @@ impl TranscriptionManager {
 
         while let Ok(cmd) = rx.recv() {
             match cmd {
+                StreamCmd::Feed(_) if self.router.abandoned.load(Ordering::Relaxed) => return,
                 StreamCmd::Feed(pcm) => {
                     self.touch_activity();
                     lock_perf(&perf).record_feed(pcm.len());
@@ -1089,6 +1096,7 @@ impl TranscriptionManager {
         };
         let (reply_tx, reply_rx) = mpsc::channel();
         if tx.try_send(StreamCmd::Finalize(reply_tx)).is_err() {
+            self.router.abandoned.store(true, Ordering::Relaxed);
             return Ok(None);
         }
         let finalized = match reply_rx.recv() {
@@ -1116,6 +1124,7 @@ impl TranscriptionManager {
 
     /// Abandon any active stream without producing text (e.g. on cancel).
     pub fn cancel_stream(&self) {
+        self.router.abandoned.store(true, Ordering::Relaxed);
         if let Some(tx) = self.router.take() {
             let _ = tx.try_send(StreamCmd::Cancel);
         }

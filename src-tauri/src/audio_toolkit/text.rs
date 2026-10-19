@@ -1,6 +1,8 @@
 use natural::phonetics::soundex;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use strsim::levenshtein;
 
 /// Builds an n-gram string by cleaning and concatenating words
@@ -442,18 +444,18 @@ fn builtin_filler_patterns(language: &OutputLanguageEvidence) -> Vec<&'static Re
         words.iter().filter_map(|w| filler_pattern(w)).collect()
     }
     static UNIVERSAL: Lazy<Vec<Regex>> = Lazy::new(|| compile(UNIVERSAL_FILLER_WORDS));
-    static EN: Lazy<Vec<Regex>> = Lazy::new(|| compile(gated_filler_words_for_language("en")));
-    static DE: Lazy<Vec<Regex>> = Lazy::new(|| compile(gated_filler_words_for_language("de")));
-    static FR: Lazy<Vec<Regex>> = Lazy::new(|| compile(gated_filler_words_for_language("fr")));
-    let base = language
+    // Keyed by the word list, so `gated_filler_words_for_language` stays
+    // the one place that maps languages to words.
+    type Cache = HashMap<&'static [&'static str], &'static [Regex]>;
+    static GATED: Lazy<Mutex<Cache>> = Lazy::new(Default::default);
+    let words = language
         .language()
-        .map(|lang| lang.split(['-', '_']).next().unwrap_or(lang));
-    let gated: &'static [Regex] = match base {
-        Some("en") => &EN[..],
-        Some("de") => &DE[..],
-        Some("fr") => &FR[..],
-        _ => &[],
-    };
+        .map_or(&[][..], gated_filler_words_for_language);
+    let gated: &'static [Regex] = GATED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(words)
+        .or_insert_with(|| Box::leak(compile(words).into_boxed_slice()));
     UNIVERSAL.iter().chain(gated).collect()
 }
 

@@ -606,19 +606,25 @@ impl MeetingManager {
     /// Stops recording and transcribes in the background.
     pub fn stop(self: &Arc<Self>) -> Result<()> {
         let mut recording = self.active.lock().unwrap();
-        let Some(current) = recording.as_ref() else {
-            return Err(anyhow!("No meeting is being recorded"));
+        // Nothing to stop. This includes a meeting whose microphone failed
+        // to open: it's being marked failed, and the UI hears of it then.
+        let Some(active) = recording.take() else {
+            return Ok(());
         };
         // Saved before the recording is let go: if the database refuses,
         // the meeting carries on and Stop can be tried again.
-        let duration_ms = current.started.elapsed().as_millis() as i64;
-        self.conn()?.execute(
-            "UPDATE meetings SET status = 'transcribing', duration_ms = ?1 WHERE id = ?2",
-            params![duration_ms, current.id],
-        )?;
-        let Some(active) = recording.take() else {
-            return Err(anyhow!("No meeting is being recorded"));
-        };
+        let duration_ms = active.started.elapsed().as_millis() as i64;
+        let saved = (|| -> Result<()> {
+            self.conn()?.execute(
+                "UPDATE meetings SET status = 'transcribing', duration_ms = ?1 WHERE id = ?2",
+                params![duration_ms, active.id],
+            )?;
+            Ok(())
+        })();
+        if let Err(e) = saved {
+            *recording = Some(active);
+            return Err(e);
+        }
         drop(recording);
         active.stop.store(true, Ordering::Relaxed);
         self.changed();
@@ -1409,10 +1415,12 @@ struct RingSink {
 
 impl handy_recorder::Sink for RingSink {
     fn process_chunk(&mut self, chunk: handy_recorder::AudioChunk<'_>) {
-        for s in &chunk.samples[..chunk.valid_frames] {
-            if self.producer.push(*s).is_err() {
-                self.lost.fetch_add(1, Ordering::Relaxed);
-            }
+        let lost = chunk.samples[..chunk.valid_frames]
+            .iter()
+            .filter(|s| self.producer.push(**s).is_err())
+            .count();
+        if lost > 0 {
+            self.lost.fetch_add(lost, Ordering::Relaxed);
         }
     }
 }

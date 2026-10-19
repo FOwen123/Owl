@@ -17,13 +17,18 @@ export const useMeetings = () => {
         return;
       }
       fetching = true;
-      do {
-        again = false;
-        const result = await commands.getMeetings();
-        if (gone) return;
-        if (result.status === "ok") setMeetings(result.data);
-      } while (again);
-      fetching = false;
+      try {
+        do {
+          again = false;
+          const result = await commands.getMeetings();
+          if (gone) return;
+          if (result.status === "ok") setMeetings(result.data);
+        } while (again);
+      } catch (e) {
+        console.error("Failed to load meetings:", e);
+      } finally {
+        fetching = false; // or every later update is ignored
+      }
     };
     refresh();
     const unlisten = listen("meetings-updated", refresh);

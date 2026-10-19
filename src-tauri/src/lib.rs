@@ -401,8 +401,11 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_menu::refresh_microphones(app_handle);
     let app_handle_for_menu = app_handle.clone();
     app_handle.listen("meetings-updated", move |_| {
-        app_menu::refresh(&app_handle_for_menu);
-        meeting_window::sync(&app_handle_for_menu);
+        // The event also fires for every live transcript line; the menu
+        // only changes when a meeting starts or stops.
+        if meeting_window::sync(&app_handle_for_menu) {
+            app_menu::refresh(&app_handle_for_menu);
+        }
     });
 
     // Refresh tray menu when model state changes

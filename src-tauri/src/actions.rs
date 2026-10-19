@@ -81,6 +81,12 @@ impl EditTarget {
 
 static EDIT_TARGET: std::sync::Mutex<Option<EditTarget>> = std::sync::Mutex::new(None);
 
+/// Owl: drops a pending Edit by voice target, its selected text included,
+/// when the edit won't happen: a start that failed, or a cancel.
+pub(crate) fn forget_edit_target() {
+    *EDIT_TARGET.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
 const EDIT_PROMPT: &str = "You edit text by voice. The user's spoken instruction is in <instruction>. \
 If <selected_text> is given, rewrite it as the instruction asks and reply with only the rewritten text, in its language unless the instruction asks for another. \
 If there is no selected text, reply with only the text the instruction asks for (an answer, a draft, a translation), ready to insert where the user is typing. \
@@ -459,6 +465,24 @@ fn frontmost_app() -> Option<i32> {
     None
 }
 
+/// Whether the app is built on Electron (Slack, VS Code, Obsidian, …).
+#[cfg(target_os = "macos")]
+fn is_electron(pid: i32) -> bool {
+    objc2_app_kit::NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
+        .and_then(|app| app.bundleURL())
+        .and_then(|url| url.path())
+        .is_some_and(|path| {
+            std::path::Path::new(&path.to_string())
+                .join("Contents/Frameworks/Electron Framework.framework")
+                .exists()
+        })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_electron(_pid: i32) -> bool {
+    false
+}
+
 /// Owl: where an edit would go, through Accessibility. None in apps that
 /// hide their text, where Owl can't tell what's selected.
 fn edit_target() -> Option<EditTarget> {
@@ -467,7 +491,11 @@ fn edit_target() -> Option<EditTarget> {
         crate::correction_watch::expose_text(pid);
     }
     let spot = crate::correction_watch::selection_spot().or_else(|| {
-        // An Electron app builds its text tree a moment after being asked.
+        // An Electron app builds its text tree a moment after being asked;
+        // any other app that showed nothing won't, so it isn't made to wait.
+        if !app.is_some_and(is_electron) {
+            return None;
+        }
         std::thread::sleep(Duration::from_millis(200));
         crate::correction_watch::selection_spot()
     })?;
@@ -660,6 +688,7 @@ impl ShortcutAction for TranscribeAction {
                 .get_model_path(&selected_model)
             {
                 warn!("Not starting recording: no model can transcribe it ({})", e);
+                forget_edit_target();
                 return;
             }
         }
@@ -781,6 +810,7 @@ impl ShortcutAction for TranscribeAction {
         } else {
             // Starting failed (for example due to blocked microphone permissions).
             // Revert UI state so we don't stay stuck in the recording overlay.
+            forget_edit_target();
             tm.cancel_stream();
             utils::hide_recording_overlay(app);
             set_tray_state(app, TrayIconState::Idle);
@@ -842,6 +872,10 @@ impl ShortcutAction for TranscribeAction {
         let binding_id = binding_id.to_string(); // Clone binding_id for the async task
         let post_process = wants_post_process(self.post_process, ai_cleanup_on(&get_settings(app)));
         let edit = self.edit;
+        // Taken now, so it never outlives this dictation, however it ends.
+        let target = edit
+            .then(|| EDIT_TARGET.lock().unwrap_or_else(|e| e.into_inner()).take())
+            .flatten();
         let cancel_generation = rm.cancel_generation();
 
         tauri::async_runtime::spawn(async move {
@@ -946,11 +980,6 @@ impl ShortcutAction for TranscribeAction {
                                     show_processing_overlay(&ah);
                                 }
                             }
-                            let target = edit
-                                .then(|| {
-                                    EDIT_TARGET.lock().unwrap_or_else(|e| e.into_inner()).take()
-                                })
-                                .flatten();
                             let output = async {
                                 if let Some(target) = &target {
                                     edited(&ah, &transcription, target.text()).await

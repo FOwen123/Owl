@@ -2,6 +2,7 @@
 
 use crate::settings::{AppSettings, Replacement};
 use regex::{Captures, Regex};
+use std::sync::Mutex;
 
 /// Tells an AI the user's Words and Dictionary terms, so it can fix one the
 /// speech model misheard as a sound-alike ("ask cloud to review" → "ask
@@ -27,42 +28,69 @@ pub fn spelling_rule(settings: &AppSettings) -> Option<String> {
     })
 }
 
-/// Applies every replacement in order. English (ASCII) terms match whole
-/// words, ignoring case; other scripts such as Chinese match exactly, since
-/// they have no spaces between words. Text already written as the
-/// replacement is left as it is, so "claude → Claude Code" never makes
-/// "Claude Code Code", even when this runs again on the AI's reply.
+/// The compiled form of the last `replacements` seen. They run twice per
+/// dictation (before and after the AI), and compiling a regex per entry
+/// each time adds up on the paste path.
+#[allow(clippy::type_complexity)]
+static COMPILED: Mutex<(Vec<Replacement>, Vec<(Regex, String)>)> =
+    Mutex::new((Vec::new(), Vec::new()));
+
+fn compiled(replacements: &[Replacement]) -> Vec<(Regex, String)> {
+    let mut cache = COMPILED.lock().unwrap_or_else(|e| e.into_inner());
+    if cache.0.as_slice() != replacements {
+        *cache = (
+            replacements.to_vec(),
+            replacements.iter().filter_map(compile).collect(),
+        );
+    }
+    cache.1.clone()
+}
+
+/// One replacement as a pattern and what it writes. English (ASCII) terms
+/// match whole words, ignoring case; other scripts such as Chinese match
+/// exactly, since they have no spaces between words. Text already written
+/// as the replacement is matched first and kept (group 1), so "claude →
+/// Claude Code" never makes "Claude Code Code", even when this runs again
+/// on the AI's reply.
+fn compile(r: &Replacement) -> Option<(Regex, String)> {
+    let from = r.from.trim();
+    if from.is_empty() {
+        return None;
+    }
+    let (flags, from) = if from.is_ascii() {
+        // \b only where the term starts/ends with a word character, so
+        // terms like "C++" still match.
+        let word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        let pattern = format!(
+            "{}{}{}",
+            if word(from.chars().next()) { r"\b" } else { "" },
+            regex::escape(from),
+            if word(from.chars().last()) { r"\b" } else { "" },
+        );
+        ("(?i)", pattern)
+    } else {
+        ("", regex::escape(from))
+    };
+    let keep = if r.to.is_empty() {
+        String::new()
+    } else {
+        format!("({})|", regex::escape(&r.to))
+    };
+    Regex::new(&format!("{flags}{keep}{from}"))
+        .ok()
+        .map(|re| (re, r.to.clone()))
+}
+
+/// Applies every replacement in order.
 pub fn apply_replacements(text: &str, replacements: &[Replacement]) -> String {
     let mut out = text.to_string();
-    for r in replacements.iter().filter(|r| !r.from.trim().is_empty()) {
-        let from = r.from.trim();
-        let (flags, from) = if from.is_ascii() {
-            // \b only where the term starts/ends with a word character, so
-            // terms like "C++" still match.
-            let word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
-            let pattern = format!(
-                "{}{}{}",
-                if word(from.chars().next()) { r"\b" } else { "" },
-                regex::escape(from),
-                if word(from.chars().last()) { r"\b" } else { "" },
-            );
-            ("(?i)", pattern)
-        } else {
-            ("", regex::escape(from))
-        };
-        let keep = if r.to.is_empty() {
-            String::new()
-        } else {
-            format!("({})|", regex::escape(&r.to))
-        };
-        if let Ok(re) = Regex::new(&format!("{flags}{keep}{from}")) {
-            out = re
-                .replace_all(&out, |c: &Captures| match c.get(1) {
-                    Some(kept) => kept.as_str().to_string(),
-                    None => r.to.clone(),
-                })
-                .into_owned();
-        }
+    for (re, to) in compiled(replacements) {
+        out = re
+            .replace_all(&out, |c: &Captures| match c.get(1) {
+                Some(kept) => kept.as_str().to_string(),
+                None => to.clone(),
+            })
+            .into_owned();
     }
     out
 }

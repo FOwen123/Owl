@@ -9,6 +9,8 @@
 pub struct Source {
     pub rate: u32,
     pub consumer: rtrb::Consumer<f32>,
+    /// Samples dropped because the reader fell behind the ring buffer.
+    pub lost: Arc<AtomicUsize>,
 }
 
 use objc2::rc::Retained;
@@ -35,6 +37,8 @@ use std::cell::UnsafeCell;
 use std::ffi::{c_void, CStr};
 use std::mem::size_of;
 use std::ptr::NonNull;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 /// Seconds of audio the ring holds if the writer falls behind.
 const RING_SECONDS: usize = 10;
@@ -96,6 +100,7 @@ unsafe fn default_output_uid() -> Result<Retained<NSString>, String> {
 /// State the IOProc reads on the audio thread.
 struct Callback {
     producer: UnsafeCell<rtrb::Producer<f32>>,
+    lost: Arc<AtomicUsize>,
 }
 
 /// Real-time callback: average the tap's channels and push mono samples.
@@ -127,7 +132,12 @@ unsafe extern "C-unwind" fn io_proc(
             first.mDataByteSize as usize / size_of::<f32>(),
         );
         for frame in samples.chunks_exact(channels) {
-            let _ = producer.push(frame.iter().sum::<f32>() / channels as f32);
+            if producer
+                .push(frame.iter().sum::<f32>() / channels as f32)
+                .is_err()
+            {
+                callback.lost.fetch_add(1, Ordering::Relaxed);
+            }
         }
     } else {
         // Non-interleaved: one buffer per channel.
@@ -139,7 +149,9 @@ unsafe extern "C-unwind" fn io_proc(
                     sum += *(buffer.mData as *const f32).add(i);
                 }
             }
-            let _ = producer.push(sum / buffers.len() as f32);
+            if producer.push(sum / buffers.len() as f32).is_err() {
+                callback.lost.fetch_add(1, Ordering::Relaxed);
+            }
         }
     }
     0
@@ -301,8 +313,10 @@ unsafe fn start_inner() -> Result<(Source, SystemTap), String> {
         _ => rate,
     };
     let (producer, consumer) = rtrb::RingBuffer::new(rate as usize * RING_SECONDS);
+    let lost = Arc::new(AtomicUsize::new(0));
     session.callback = Box::into_raw(Box::new(Callback {
         producer: UnsafeCell::new(producer),
+        lost: lost.clone(),
     }));
     let status = AudioDeviceCreateIOProcID(
         session.aggregate,
@@ -323,7 +337,14 @@ unsafe fn start_inner() -> Result<(Source, SystemTap), String> {
         format.mChannelsPerFrame,
         own != kAudioObjectUnknown
     );
-    Ok((Source { rate, consumer }, session))
+    Ok((
+        Source {
+            rate,
+            consumer,
+            lost,
+        },
+        session,
+    ))
 }
 
 #[cfg(test)]

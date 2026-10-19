@@ -430,6 +430,33 @@ fn remove_filler_matches(text: &str, pattern: &Regex) -> String {
     kept
 }
 
+/// One filler word as a pattern: the whole word, any case, with a comma or
+/// full stop after it.
+fn filler_pattern(word: &str) -> Option<Regex> {
+    Regex::new(&format!(r"(?i)\b{}\b[,.]?", regex::escape(word))).ok()
+}
+
+/// The built-in tiers, compiled once: they run on every dictation.
+fn builtin_filler_patterns(language: &OutputLanguageEvidence) -> Vec<&'static Regex> {
+    fn compile(words: &[&str]) -> Vec<Regex> {
+        words.iter().filter_map(|w| filler_pattern(w)).collect()
+    }
+    static UNIVERSAL: Lazy<Vec<Regex>> = Lazy::new(|| compile(UNIVERSAL_FILLER_WORDS));
+    static EN: Lazy<Vec<Regex>> = Lazy::new(|| compile(gated_filler_words_for_language("en")));
+    static DE: Lazy<Vec<Regex>> = Lazy::new(|| compile(gated_filler_words_for_language("de")));
+    static FR: Lazy<Vec<Regex>> = Lazy::new(|| compile(gated_filler_words_for_language("fr")));
+    let base = language
+        .language()
+        .map(|lang| lang.split(['-', '_']).next().unwrap_or(lang));
+    let gated: &'static [Regex] = match base {
+        Some("en") => &EN[..],
+        Some("de") => &DE[..],
+        Some("fr") => &FR[..],
+        _ => &[],
+    };
+    UNIVERSAL.iter().chain(gated).collect()
+}
+
 /// Removes filler words from transcription output when enabled.
 ///
 /// Built-in removal is two-tiered: [`UNIVERSAL_FILLER_WORDS`] apply regardless
@@ -459,27 +486,19 @@ pub fn remove_filler_words(
         return text.to_string();
     }
 
-    // Build filler patterns from custom list or the built-in tiers
-    let patterns: Vec<Regex> = match custom_filler_words {
-        Some(words) => words
-            .iter()
-            .filter_map(|word| Regex::new(&format!(r"(?i)\b{}\b[,.]?", regex::escape(word))).ok())
-            .collect(),
-        None => UNIVERSAL_FILLER_WORDS
-            .iter()
-            .chain(
-                language
-                    .language()
-                    .map(gated_filler_words_for_language)
-                    .unwrap_or_default(),
-            )
-            .map(|word| Regex::new(&format!(r"(?i)\b{}\b[,.]?", regex::escape(word))).unwrap())
-            .collect(),
+    // A custom list is compiled per call (rare); the built-in tiers once.
+    let custom: Vec<Regex>;
+    let patterns: Vec<&Regex> = match custom_filler_words {
+        Some(words) => {
+            custom = words.iter().filter_map(|w| filler_pattern(w)).collect();
+            custom.iter().collect()
+        }
+        None => builtin_filler_patterns(language),
     };
 
     // Remove filler words
     let mut filtered = text.to_string();
-    for pattern in &patterns {
+    for pattern in patterns {
         filtered = remove_filler_matches(&filtered, pattern);
     }
 

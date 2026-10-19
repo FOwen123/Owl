@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { emit, listen } from "@tauri-apps/api/event";
+import { emit } from "@tauri-apps/api/event";
 import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
@@ -33,6 +33,7 @@ import {
   useSpeakerLabel,
 } from "./MeetingSpeakers";
 import { MeetingTemplates, useTemplateOptions } from "./MeetingTemplates";
+import { useMeetings } from "./useMeetings";
 import { useSettings } from "../../hooks/useSettings";
 
 export const clock = (ms: number) => {
@@ -77,7 +78,7 @@ const firstLine = (markdown: string) =>
 export const NotetakerPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { getSetting, updateSetting, isUpdating } = useSettings();
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const meetings = useMeetings();
   const [openId, setOpenId] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
@@ -86,23 +87,9 @@ export const NotetakerPage: React.FC = () => {
     providers: [],
   });
 
-  // Replies can arrive out of order; only the newest request's counts.
-  const latest = useRef(0);
-  const refresh = useCallback(async () => {
-    const request = ++latest.current;
-    const result = await commands.getMeetings();
-    if (request === latest.current && result.status === "ok")
-      setMeetings(result.data);
-  }, []);
-
   useEffect(() => {
-    refresh();
     commands.getSummaryOptions().then(setOptions);
-    const unlisten = listen("meetings-updated", refresh);
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [refresh]);
+  }, []);
 
   const recording = meetings.find((m) => m.status === "recording");
   useEffect(() => {

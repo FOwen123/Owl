@@ -56,14 +56,8 @@ bun run format:frontend   # Prettier only
 bun run format:backend    # cargo fmt only
 ```
 
-**Model Setup (Required for Development):**
-
-```bash
-mkdir -p src-tauri/resources/models
-curl -L -o src-tauri/resources/models/silero-vad-v6.2-F32.gguf https://huggingface.co/handy-computer/silero-vad-v6.2-gguf/resolve/main/silero-vad-v6.2-F32.gguf
-```
-
-For detailed platform-specific build setup, see [BUILD.md](BUILD.md).
+For prerequisites (cmake, Xcode) and troubleshooting, see [BUILD.md](BUILD.md).
+The voice-detection model is checked in, so nothing needs downloading.
 
 ## Architecture Overview
 

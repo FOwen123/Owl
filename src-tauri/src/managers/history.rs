@@ -356,22 +356,22 @@ impl HistoryManager {
         let mut deleted_count = 0;
 
         for (id, file_name) in entries {
-            // Delete database entry
-            conn.execute(
-                "DELETE FROM transcription_history WHERE id = ?1",
-                params![id],
-            )?;
-
-            // Delete WAV file
+            // The recording goes first: a row deleted ahead of a file that
+            // then can't be removed would leave an orphan WAV behind.
             let file_path = self.recordings_dir.join(file_name);
             if file_path.exists() {
                 if let Err(e) = fs::remove_file(&file_path) {
                     error!("Failed to delete WAV file {}: {}", file_name, e);
-                } else {
-                    debug!("Deleted old WAV file: {}", file_name);
-                    deleted_count += 1;
+                    continue;
                 }
+                debug!("Deleted old WAV file: {}", file_name);
             }
+
+            conn.execute(
+                "DELETE FROM transcription_history WHERE id = ?1",
+                params![id],
+            )?;
+            deleted_count += 1;
         }
 
         Ok(deleted_count)

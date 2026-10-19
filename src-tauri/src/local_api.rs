@@ -12,7 +12,7 @@ use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
 
@@ -24,9 +24,18 @@ const MAX_HEADERS: usize = 16 * 1024;
 const DEADLINE: Duration = Duration::from_secs(20);
 /// Longer audio is refused while it's decoded.
 const MAX_SECONDS: usize = 60 * 60;
+/// Connections waiting while one is answered; more get a 503.
+const QUEUE: usize = 4;
 
-/// The running server's stop flag and address.
-static SERVER: Mutex<Option<(Arc<AtomicBool>, SocketAddr)>> = Mutex::new(None);
+/// The running server: its stop flag, its address, and word that its
+/// listener has closed.
+struct Server {
+    stop: Arc<AtomicBool>,
+    addr: SocketAddr,
+    closed: mpsc::Receiver<()>,
+}
+
+static SERVER: Mutex<Option<Server>> = Mutex::new(None);
 
 /// Starts or stops the server to match Settings. A token is made the first
 /// time the API is turned on.
@@ -34,9 +43,8 @@ pub fn sync(app: &AppHandle) -> Result<()> {
     let mut settings = get_settings(app);
     let mut running = SERVER.lock().unwrap_or_else(|e| e.into_inner());
     if !settings.local_api_enabled {
-        if let Some((stop, addr)) = running.take() {
-            stop.store(true, Ordering::SeqCst);
-            let _ = TcpStream::connect(addr); // wakes the waiting accept
+        if let Some(server) = running.take() {
+            stop_server(server);
         }
         return Ok(());
     }
@@ -49,26 +57,71 @@ pub fn sync(app: &AppHandle) -> Result<()> {
     }
     let listener = TcpListener::bind(("127.0.0.1", PORT))
         .map_err(|e| anyhow!("Port {PORT} is busy, so the local API can't start: {e}"))?;
-    let stop = Arc::new(AtomicBool::new(false));
-    *running = Some((stop.clone(), listener.local_addr()?));
     let app = app.clone();
+    *running = Some(start_server(listener, move |stream| {
+        let token = get_settings(&app).local_api_token.0;
+        let transcribe = |path: &Path| {
+            app.state::<Arc<MeetingManager>>()
+                .transcribe_file(path, MAX_SECONDS)
+        };
+        if catch_unwind(AssertUnwindSafe(|| serve(stream, &token, &transcribe))).is_err() {
+            log::error!("Local API: a request crashed");
+        }
+    })?);
+    Ok(())
+}
+
+/// Answers connections on `listener` one at a time, on its own thread,
+/// until `stop_server`. Accepting runs on a second thread, so stopping frees
+/// the port at once even while a request is still being answered.
+fn start_server(
+    listener: TcpListener,
+    handle: impl Fn(TcpStream) + Send + 'static,
+) -> Result<Server> {
+    let stop = Arc::new(AtomicBool::new(false));
+    let (closed, closed_rx) = mpsc::channel();
+    let addr = listener.local_addr()?;
+    let (queue, waiting) = mpsc::sync_channel::<TcpStream>(QUEUE);
+    let stop_flag = stop.clone();
     std::thread::spawn(move || {
-        for stream in listener.incoming() {
-            if stop.load(Ordering::SeqCst) {
+        for stream in waiting {
+            if stop_flag.load(Ordering::SeqCst) {
                 break;
             }
-            let Ok(stream) = stream else { continue };
-            let token = get_settings(&app).local_api_token.0;
-            let transcribe = |path: &Path| {
-                app.state::<Arc<MeetingManager>>()
-                    .transcribe_file(path, MAX_SECONDS)
-            };
-            if catch_unwind(AssertUnwindSafe(|| serve(stream, &token, &transcribe))).is_err() {
-                log::error!("Local API: a request crashed");
-            }
+            handle(stream);
         }
     });
-    Ok(())
+    let stop_flag = stop.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            if stop_flag.load(Ordering::SeqCst) {
+                break;
+            }
+            if let Ok(stream) = stream {
+                if let Err(mpsc::TrySendError::Full(mut stream)) = queue.try_send(stream) {
+                    let _ = stream.write_all(
+                        b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    );
+                }
+            }
+        }
+        drop(listener);
+        let _ = closed.send(());
+    });
+    Ok(Server {
+        stop,
+        addr,
+        closed: closed_rx,
+    })
+}
+
+/// Stops the server and waits for its port to be free, so the API can be
+/// turned on again at once. A request already being answered finishes on
+/// its own.
+fn stop_server(server: Server) {
+    server.stop.store(true, Ordering::SeqCst);
+    let _ = TcpStream::connect(server.addr); // wakes the waiting accept
+    let _ = server.closed.recv_timeout(Duration::from_secs(1));
 }
 
 fn new_token() -> Result<String> {
@@ -454,6 +507,25 @@ Content-Type: multipart/form-data; boundary=b\r\nContent-Length: 999999999999\r\
             started.elapsed()
         );
         trickle.join().unwrap();
+    }
+
+    #[test]
+    fn the_port_is_free_as_soon_as_the_server_stops() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        // A request still being answered doesn't hold the port.
+        let server =
+            start_server(listener, |_| std::thread::sleep(Duration::from_secs(5))).unwrap();
+        let _busy = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        let started = Instant::now();
+        stop_server(server);
+        assert!(
+            started.elapsed() < Duration::from_millis(500),
+            "{:?}",
+            started.elapsed()
+        );
+        TcpListener::bind(("127.0.0.1", port)).expect("the old listener has closed");
     }
 
     #[test]

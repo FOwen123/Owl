@@ -177,6 +177,10 @@ fn create_client(provider: &PostProcessProvider, api_key: &str) -> Result<reqwes
     let headers = build_headers(provider, api_key)?;
     reqwest::Client::builder()
         .default_headers(headers)
+        // Owl: an endpoint that never answers must not hold a meeting's notes
+        // forever; long enough for a slow local model on a long transcript.
+        .connect_timeout(std::time::Duration::from_secs(20))
+        .timeout(std::time::Duration::from_secs(600))
         .build()
         .map_err(|e| report_reqwest_error("Failed to build HTTP client", &e))
 }

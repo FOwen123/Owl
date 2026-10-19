@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -8,6 +8,7 @@ import { commands, type Meeting, type Result } from "@/bindings";
 import { Button } from "@/components/ui/Button";
 import { clock } from "@/components/owl/NotetakerPage";
 import { useSpeakerLabel } from "@/components/owl/MeetingSpeakers";
+import { useMeetings } from "@/components/owl/useMeetings";
 import { ring } from "@/overlay/RecordingOverlay";
 import { syncLanguageFromSettings } from "@/i18n";
 import { getLanguageDirection } from "@/lib/utils/rtl";
@@ -27,21 +28,10 @@ export const MeetingWindow: React.FC = () => {
   const [mode, setMode] = useState<Mode | null>(null);
   // Counts each time Rust shows the window, so a card's countdown starts over.
   const [shows, setShows] = useState(0);
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-
-  // Replies can arrive out of order; only the newest request's counts.
-  const latest = useRef(0);
-  const refresh = useCallback(async () => {
-    const request = ++latest.current;
-    const result = await commands.getMeetings();
-    if (request === latest.current && result.status === "ok")
-      setMeetings(result.data);
-  }, []);
+  const meetings = useMeetings();
 
   useEffect(() => {
-    refresh();
     const unlisten = [
-      listen("meetings-updated", refresh),
       // A hidden window keeps running, so read the language on every show.
       listen<Mode>("meeting-window-mode", async (e) => {
         await syncLanguageFromSettings();
@@ -51,7 +41,7 @@ export const MeetingWindow: React.FC = () => {
       listen("app-language-changed", syncLanguageFromSettings),
     ];
     return () => unlisten.forEach((p) => p.then((fn) => fn()));
-  }, [refresh]);
+  }, []);
 
   const recording = meetings.find((m) => m.status === "recording");
   // Until Rust says otherwise, the window opened for what's happening now.

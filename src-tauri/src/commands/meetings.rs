@@ -22,11 +22,16 @@ pub fn stop_meeting(meetings: State<Arc<MeetingManager>>) -> Result<(), String> 
 
 #[tauri::command]
 #[specta::specta]
-/// Async, so reading every meeting never blocks the main thread.
+/// Async, with the read on a blocking thread: every meeting's transcript is
+/// read, which must hold up neither the main thread nor the async runtime.
 pub async fn get_meetings(
     meetings: State<'_, Arc<MeetingManager>>,
 ) -> Result<Vec<Meeting>, String> {
-    meetings.list().map_err(|e| e.to_string())
+    let meetings = meetings.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || meetings.list())
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

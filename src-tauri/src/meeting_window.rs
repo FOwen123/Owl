@@ -150,18 +150,21 @@ pub fn hide(app: &AppHandle) {
 }
 
 /// Opens the live window when a meeting starts (from anywhere: the Notetaker
-/// page, the menu bar, the prompt) and closes it when it stops.
-pub fn sync(app: &AppHandle) {
+/// page, the menu bar, the prompt) and closes it when it stops. Says whether
+/// a meeting started or stopped since the last call.
+pub fn sync(app: &AppHandle) -> bool {
     let recording = app
         .try_state::<Arc<MeetingManager>>()
         .is_some_and(|m| m.active_id().is_some());
-    if WAS_RECORDING.swap(recording, Ordering::SeqCst) != recording {
+    let changed = WAS_RECORDING.swap(recording, Ordering::SeqCst) != recording;
+    if changed {
         if recording {
             show(app, "live");
         } else {
             hide(app);
         }
     }
+    changed
 }
 
 /// Where the window first appears: the main screen's top-right corner.

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
 import type { MeetingTemplate } from "@/bindings";
@@ -34,8 +34,8 @@ export const MeetingTemplates: React.FC<{ builtIn: string[] }> = ({
 
   const save = (templates: MeetingTemplate[]) =>
     updateSetting("meeting_templates", templates);
-  const edit = (id: string, change: Partial<MeetingTemplate>) =>
-    save(own.map((tpl) => (tpl.id === id ? { ...tpl, ...change } : tpl)));
+  const edit = (id: string, change: MeetingTemplate) =>
+    save(own.map((tpl) => (tpl.id === id ? change : tpl)));
 
   return (
     <SettingsGroup
@@ -52,32 +52,12 @@ export const MeetingTemplates: React.FC<{ builtIn: string[] }> = ({
         />
       </div>
       {own.map((tpl) => (
-        <div key={tpl.id} className="px-4 py-3 space-y-2">
-          <div className="flex items-center gap-2">
-            <Input
-              variant="compact"
-              value={tpl.name}
-              placeholder={t("owl.notetaker.templates.name")}
-              onChange={(e) => edit(tpl.id, { name: e.target.value })}
-              className="flex-1"
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={t("owl.notetaker.templates.remove")}
-              onClick={() => save(own.filter((x) => x.id !== tpl.id))}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-          <Textarea
-            value={tpl.prompt}
-            placeholder={t("owl.notetaker.templates.prompt")}
-            onChange={(e) => edit(tpl.id, { prompt: e.target.value })}
-            rows={4}
-            className="w-full"
-          />
-        </div>
+        <TemplateEditor
+          key={tpl.id}
+          template={tpl}
+          onSave={(next) => edit(next.id, next)}
+          onRemove={() => save(own.filter((x) => x.id !== tpl.id))}
+        />
       ))}
       <div className="px-4 py-3">
         <Button
@@ -100,5 +80,53 @@ export const MeetingTemplates: React.FC<{ builtIn: string[] }> = ({
         </Button>
       </div>
     </SettingsGroup>
+  );
+};
+
+/** One template's name and prompt. Saved when a field loses focus, not on
+ * every keystroke: each save writes the settings file and rebuilds the menu
+ * bar. */
+const TemplateEditor: React.FC<{
+  template: MeetingTemplate;
+  onSave: (template: MeetingTemplate) => void;
+  onRemove: () => void;
+}> = ({ template, onSave, onRemove }) => {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState(template);
+  // A change from elsewhere replaces the draft; our own save matches it.
+  useEffect(() => setDraft(template), [template.name, template.prompt]);
+  const save = () => {
+    if (draft.name !== template.name || draft.prompt !== template.prompt)
+      onSave(draft);
+  };
+  return (
+    <div className="px-4 py-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <Input
+          variant="compact"
+          value={draft.name}
+          placeholder={t("owl.notetaker.templates.name")}
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          onBlur={save}
+          className="flex-1"
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={t("owl.notetaker.templates.remove")}
+          onClick={onRemove}
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </div>
+      <Textarea
+        value={draft.prompt}
+        placeholder={t("owl.notetaker.templates.prompt")}
+        onChange={(e) => setDraft({ ...draft, prompt: e.target.value })}
+        onBlur={save}
+        rows={4}
+        className="w-full"
+      />
+    </div>
   );
 };

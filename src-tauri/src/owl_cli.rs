@@ -2,7 +2,9 @@
 //! <file>` and `owl mcp`. The read commands open Owl's databases directly, so
 //! the app needn't be running; `transcribe` runs headless (see `lib.rs`).
 
-use crate::managers::meeting::{fill_speakers, read_meetings, render, ExportFormat, Meeting};
+use crate::managers::meeting::{
+    fill_speakers, read_meeting, read_meetings, render, ExportFormat, Meeting,
+};
 use anyhow::{anyhow, Result};
 use clap::Subcommand;
 use rusqlite::{Connection, OpenFlags};
@@ -54,15 +56,18 @@ pub fn open_db(name: &str) -> Result<Connection> {
 }
 
 pub fn meetings() -> Result<Vec<Meeting>> {
-    read_meetings(&open_db("meetings.db")?)
-        .map_err(|e| anyhow!("{e}; open Owl once so it can update its meetings"))
+    read_meetings(&open_db("meetings.db")?).map_err(stale)
 }
 
 pub fn meeting(id: i64) -> Result<Meeting> {
-    meetings()?
-        .into_iter()
-        .find(|m| m.id == id)
+    read_meeting(&open_db("meetings.db")?, id)
+        .map_err(stale)?
         .ok_or_else(|| anyhow!("No meeting {id}"))
+}
+
+/// A database the app hasn't opened since an upgrade can be older than the code.
+fn stale(e: anyhow::Error) -> anyhow::Error {
+    anyhow!("{e}; open Owl once so it can update its meetings")
 }
 
 /// One line per meeting: id, date, length and title.

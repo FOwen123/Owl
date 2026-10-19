@@ -122,10 +122,15 @@ struct FinalizedStreamText {
 /// per-frame callback (feeds frames). The recorder holds an `Arc<StreamRouter>`
 /// directly, so a frame with no stream pending costs a single relaxed atomic
 /// load — no Tauri state lookup, no mutex lock.
+/// Frames a stalled streaming worker may fall behind before the stream is
+/// given up (about a minute of 30 ms frames); the batch pass then
+/// transcribes the recording the audio recorder kept.
+const STREAM_QUEUE: usize = 2048;
+
 pub struct StreamRouter {
     /// Command channel to the active streaming worker, present from
     /// `start_stream` until `finalize_stream`/`cancel_stream`.
-    tx: Mutex<Option<mpsc::Sender<StreamCmd>>>,
+    tx: Mutex<Option<mpsc::SyncSender<StreamCmd>>>,
     /// True while a stream is pending or active (channel is open). The audio
     /// callback checks this first to avoid the mutex lock when no stream runs.
     open: Arc<AtomicBool>,
@@ -143,7 +148,7 @@ impl StreamRouter {
     /// receiver the worker should drain. Caller must ensure no prior channel is
     /// still open.
     fn open(&self) -> mpsc::Receiver<StreamCmd> {
-        let (tx, rx) = mpsc::channel::<StreamCmd>();
+        let (tx, rx) = mpsc::sync_channel::<StreamCmd>(STREAM_QUEUE);
         *self.tx.lock().unwrap() = Some(tx);
         self.open.store(true, Ordering::Relaxed);
         rx
@@ -151,7 +156,7 @@ impl StreamRouter {
 
     /// Take the sender out (closing the channel to new feeds). Returns the
     /// sender so the caller can send the final `Finalize`/`Cancel` command.
-    fn take(&self) -> Option<mpsc::Sender<StreamCmd>> {
+    fn take(&self) -> Option<mpsc::SyncSender<StreamCmd>> {
         self.open.store(false, Ordering::Relaxed);
         self.tx.lock().unwrap().take()
     }
@@ -169,8 +174,16 @@ impl StreamRouter {
         if !self.open.load(Ordering::Relaxed) {
             return;
         }
-        if let Some(tx) = self.tx.lock().unwrap().as_ref() {
-            let _ = tx.send(StreamCmd::Feed(frame.to_vec()));
+        let mut tx = self.tx.lock().unwrap();
+        let stuck = tx
+            .as_ref()
+            .is_some_and(|tx| tx.try_send(StreamCmd::Feed(frame.to_vec())).is_err());
+        if stuck {
+            // The worker hasn't kept up for a minute: stop feeding it, so
+            // memory stays bounded; finalize then falls back to batch.
+            warn!("Streaming worker is too far behind; abandoning the live stream");
+            self.open.store(false, Ordering::Relaxed);
+            *tx = None;
         }
     }
 
@@ -776,19 +789,20 @@ impl TranscriptionManager {
 
     /// Kicks off the model loading in a background thread if it's not already loaded
     pub fn initiate_model_load(&self) {
-        let mut is_loading = self.is_loading.lock().unwrap();
-        if *is_loading {
+        // The guard clears `is_loading` however the loader thread ends, so a
+        // panic there can't leave every later transcription waiting.
+        let Some(loading) = self.try_start_loading() else {
             return;
-        }
+        };
 
         let reload_pending = self.reload_model_on_next_use.load(Ordering::Acquire);
         if !reload_pending && self.is_model_loaded() {
             return;
         }
 
-        *is_loading = true;
         let self_clone = self.clone();
         thread::spawn(move || {
+            let _loading = loading;
             if reload_pending {
                 self_clone
                     .reload_model_on_next_use
@@ -798,9 +812,6 @@ impl TranscriptionManager {
             if let Err(e) = self_clone.load_model(&settings.selected_model) {
                 error!("Failed to load model: {}", e);
             }
-            let mut is_loading = self_clone.is_loading.lock().unwrap();
-            *is_loading = false;
-            self_clone.loading_condvar.notify_all();
         });
     }
 
@@ -1077,7 +1088,7 @@ impl TranscriptionManager {
             return Ok(None);
         };
         let (reply_tx, reply_rx) = mpsc::channel();
-        if tx.send(StreamCmd::Finalize(reply_tx)).is_err() {
+        if tx.try_send(StreamCmd::Finalize(reply_tx)).is_err() {
             return Ok(None);
         }
         let finalized = match reply_rx.recv() {
@@ -1106,7 +1117,7 @@ impl TranscriptionManager {
     /// Abandon any active stream without producing text (e.g. on cancel).
     pub fn cancel_stream(&self) {
         if let Some(tx) = self.router.take() {
-            let _ = tx.send(StreamCmd::Cancel);
+            let _ = tx.try_send(StreamCmd::Cancel);
         }
         self.stream_active.store(false, Ordering::Release);
     }

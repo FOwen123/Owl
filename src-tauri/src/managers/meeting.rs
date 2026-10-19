@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -454,10 +454,13 @@ impl MeetingManager {
         let stages = self.stages();
         let (segments, queue) = mpsc::sync_channel(LIVE_QUEUE);
         let behind = Arc::new(AtomicBool::new(false));
+        let (started, ready) = mpsc::channel();
         let recorder = {
             let (stop, behind) = (stop.clone(), behind.clone());
             std::thread::spawn(move || {
-                record(&folder, mic_name, &stop, &stages, &segments, &behind)
+                record(
+                    &folder, mic_name, &stop, &stages, &segments, &behind, started,
+                )
             })
         };
         let transcriber = {
@@ -473,6 +476,25 @@ impl MeetingManager {
         });
         drop(active);
         self.changed();
+        // A microphone that can't open fails the meeting now, not at Stop.
+        // Waited for off this thread: Start runs on the main thread, and the
+        // first permission prompt can hold the microphone open for a while.
+        let this = self.clone();
+        std::thread::spawn(move || {
+            if ready.recv().is_ok() {
+                return;
+            }
+            let Some(failed) = this.active.lock().unwrap().take_if(|a| a.id == id) else {
+                return; // stopped meanwhile; Stop finishes it
+            };
+            let error = match failed.recorder.join() {
+                Ok(Err(e)) => format!("{e:#}"),
+                Ok(Ok(_)) => "The recorder stopped before the meeting started".to_string(),
+                Err(_) => "The recorder crashed".to_string(),
+            };
+            let _ = failed.transcriber.join();
+            this.finish(id, Err(anyhow!("{error}")));
+        });
         Ok(id)
     }
 
@@ -583,18 +605,22 @@ impl MeetingManager {
 
     /// Stops recording and transcribes in the background.
     pub fn stop(self: &Arc<Self>) -> Result<()> {
-        let active = self
-            .active
-            .lock()
-            .unwrap()
-            .take()
-            .ok_or_else(|| anyhow!("No meeting is being recorded"))?;
-        active.stop.store(true, Ordering::Relaxed);
-        let duration_ms = active.started.elapsed().as_millis() as i64;
+        let mut recording = self.active.lock().unwrap();
+        let Some(current) = recording.as_ref() else {
+            return Err(anyhow!("No meeting is being recorded"));
+        };
+        // Saved before the recording is let go: if the database refuses,
+        // the meeting carries on and Stop can be tried again.
+        let duration_ms = current.started.elapsed().as_millis() as i64;
         self.conn()?.execute(
             "UPDATE meetings SET status = 'transcribing', duration_ms = ?1 WHERE id = ?2",
-            params![duration_ms, active.id],
+            params![duration_ms, current.id],
         )?;
+        let Some(active) = recording.take() else {
+            return Err(anyhow!("No meeting is being recorded"));
+        };
+        drop(recording);
+        active.stop.store(true, Ordering::Relaxed);
         self.changed();
 
         let this = self.clone();
@@ -640,29 +666,46 @@ impl MeetingManager {
         match result {
             Ok((lines, warning)) => {
                 let json = serde_json::to_string(&lines).unwrap_or_else(|_| "[]".into());
-                let _ = conn.execute(
+                let saved = conn.execute(
                     // A changed transcript drops notes written from the old one.
                     "UPDATE meetings SET status = 'ready',
                      summary = CASE WHEN transcript IS ?1 THEN summary ELSE NULL END,
                      transcript = ?1, error = ?2 WHERE id = ?3",
                     params![json, warning, id],
                 );
-                self.changed();
-                if !lines.is_empty() && get_settings(&self.app).post_process_enabled {
-                    if let Err(e) = tauri::async_runtime::block_on(self.summarize(id, None, None)) {
-                        log::warn!("Meeting {id}: no summary: {e}");
+                match saved {
+                    Ok(_) => {
+                        self.changed();
+                        if !lines.is_empty() && get_settings(&self.app).post_process_enabled {
+                            if let Err(e) =
+                                tauri::async_runtime::block_on(self.summarize(id, None, None))
+                            {
+                                log::warn!("Meeting {id}: no summary: {e}");
+                            }
+                        }
+                    }
+                    // The lines heard live are already in the row; the
+                    // meeting must not stay "transcribing" for good.
+                    Err(e) => {
+                        self.fail(&conn, id, &format!("The transcript couldn't be saved: {e}"))
                     }
                 }
             }
             Err(e) => {
                 log::error!("Meeting {id} failed: {e:#}");
-                let _ = conn.execute(
-                    "UPDATE meetings SET status = 'failed', error = ?1 WHERE id = ?2",
-                    params![e.to_string(), id],
-                );
+                self.fail(&conn, id, &e.to_string());
             }
         }
         self.changed();
+    }
+
+    fn fail(&self, conn: &Connection, id: i64, error: &str) {
+        if let Err(e) = conn.execute(
+            "UPDATE meetings SET status = 'failed', error = ?1 WHERE id = ?2",
+            params![error, id],
+        ) {
+            log::error!("Meeting {id}: can't record that it failed: {e}");
+        }
     }
 
     /// Transcribes a meeting again from its kept audio, so new Words, rules or
@@ -1071,10 +1114,10 @@ impl MeetingManager {
     }
 
     pub fn get(&self, id: i64) -> Result<Meeting> {
-        self.list()?
-            .into_iter()
-            .find(|m| m.id == id)
-            .ok_or_else(|| anyhow!("Meeting not found"))
+        let mut meeting =
+            read_meeting(&self.conn()?, id)?.ok_or_else(|| anyhow!("Meeting not found"))?;
+        meeting.summarizing = self.summarizing.lock().unwrap().contains(&id);
+        Ok(meeting)
     }
 
     /// Names speaker `voice` in meeting `id`; an empty name goes back to
@@ -1182,11 +1225,14 @@ fn record(
     stages: &Stages,
     segments: &mpsc::SyncSender<(Speaker, Segment)>,
     behind: &AtomicBool,
+    started: mpsc::Sender<()>,
 ) -> Result<Option<String>> {
-    let (mic, mic_consumer) = open_mic(mic_name)?;
+    let (mic, mic_consumer, mic_lost) = open_mic(mic_name)?;
     let mut mic_track = Track::new(SAMPLE_RATE as u32, mic_consumer, &folder.join("mic.wav"))?;
     let mut system_track = None;
 
+    #[cfg(target_os = "macos")]
+    let mut system_lost = None;
     #[cfg(target_os = "macos")]
     let _tap = match crate::audio_toolkit::audio::system_capture::start() {
         Ok((source, tap)) => {
@@ -1195,6 +1241,7 @@ fn record(
                 source.consumer,
                 &folder.join("system.wav"),
             )?);
+            system_lost = Some(source.lost);
             Some(tap)
         }
         Err(e) => {
@@ -1204,6 +1251,8 @@ fn record(
     };
 
     let mut split = Splitter::new(stages, system_track.is_some());
+    // Everything is open: the meeting has started.
+    let _ = started.send(());
     // While recording, capture never waits on transcription: a full queue
     // gives up on live lines (the saved audio is transcribed instead).
     let queue = |found: Vec<(Speaker, Segment)>| {
@@ -1240,6 +1289,13 @@ fn record(
             "Meeting: the microphone dropped {} frames",
             stopped.dropped_frames
         );
+    }
+    // Samples the ring buffers had to drop while this loop fell behind.
+    let lost = mic_lost.load(Ordering::Relaxed);
+    #[cfg(target_os = "macos")]
+    let lost = lost + system_lost.map_or(0, |l| l.load(Ordering::Relaxed));
+    if lost > 0 {
+        log::warn!("Meeting: the recording loop fell behind; {lost} samples were lost");
     }
     Ok(match stopped.end_reason {
         handy_recorder::EndReason::StopCalled => None,
@@ -1344,21 +1400,33 @@ fn join_lines(lines: Vec<TranscriptLine>) -> Vec<TranscriptLine> {
     out
 }
 
-/// Hands the microphone's 16 kHz mono chunks to the recording loop.
-struct RingSink(rtrb::Producer<f32>);
+/// Hands the microphone's 16 kHz mono chunks to the recording loop, counting
+/// the samples lost when the loop falls behind the ring buffer.
+struct RingSink {
+    producer: rtrb::Producer<f32>,
+    lost: Arc<AtomicUsize>,
+}
 
 impl handy_recorder::Sink for RingSink {
     fn process_chunk(&mut self, chunk: handy_recorder::AudioChunk<'_>) {
         for s in &chunk.samples[..chunk.valid_frames] {
-            let _ = self.0.push(*s);
+            if self.producer.push(*s).is_err() {
+                self.lost.fetch_add(1, Ordering::Relaxed);
+            }
         }
     }
 }
 
 /// Opens the microphone chosen in Settings (by name), or the default one.
+/// The counter is the samples lost to a full ring buffer.
+#[allow(clippy::type_complexity)]
 fn open_mic(
     name: Option<String>,
-) -> Result<(handy_recorder::Recorder<RingSink>, rtrb::Consumer<f32>)> {
+) -> Result<(
+    handy_recorder::Recorder<RingSink>,
+    rtrb::Consumer<f32>,
+    Arc<AtomicUsize>,
+)> {
     let device = name.and_then(|name| {
         handy_recorder::list_input_devices()
             .ok()?
@@ -1371,21 +1439,34 @@ fn open_mic(
         ..handy_recorder::RecorderConfig::speech()
     })?;
     let (producer, consumer) = rtrb::RingBuffer::new(SAMPLE_RATE * 10);
+    let lost = Arc::new(AtomicUsize::new(0));
     recorder
-        .start(RingSink(producer))
+        .start(RingSink {
+            producer,
+            lost: lost.clone(),
+        })
         .map_err(|e| anyhow!("The microphone didn't start: {}", e.error))?;
-    Ok((recorder, consumer))
+    Ok((recorder, consumer, lost))
 }
 
 /// Every meeting in `conn`, newest first. Also read directly by the command
 /// line and the MCP server, without the app running.
 pub fn read_meetings(conn: &Connection) -> Result<Vec<Meeting>> {
-    let mut stmt = conn.prepare(
+    read_rows(conn, "ORDER BY started_at DESC", params![])
+}
+
+/// One meeting, without reading the others; `None` when there's no such id.
+pub fn read_meeting(conn: &Connection, id: i64) -> Result<Option<Meeting>> {
+    Ok(read_rows(conn, "WHERE id = ?1", params![id])?.pop())
+}
+
+fn read_rows(conn: &Connection, tail: &str, params: impl rusqlite::Params) -> Result<Vec<Meeting>> {
+    let mut stmt = conn.prepare(&format!(
         "SELECT id, started_at, duration_ms, status, transcript, summary, error, speaker_names,
                     title, template
-             FROM meetings ORDER BY started_at DESC",
-    )?;
-    let rows = stmt.query_map([], |row| {
+             FROM meetings {tail}"
+    ))?;
+    let rows = stmt.query_map(params, |row| {
         let status: String = row.get(3)?;
         let transcript: String = row.get(4)?;
         Ok(Meeting {
@@ -1756,7 +1837,10 @@ mod tests {
             };
             let (segments, _queue) = mpsc::sync_channel(LIVE_QUEUE);
             let behind = AtomicBool::new(false);
-            std::thread::spawn(move || record(&folder, None, &stop, &stages, &segments, &behind))
+            let (started, _ready) = mpsc::channel();
+            std::thread::spawn(move || {
+                record(&folder, None, &stop, &stages, &segments, &behind, started)
+            })
         };
         std::thread::sleep(Duration::from_secs(3));
         stop.store(true, Ordering::Relaxed);

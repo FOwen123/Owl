@@ -47,8 +47,9 @@ pub fn time_limit(text: &str) -> Duration {
 }
 
 /// The AI's reply if it looks like an edit of what was said, otherwise the
-/// reason it was rejected.
-pub fn check(said: &str, reply: &str) -> Result<String, &'static str> {
+/// reason it was rejected. `words` (the user's Words) count as said: writing
+/// one the speech model misheard is a fix, not new content.
+pub fn check(said: &str, reply: &str, words: &[String]) -> Result<String, &'static str> {
     let reply = reply.trim();
     if reply.is_empty() {
         return Err("empty reply");
@@ -73,7 +74,8 @@ pub fn check(said: &str, reply: &str) -> Result<String, &'static str> {
         return Err("reply changed the length too much");
     }
 
-    let heard: HashSet<&String> = before.iter().collect();
+    let known: Vec<String> = words.iter().flat_map(|w| units(w)).collect();
+    let heard: HashSet<&String> = before.iter().chain(&known).collect();
     let meaningful: Vec<&String> = after
         .iter()
         .filter(|u| u.chars().count() > 3 || u.chars().any(|c| c.is_ascii_digit() || !c.is_ascii()))
@@ -86,13 +88,64 @@ pub fn check(said: &str, reply: &str) -> Result<String, &'static str> {
     if new * 4 > meaningful.len() {
         return Err("reply added too many new words");
     }
+    if invented(said, reply, &known) {
+        return Err("reply inserted words that weren't said");
+    }
 
     Ok(reply.to_string())
+}
+
+/// Whether the reply inserts content that wasn't said. Fixing a misheard
+/// word swaps it for another, so only insertions count: two new English
+/// words, or three new Chinese characters, mean the AI is adding its own
+/// content ("software is the" → "software is eating the world").
+fn invented(said: &str, reply: &str, known: &[String]) -> bool {
+    use crate::correction::{diff, is_cjk_token, tokens};
+    let lower = |t: &str| -> Vec<String> { tokens(t).iter().map(|w| w.to_lowercase()).collect() };
+    let (a, b) = (lower(said), lower(reply));
+    // An inflection of a word that was said ("talk" → "talking") isn't new.
+    let heard = |w: &str| {
+        a.iter().chain(known).any(|h| {
+            h == w
+                || (h.chars().count() >= 4
+                    && w.chars().count() >= 4
+                    && h.chars().take(4).eq(w.chars().take(4)))
+        })
+    };
+    let (mut english, mut chinese) = (0, 0);
+    for (old, new) in diff(&a, &b).1 {
+        if !old.is_empty() {
+            continue;
+        }
+        for w in &b[new] {
+            if heard(w) || w.chars().all(|c| c.is_ascii_digit()) {
+                continue;
+            }
+            if is_cjk_token(w) {
+                chinese += 1;
+            } else if w.chars().count() > 3 {
+                english += 1;
+            }
+        }
+    }
+    english >= 2 || chinese >= 3
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn check(said: &str, reply: &str) -> Result<String, &'static str> {
+        super::check(said, reply, &[])
+    }
+
+    #[test]
+    fn a_dictionary_word_is_a_fix_not_new_content() {
+        let said = "please restart open claw now";
+        let reply = "Please restart OpenClaw now.";
+        assert!(check(said, reply).is_err());
+        assert!(super::check(said, reply, &["OpenClaw".to_string()]).is_ok());
+    }
 
     #[test]
     fn short_dictations_skip_the_ai() {
@@ -173,6 +226,28 @@ mod tests {
         )
         .is_ok());
         assert!(check("set the port to eighty eighty", "Set the port to 8080.").is_ok());
+    }
+
+    #[test]
+    fn invented_content_is_rejected() {
+        // 2026-10-21: the AI finished a half-said phrase and flipped its point.
+        let said = "a lot of people are saying software is the, but then I think it's not like software is taking off";
+        assert!(check(
+            said,
+            "A lot of people are saying software is eating the world, but I think it's not—software is taking off."
+        )
+        .is_err());
+        assert!(check(
+            "我們明天開會討論預算的問題",
+            "我們明天開會討論明年行銷預算的問題。"
+        )
+        .is_err());
+        // Fixing a misheard name is a swap, not an insertion.
+        assert!(check(
+            "then we talk about Stefan's paradox and the microchef versus the restaurant",
+            "Then we talk about Jevons paradox and the microchef versus the restaurant."
+        )
+        .is_ok());
     }
 
     #[test]

@@ -1307,7 +1307,11 @@ pub async fn fetch_post_process_models(
         .unwrap_or_default();
 
     // Skip fetching if no API key for providers that typically need one
-    if api_key.trim().is_empty() && provider.id != "custom" {
+    // Owl: ChatGPT uses the signed-in plan, not a key.
+    if api_key.trim().is_empty()
+        && provider.id != "custom"
+        && provider.id != crate::chatgpt::PROVIDER_ID
+    {
         return Err(format!(
             "API key is required for {}. Please add an API key to list available models.",
             provider.label

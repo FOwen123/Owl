@@ -509,6 +509,24 @@ pub struct AppSettings {
     /// Owl: watch the text box after a paste and suggest fixes (`correction_watch.rs`).
     #[serde(default = "default_learn_from_edits")]
     pub learn_from_edits: bool,
+    /// Owl: a few sentences about the speaker's topics, given to speech
+    /// models that take context (`hearing.rs`). Written by the learner or
+    /// the user.
+    #[serde(default)]
+    pub hearing_context: String,
+    /// Owl: Words the learner saw misheard; they go first in the hint list.
+    #[serde(default)]
+    pub hearing_priority: Vec<String>,
+    /// Owl: how many Words the speech model hears as hints (`None`: all).
+    #[serde(default)]
+    pub hearing_word_limit: Option<usize>,
+    /// Owl: keep each dictation's audio and text on this Mac to learn from
+    /// (`learning.rs`). Off until the user turns it on.
+    #[serde(default)]
+    pub learning_enabled: bool,
+    /// Owl: show the AI cleanup a few of the user's own past fixes as examples.
+    #[serde(default)]
+    pub cleanup_examples: bool,
     /// Owl: ask to take notes when another app starts using the microphone
     /// (`meeting_detect.rs`).
     #[serde(default = "default_meeting_detection")]
@@ -782,6 +800,15 @@ fn default_post_process_providers() -> Vec<PostProcessProvider> {
             allow_base_url_edit: false,
             models_endpoint: Some("/models".to_string()),
             supports_structured_output: true,
+        },
+        // Owl: the user's ChatGPT plan, via Sign in with ChatGPT (`chatgpt.rs`).
+        PostProcessProvider {
+            id: crate::chatgpt::PROVIDER_ID.to_string(),
+            label: "ChatGPT".to_string(),
+            base_url: "https://api.openai.com/v1".to_string(),
+            allow_base_url_edit: false,
+            models_endpoint: Some("/models".to_string()),
+            supports_structured_output: false,
         },
         PostProcessProvider {
             id: "zai".to_string(),
@@ -1077,6 +1104,11 @@ pub fn get_default_settings() -> AppSettings {
         meeting_templates: Vec::new(),
         meeting_template: default_meeting_template(),
         learn_from_edits: default_learn_from_edits(),
+        hearing_context: String::new(),
+        hearing_priority: Vec::new(),
+        hearing_word_limit: None,
+        learning_enabled: false,
+        cleanup_examples: false,
         meeting_detection: default_meeting_detection(),
         local_api_enabled: false,
         local_api_token: Secret::default(),

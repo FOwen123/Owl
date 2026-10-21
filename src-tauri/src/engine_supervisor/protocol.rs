@@ -156,6 +156,9 @@ pub struct LoadedInfo {
     /// Owl: whether `RunOptions::vocabulary` reaches the model (`Feature::Vocabulary`).
     #[serde(default)]
     pub supports_vocabulary: bool,
+    /// Owl: whether `RunOptions::prompt` (free-text context) reaches the model.
+    #[serde(default)]
+    pub supports_context: bool,
 }
 
 /// Encode one frame. Refuses a section the reader would refuse, so an

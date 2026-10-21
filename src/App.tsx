@@ -9,6 +9,7 @@ import { toast, Toaster } from "sonner";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { platform } from "@tauri-apps/plugin-os";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   checkAccessibilityPermission,
   checkMicrophonePermission,
@@ -170,6 +171,23 @@ function App() {
   // The technical error detail is logged to owl.log on the Rust side
   // (see actions.rs `error!("Failed to paste transcription: ...")`),
   // so we show a localized, user-friendly message here instead of the raw error.
+  // Owl: the ChatGPT plan's allowance for Owl ran out (chatgpt.rs).
+  useEffect(() => {
+    const unlisten = listen<string>("chatgpt-limit", (event) => {
+      toast.error(t("settings.postProcessing.api.chatgpt.limitTitle"), {
+        id: "chatgpt-limit",
+        description: t("settings.postProcessing.api.chatgpt.limitDescription"),
+        action: {
+          label: t("settings.postProcessing.api.chatgpt.usage"),
+          onClick: () => openUrl(event.payload),
+        },
+      });
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [t]);
+
   useEffect(() => {
     const unlisten = listen("paste-error", () => {
       toast.error(t("errors.pasteFailedTitle"), {

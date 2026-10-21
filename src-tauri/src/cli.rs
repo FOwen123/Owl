@@ -69,4 +69,23 @@ pub struct CliArgs {
     /// (snippets, AI cleanup, dictionary), as the post-process shortcut does.
     #[arg(long)]
     pub post_process: bool,
+
+    /// Owl: replay the test set in this folder (set.jsonl + audio) through
+    /// Owl and score it (`eval.rs`). Honors --model and --post-process; writes
+    /// results/<--eval-name>.json in the folder and prints the summary.
+    #[arg(long, value_name = "DIR")]
+    pub eval: Option<PathBuf>,
+
+    /// Name of the --eval run's results file (default: "run").
+    #[arg(long, value_name = "NAME")]
+    pub eval_name: Option<String>,
+
+    /// Owl: write the learning log's corrected dictations as a test set to
+    /// this folder, for --eval.
+    #[arg(long, value_name = "DIR")]
+    pub export_learning: Option<PathBuf>,
+
+    /// Owl: run the learner once (as "Learn now" does) and print its report.
+    #[arg(long)]
+    pub learn: bool,
 }

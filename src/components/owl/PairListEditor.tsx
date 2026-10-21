@@ -4,6 +4,7 @@ import { ArrowRight, X } from "lucide-react";
 import { Input } from "../ui/Input";
 import { Textarea } from "../ui/Textarea";
 import { Button } from "../ui/Button";
+import { IconButton } from "../settings/history/HistorySettings";
 
 export type Pair = [string, string];
 
@@ -46,18 +47,20 @@ export const PairListEditor: React.FC<PairListEditorProps> = ({
   const SecondField = multiline ? Textarea : Input;
 
   return (
-    <div className="p-4 space-y-3">
-      <div className="flex items-start gap-2">
+    <>
+      <div className="flex items-start gap-2 px-4 py-3">
         <Input
-          className="w-48 shrink-0"
+          variant="compact"
+          className="w-40 shrink-0"
           value={first}
           placeholder={firstPlaceholder}
           onChange={(e) => setFirst(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
           disabled={disabled}
         />
-        <ArrowRight className="w-4 h-4 mt-2.5 shrink-0 text-mid-gray" />
+        <ArrowRight className="w-4 h-4 mt-1.5 shrink-0 text-mid-gray" />
         <SecondField
+          variant="compact"
           className="flex-1 min-w-0"
           value={second}
           placeholder={secondPlaceholder}
@@ -75,29 +78,30 @@ export const PairListEditor: React.FC<PairListEditorProps> = ({
       </div>
 
       {pairs.length === 0 ? (
-        <p className="text-sm text-mid-gray">{emptyText}</p>
+        <p className="px-4 py-3 text-center text-text/60">{emptyText}</p>
       ) : (
-        <ul className="divide-y divide-mid-gray/20 border border-mid-gray/20 rounded-lg">
+        <ul className="divide-y divide-border">
           {pairs.map(([a, b]) => (
-            <li key={a} className="flex items-start gap-3 px-3 py-2 text-sm">
-              <span className="w-48 shrink-0 font-medium break-words">{a}</span>
+            <li key={a} className="flex items-start gap-3 px-4 py-2 text-sm">
+              <span className="w-40 shrink-0 font-medium break-words">{a}</span>
               <ArrowRight className="w-4 h-4 mt-0.5 shrink-0 text-mid-gray" />
               <span className="flex-1 min-w-0 whitespace-pre-wrap break-words">
                 {b}
               </span>
-              <button
-                type="button"
-                className="shrink-0 text-mid-gray hover:text-text cursor-pointer"
-                aria-label={t("owl.pairs.remove", { item: a })}
-                onClick={() => onChange(pairs.filter(([x]) => x !== a))}
-                disabled={disabled}
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {/* Pulled up so the button lines up with the text. */}
+              <div className="-my-1 shrink-0">
+                <IconButton
+                  title={t("owl.pairs.remove", { item: a })}
+                  onClick={() => onChange(pairs.filter(([x]) => x !== a))}
+                  disabled={disabled}
+                >
+                  <X width={16} height={16} />
+                </IconButton>
+              </div>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </>
   );
 };

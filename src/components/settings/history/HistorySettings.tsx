@@ -16,7 +16,7 @@ import { AudioPlayer, AudioPlayerGroup } from "../../ui/AudioPlayer";
 import { Button } from "../../ui/Button";
 import { copyToClipboard } from "./clipboard";
 
-const IconButton: React.FC<{
+export const IconButton: React.FC<{
   onClick: () => void;
   title: string;
   disabled?: boolean;
@@ -365,6 +365,7 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
           <IconButton
             onClick={handleCopyText}
             disabled={!hasTranscription || retrying}
+            active={showCopied}
             title={t("settings.history.copyToClipboard")}
           >
             {showCopied ? (

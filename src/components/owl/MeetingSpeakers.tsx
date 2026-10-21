@@ -4,6 +4,9 @@ import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { commands, type Meeting } from "@/bindings";
 import { Button } from "../ui/Button";
+import Badge from "../ui/Badge";
+import { Input } from "../ui/Input";
+import { SettingContainer } from "../ui/SettingContainer";
 
 type Line = Meeting["transcript"][number];
 type Names = Meeting["speaker_names"];
@@ -47,17 +50,16 @@ export const SpeakerChips: React.FC<{ meeting: Meeting }> = ({ meeting }) => {
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
-      <span className="px-2 py-0.5 rounded-full bg-logo-primary/10 text-logo-primary">
-        {t("owl.notetaker.speaker.you")}
-      </span>
+      <Badge>{t("owl.notetaker.speaker.you")}</Badge>
       {voices.map((voice) =>
         editing === voice ? (
-          <input
+          <Input
             key={voice}
+            variant="compact"
             autoFocus
             defaultValue={meeting.speaker_names[voice] ?? ""}
             placeholder={t("owl.notetaker.speakerName")}
-            className="w-28 px-2 py-0.5 rounded-full border border-mid-gray/30 bg-transparent text-xs"
+            className="w-32 text-xs! py-0.5!"
             onBlur={(e) => save(voice, e.currentTarget.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
@@ -69,9 +71,11 @@ export const SpeakerChips: React.FC<{ meeting: Meeting }> = ({ meeting }) => {
             key={voice}
             type="button"
             onClick={() => setEditing(voice)}
-            className="px-2 py-0.5 rounded-full bg-mid-gray/10 hover:bg-mid-gray/20 cursor-pointer"
+            className="rounded-full cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-focus-ring"
           >
-            {label({ speaker: "others", voice })}
+            <Badge variant="secondary" className="hover:text-text">
+              {label({ speaker: "others", voice })}
+            </Badge>
           </button>
         ),
       )}
@@ -107,15 +111,12 @@ export const SpeakerModelRow: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-between gap-4 p-4">
-      <div className="min-w-0">
-        <p className="text-sm font-medium">
-          {t("owl.notetaker.speakerModel.title")}
-        </p>
-        <p className="text-xs text-mid-gray">
-          {t("owl.notetaker.speakerModel.description")}
-        </p>
-      </div>
+    <SettingContainer
+      title={t("owl.notetaker.speakerModel.title")}
+      description={t("owl.notetaker.speakerModel.description")}
+      descriptionMode="inline"
+      grouped
+    >
       <Button
         variant="secondary"
         size="sm"
@@ -127,6 +128,6 @@ export const SpeakerModelRow: React.FC = () => {
           ? t("owl.notetaker.speakerModel.download")
           : t("owl.notetaker.speakerModel.downloading", { percent })}
       </Button>
-    </div>
+    </SettingContainer>
   );
 };

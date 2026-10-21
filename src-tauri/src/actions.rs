@@ -726,12 +726,14 @@ pub(crate) async fn process_with(
         }
     }
 
-    // Owl: spoken numbers as digits, whether or not the AI ran.
+    // Owl: spoken numbers as digits, whether or not the AI ran. History shows
+    // the pasted text whenever it differs from what was heard.
     if settings.cleanup_level != CleanupLevel::None {
-        final_text = crate::numbers::format_numbers(&final_text);
-        if post_processed_text.is_some() {
-            post_processed_text = Some(final_text.clone());
+        let formatted = crate::numbers::format_numbers(&final_text);
+        if formatted != final_text || post_processed_text.is_some() {
+            post_processed_text = Some(formatted.clone());
         }
+        final_text = formatted;
     }
 
     ProcessedTranscription {

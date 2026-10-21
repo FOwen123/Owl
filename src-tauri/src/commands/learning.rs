@@ -93,6 +93,11 @@ pub fn undo_learned_change(app: AppHandle, id: i64) -> Result<(), String> {
     let change: Change = serde_json::from_str(&change).map_err(|e| e.to_string())?;
     update(&app, |s| change.undo(s));
     let _ = app.emit("learning-changed", ());
+    // So the settings store (Words, replacements, context) shows the undo.
+    let _ = app.emit(
+        "settings-changed",
+        serde_json::json!({ "setting": "learning" }),
+    );
     Ok(())
 }
 

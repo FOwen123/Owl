@@ -56,6 +56,20 @@ fn multiplier(word: &str) -> Option<u64> {
     }
 }
 
+/// "first" … "twentieth", "hundredth": ordinal number words.
+fn is_ordinal(word: &str) -> bool {
+    let w = word.to_ascii_lowercase();
+    if matches!(
+        w.as_str(),
+        "first" | "second" | "third" | "fifth" | "eighth" | "ninth" | "twelfth"
+    ) {
+        return true;
+    }
+    let stem = |suffix: &str| w.strip_suffix(suffix).map(str::to_string);
+    stem("ieth").is_some_and(|s| small(&format!("{s}y")).is_some())
+        || stem("th").is_some_and(|s| small(&s).is_some() || multiplier(&s).is_some())
+}
+
 fn is_number_word(w: &str) -> bool {
     small(w).is_some() || multiplier(w).is_some()
 }
@@ -184,6 +198,14 @@ fn english(text: &str) -> String {
             .filter(|w| !w.eq_ignore_ascii_case("and"))
             .collect();
         let next = |k: usize| ws.get(k).filter(|w| text[ws[k - 1].end..w.start] == *" ");
+        // "twenty-first", "one hundred second": an ordinal stays words.
+        let joined_next = ws
+            .get(j)
+            .filter(|w| matches!(&text[ws[j - 1].end..w.start], " " | "-"));
+        if joined_next.is_some_and(|w| is_ordinal(w.text)) {
+            i = j + 1;
+            continue;
+        }
 
         let mut digits = None;
         let mut end = j;
@@ -328,8 +350,9 @@ fn chinese(text: &str) -> String {
         let rest: String = chars[j..].iter().take(2).collect();
         let decimal = chars.get(j) == Some(&'點') || chars.get(j) == Some(&'点');
         let converted = if decimal && chars.get(j + 1).is_some_and(|c| digit(*c).is_some()) {
+            // Only a whole decimal; a clock time or idiom stays as said.
             let (n, end) = cn_number(&chars, i);
-            n.map(|n| (n, end))
+            n.filter(|n| n.contains('.')).map(|n| (n, end))
         } else if run.len() == 4
             && run.iter().all(|c| digit(*c).is_some())
             && rest.starts_with('年')
@@ -378,11 +401,29 @@ fn cn_number(chars: &[char], start: usize) -> (Option<String>, usize) {
             decimals.push_str(&d.to_string());
             k += 1;
         }
-        if !decimals.is_empty() {
+        if !decimals.is_empty() && decimal_ends(chars, k) {
             return (Some(format!("{whole}.{decimals}")), k);
         }
     }
     (Some(whole.to_string()), j)
+}
+
+/// Whether a decimal like 二點五 ends at `k`: at the end, before non-Chinese
+/// text, a unit or a particle. Clock times (一點五十分, 三點五分) and idioms
+/// (一點一滴) go on with something else and stay words.
+fn decimal_ends(chars: &[char], k: usize) -> bool {
+    const AFTER: &[&str] = &[
+        "倍", "萬", "万", "億", "亿", "元", "塊", "块", "公里", "公斤", "公升", "米", "版", "秒",
+        "小時", "小时", "度", "的", "了", "吧", "啊", "呢", "嗎", "吗", "和", "跟", "或", "到",
+    ];
+    let Some(&next) = chars.get(k) else {
+        return true;
+    };
+    if !crate::correction::is_cjk(next) {
+        return true;
+    }
+    let rest: String = chars[k..].iter().take(2).collect();
+    AFTER.iter().any(|a| rest.starts_with(a))
 }
 
 #[cfg(test)]
@@ -415,6 +456,9 @@ mod tests {
             "hundreds of users",
             "at one point we left",
             "Someone said one, two",
+            "the twenty-first version",
+            "the one hundred second time",
+            "his twenty fifth birthday",
         ] {
             assert_eq!(f(s), s);
         }
@@ -424,6 +468,8 @@ mod tests {
     fn chinese_numbers_become_digits_when_clear() {
         assert_eq!(f("大概百分之二十的人"), "大概20%的人");
         assert_eq!(f("版本二點五"), "版本2.5");
+        assert_eq!(f("版本二點五的功能"), "版本2.5的功能");
+        assert_eq!(f("快了二點五倍"), "快了2.5倍");
         assert_eq!(f("二零二六年的計畫"), "2026年的計畫");
         assert_eq!(f("我們有二十五個人"), "我們有25個人");
         assert_eq!(f("十二月十五號開會"), "12月15號開會");
@@ -442,6 +488,10 @@ mod tests {
             "三點開會",
             "一起去",
             "三心二意",
+            // Clock times and idioms aren't decimals.
+            "一點五十分開會",
+            "三點五分到",
+            "一點一滴累積經驗",
         ] {
             assert_eq!(f(s), s);
         }

@@ -335,7 +335,9 @@ impl AiCache {
             settings.post_process_models.get(provider),
             prompt,
             format!("{:?}", settings.cleanup_level),
+            // The spelling rule in the prompt lists Words and replacement targets.
             settings.custom_words,
+            settings.replacements,
             examples,
             text,
         ]);

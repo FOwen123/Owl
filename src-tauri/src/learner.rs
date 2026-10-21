@@ -107,6 +107,29 @@ impl Change {
         }
     }
 
+    /// The change with its `before` taken from `current`.
+    fn rebased(self, current: &AppSettings) -> Change {
+        match self {
+            Change::Priority { after, .. } => Change::Priority {
+                before: current.hearing_priority.clone(),
+                after,
+            },
+            Change::Context { after, .. } => Change::Context {
+                before: current.hearing_context.clone(),
+                after,
+            },
+            Change::WordLimit { after, .. } => Change::WordLimit {
+                before: current.hearing_word_limit.map(|n| n as u32),
+                after,
+            },
+            Change::Examples { after, .. } => Change::Examples {
+                before: current.cleanup_examples,
+                after,
+            },
+            other => other,
+        }
+    }
+
     /// Whether the change rests on fixes the user made, so it may be kept
     /// when it doesn't change the score (the judged dictations may not
     /// contain the word). The rest must improve it.
@@ -152,7 +175,8 @@ pub fn learn(app: &AppHandle) -> Result<LearnReport> {
     let _done = Done;
     let report = learn_once(app);
     if let (Ok(report), Some(learning)) = (&report, app.try_state::<Arc<Learning>>()) {
-        if let Err(e) = learning.add_run(report.keyed as i64, &serde_json::to_string(report)?) {
+        let watermark = learning.last_keyed_id().unwrap_or(0);
+        if let Err(e) = learning.add_run(watermark, &serde_json::to_string(report)?) {
             log::warn!("Learner: couldn't save the run: {e:#}");
         }
     }
@@ -197,12 +221,13 @@ fn learn_once(app: &AppHandle) -> Result<LearnReport> {
         study.iter().filter_map(|i| dictations.get(&i.id)).collect();
 
     let tm = app.state::<Arc<TranscriptionManager>>();
-    if !tm.is_model_loaded() {
-        tm.load_model(&settings.selected_model)?;
-    }
     let post_process = crate::actions::ai_cleanup_on(&settings);
     let cache = AiCache::open(learning.file("ai_replies.json"));
     let replay = |s: &AppSettings| -> Result<Summary> {
+        // An "unload immediately" setting drops the model after every run.
+        if !tm.is_model_loaded() {
+            tm.load_model(&settings.selected_model)?;
+        }
         // The judged items' audio paths are absolute.
         let results = eval::replay(
             app,
@@ -223,6 +248,9 @@ fn learn_once(app: &AppHandle) -> Result<LearnReport> {
     let candidates = propose(app, &settings, &study);
     let tried = candidates.len() as u32;
     for change in candidates {
+        // Undo must restore what was in place right before this change,
+        // which may be an earlier change from this run.
+        let change = change.rebased(&current);
         let mut trial = current.clone();
         change.apply(&mut trial);
         if trial.custom_words == current.custom_words
@@ -409,8 +437,12 @@ fn propose(
         }
     }
 
-    // A context passage about the user's topics.
-    if let Some(passage) = context_passage(settings, study) {
+    // A context passage about the user's topics, written by their AI, so
+    // only when they've let dictations go to it (AI cleanup on).
+    let passage = crate::actions::ai_cleanup_on(settings)
+        .then(|| context_passage(settings, study))
+        .flatten();
+    if let Some(passage) = passage {
         if passage != settings.hearing_context {
             out.push(Change::Context {
                 before: settings.hearing_context.clone(),
@@ -504,12 +536,12 @@ pub fn start_background(app: &AppHandle) {
         let Some(learning) = app.try_state::<Arc<Learning>>() else {
             continue;
         };
-        let keyed = learning.stats().map(|s| s.keyed).unwrap_or(0);
         let due = match learning.last_run() {
-            Ok(Some((at, last_keyed, _))) => {
-                chrono::Utc::now().timestamp() - at >= 24 * 60 * 60 && keyed >= last_keyed + 5
+            Ok(Some((at, watermark, _))) => {
+                chrono::Utc::now().timestamp() - at >= 24 * 60 * 60
+                    && learning.keyed_since(watermark).unwrap_or(0) >= 5
             }
-            Ok(None) => keyed >= MIN_KEYED as i64,
+            Ok(None) => learning.stats().map(|s| s.keyed).unwrap_or(0) >= MIN_KEYED as i64,
             Err(_) => false,
         };
         let recording = app
@@ -585,6 +617,20 @@ mod tests {
             c.undo(&mut s);
         }
         assert_eq!(serde_json::to_value(&s).unwrap(), original);
+    }
+
+    #[test]
+    fn undoing_a_later_cap_restores_the_earlier_one() {
+        let mut s = crate::settings::get_default_settings();
+        s.hearing_word_limit = Some(40);
+        let change = Change::WordLimit {
+            before: None,
+            after: Some(20),
+        }
+        .rebased(&s);
+        change.apply(&mut s);
+        change.undo(&mut s);
+        assert_eq!(s.hearing_word_limit, Some(40));
     }
 
     #[test]

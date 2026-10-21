@@ -381,6 +381,8 @@ async fn access_token() -> Result<String> {
 }
 
 pub async fn sign_out() -> Result<()> {
+    // A refresh still running would write the credentials back afterwards.
+    let _one = REFRESH.lock().await;
     if let Some(creds) = read::<Credentials>("credentials.json") {
         // Best effort: the local sign-out happens either way.
         if let Ok(endpoint) = revocation_endpoint().await {

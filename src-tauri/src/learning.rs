@@ -99,7 +99,26 @@ impl Learning {
         self.dir.join(name)
     }
 
-    /// Saves a learner run: how many keyed dictations it saw and its report.
+    /// The newest keyed dictation's id: a watermark that only grows, unlike
+    /// the count, which tidying shrinks.
+    pub fn last_keyed_id(&self) -> Result<i64> {
+        Ok(self.conn()?.query_row(
+            "SELECT COALESCE(MAX(id), 0) FROM dictations WHERE kept IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )?)
+    }
+
+    /// Keyed dictations newer than the `since` watermark.
+    pub fn keyed_since(&self, since: i64) -> Result<i64> {
+        Ok(self.conn()?.query_row(
+            "SELECT COUNT(*) FROM dictations WHERE kept IS NOT NULL AND id > ?1",
+            params![since],
+            |r| r.get(0),
+        )?)
+    }
+
+    /// Saves a learner run: the keyed watermark it saw and its report.
     pub fn add_run(&self, keyed: i64, report: &str) -> Result<()> {
         self.conn()?.execute(
             "INSERT INTO runs (at, keyed, report) VALUES (?1, ?2, ?3)",
@@ -108,7 +127,7 @@ impl Learning {
         Ok(())
     }
 
-    /// The last learner run: (when, keyed dictations then, report JSON).
+    /// The last learner run: (when, keyed watermark then, report JSON).
     pub fn last_run(&self) -> Result<Option<(i64, i64, String)>> {
         Ok(self
             .conn()?

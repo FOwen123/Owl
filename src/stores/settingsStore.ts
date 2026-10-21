@@ -153,6 +153,12 @@ const settingUpdaters: {
     commands.changeVoiceCommandsSetting(value as boolean),
   learn_from_edits: (value) =>
     commands.changeLearnFromEditsSetting(value as boolean),
+  learning_enabled: (value) =>
+    commands.changeLearningEnabledSetting(value as boolean),
+  hearing_context: (value) =>
+    commands.changeHearingContextSetting(value as string),
+  cleanup_examples: (value) =>
+    commands.changeCleanupExamplesSetting(value as boolean),
   meeting_detection: (value) =>
     commands.changeMeetingDetectionSetting(value as boolean),
   word_correction_threshold: (value) =>

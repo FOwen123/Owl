@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowRight } from "lucide-react";
 import { commands, type Replacement } from "@/bindings";
@@ -15,6 +15,16 @@ export const DictionaryPage: React.FC = () => {
     useSettings();
   const replacements = getSetting("replacements") ?? [];
   const suggestions = getSetting("edit_suggestions") ?? [];
+  // Swaps whose left side is a real word: they change it every time.
+  const [risky, setRisky] = useState<Replacement[]>([]);
+  useEffect(() => {
+    commands.riskyReplacements().then(setRisky);
+  }, [replacements]);
+  const removeSwap = (r: Replacement) =>
+    updateSetting(
+      "replacements",
+      replacements.filter((x) => !(x.from === r.from && x.to === r.to)),
+    );
 
   // Suggestions come from correction_watch.rs; Add moves one into replacements.
   const resolve = async (
@@ -58,6 +68,34 @@ export const DictionaryPage: React.FC = () => {
                   onClick={() => resolve(commands.acceptEditSuggestion, s)}
                 >
                   {t("owl.dictionary.addSuggestion")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </SettingsGroup>
+      )}
+
+      {risky.length > 0 && (
+        <SettingsGroup
+          title={t("owl.learning.riskyTitle")}
+          description={t("owl.learning.riskyDescription")}
+        >
+          <ul className="divide-y divide-mid-gray/20">
+            {risky.map((r) => (
+              <li
+                key={`${r.from}→${r.to}`}
+                className="flex items-center gap-3 px-4 py-2 text-sm"
+              >
+                <span className="font-medium break-words">{r.from}</span>
+                <ArrowRight className="w-4 h-4 shrink-0 text-mid-gray" />
+                <span className="flex-1 min-w-0 break-words">{r.to}</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => removeSwap(r)}
+                  disabled={isUpdating("replacements")}
+                >
+                  {t("owl.learning.remove")}
                 </Button>
               </li>
             ))}

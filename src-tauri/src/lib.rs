@@ -6,6 +6,7 @@ mod audio_feedback;
 pub mod audio_toolkit;
 mod autostart;
 mod catalog;
+mod chatgpt;
 mod chinese_script;
 mod cleanup_guard;
 mod cleanup_rules;
@@ -18,8 +19,12 @@ pub mod diarization;
 mod dictionary;
 mod echo;
 pub mod engine_supervisor;
+mod eval;
+mod hearing;
 mod helpers;
 mod input;
+mod learner;
+mod learning;
 mod llm_client;
 mod local_api;
 mod managers;
@@ -29,6 +34,7 @@ mod media;
 mod meeting_detect;
 mod meeting_window;
 mod memory;
+mod numbers;
 mod overlay;
 pub mod owl_cli;
 mod paste_tx;
@@ -238,6 +244,16 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(model_manager.clone());
     app_handle.manage(transcription_manager.clone());
     app_handle.manage(history_manager.clone());
+    match learning::Learning::new(app_handle) {
+        Ok(learning) => {
+            app_handle.manage(Arc::new(learning));
+        }
+        Err(e) => log::error!("Learning log unavailable: {e:#}"),
+    }
+    if let Ok(dir) = portable::app_data_dir(app_handle) {
+        chatgpt::init(app_handle, &dir);
+    }
+    learner::start_background(app_handle);
     app_handle.manage(meeting_manager);
     app_handle.manage(tray::TrayState::new());
     // A busy port turns the API off, so Settings shows what's true.
@@ -484,6 +500,72 @@ mod headless_guard_tests {
     }
 }
 
+/// Owl: `--eval DIR`. Loads the model once, replays the set and writes
+/// `DIR/results/NAME.json` (per-item results and summaries).
+fn run_eval(app: &AppHandle, args: &CliArgs, dir: &std::path::Path) -> i32 {
+    let items = match eval::load_set(dir) {
+        Ok(items) => items,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            return 2;
+        }
+    };
+    let settings = get_settings(app);
+    let model_id = args
+        .model
+        .clone()
+        .unwrap_or_else(|| settings.selected_model.clone());
+    let tm = app.state::<Arc<TranscriptionManager>>();
+    if let Err(e) = tm.load_model_with_device(&model_id, args.device_index) {
+        eprintln!("error: load_model('{model_id}') failed: {e}");
+        return 1;
+    }
+    let cache = eval::AiCache::open(dir.join("ai_replies.json"));
+    let total = items.len();
+    let results = eval::replay(
+        app,
+        &settings,
+        &items,
+        dir,
+        args.post_process,
+        &cache,
+        |i, r| {
+            eprintln!("[{}/{}] {} {}", i + 1, total, r.id, r.output);
+        },
+    );
+    if let Err(e) = cache.save() {
+        eprintln!("warning: couldn't save AI replies: {e:#}");
+    }
+    let results = match results {
+        Ok(results) => results,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            return 1;
+        }
+    };
+    let traditional = settings.chinese_script == settings::ChineseScript::Traditional;
+    let report = eval::report(&results, traditional);
+    let name = args.eval_name.as_deref().unwrap_or("run");
+    let out = serde_json::json!({
+        "model": model_id,
+        "post_process": args.post_process,
+        "summary": report,
+        "items": results,
+    });
+    let path = dir.join("results").join(format!("{name}.json"));
+    let written = std::fs::create_dir_all(dir.join("results"))
+        .and_then(|_| std::fs::write(&path, serde_json::to_vec_pretty(&out).unwrap_or_default()));
+    if let Err(e) = written {
+        eprintln!("error: can't write {}: {e}", path.display());
+        return 1;
+    }
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&report).unwrap_or_default()
+    );
+    0
+}
+
 /// Headless one-shot transcription for the `--transcribe-file` / `--list-devices`
 /// path. Drives the same `TranscriptionManager::transcribe` the app uses; no
 /// mic, no VAD, no download. Returns a process exit code (0 ok, 1 runtime
@@ -500,6 +582,41 @@ fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
             }
             Err(e) => {
                 eprintln!("error: {e}");
+                1
+            }
+        };
+    }
+
+    if let Some(out) = &args.export_learning {
+        let Some(learning) = app.try_state::<Arc<learning::Learning>>() else {
+            eprintln!("error: the learning log is unavailable");
+            return 1;
+        };
+        return match eval::export_learning(&learning, out) {
+            Ok(n) => {
+                println!("{n} dictations written to {}", out.display());
+                0
+            }
+            Err(e) => {
+                eprintln!("error: {e:#}");
+                1
+            }
+        };
+    }
+    if let Some(dir) = &args.eval {
+        return run_eval(app, args, dir);
+    }
+    if args.learn {
+        return match learner::learn(app) {
+            Ok(report) => {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).unwrap_or_default()
+                );
+                0
+            }
+            Err(e) => {
+                eprintln!("error: {e:#}");
                 1
             }
         };
@@ -876,6 +993,18 @@ pub fn run(cli_args: CliArgs) {
             commands::edits::accept_edit_suggestion,
             commands::edits::dismiss_edit_suggestion,
             commands::edits::change_learn_from_edits_setting,
+            commands::learning::get_learning_overview,
+            commands::learning::run_learning_now,
+            commands::learning::undo_learned_change,
+            commands::learning::change_learning_enabled_setting,
+            commands::learning::change_hearing_context_setting,
+            commands::learning::change_cleanup_examples_setting,
+            commands::learning::fix_history_entry,
+            commands::learning::logged_history_files,
+            commands::learning::risky_replacements,
+            commands::learning::chatgpt_status,
+            commands::learning::chatgpt_sign_in,
+            commands::learning::chatgpt_sign_out,
             commands::cleanup::change_cleanup_level_setting,
             commands::cleanup::change_voice_commands_setting,
             helpers::clamshell::is_laptop,
@@ -901,7 +1030,10 @@ pub fn run(cli_args: CliArgs) {
     let headless_mode = cli_args.transcribe_file.is_some()
         || cli_args.list_devices
         || cli_args.list_models
-        || cli_args.command.is_some();
+        || cli_args.command.is_some()
+        || cli_args.eval.is_some()
+        || cli_args.export_learning.is_some()
+        || cli_args.learn;
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
@@ -1033,6 +1165,13 @@ pub fn run(cli_args: CliArgs) {
                 app_handle.manage(model_manager);
                 app_handle.manage(transcription_manager);
                 managers::transcription::apply_accelerator_settings(&app_handle);
+                // Owl: --eval shows the AI past fixes; --export-learning reads them.
+                if let Ok(learning) = learning::Learning::new(&app_handle) {
+                    app_handle.manage(Arc::new(learning));
+                }
+                if let Ok(dir) = portable::app_data_dir(&app_handle) {
+                    chatgpt::init(&app_handle, &dir);
+                }
                 // Owl: `owl transcribe` imports through the meeting pipeline,
                 // without touching meetings the app may be recording.
                 if cli_args.command.is_some() {

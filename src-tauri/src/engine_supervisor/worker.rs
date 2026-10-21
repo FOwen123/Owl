@@ -379,6 +379,7 @@ fn load(
             .map_err(|e| format!("Failed to read model capabilities: {e}"))?,
         supports_initial_prompt: model.supports(Feature::InitialPrompt),
         supports_vocabulary: model.supports(Feature::Vocabulary),
+        supports_context: model.supports(Feature::ContextPrompt),
     };
     Ok((session, info))
 }

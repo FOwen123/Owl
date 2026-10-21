@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Cog,
   FlaskConical,
+  GraduationCap,
   History,
   BookOpen,
   Info,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import { OwlMark } from "./icons/OwlLogo";
 import { DictionaryPage } from "./owl/DictionaryPage";
+import { LearningPage } from "./owl/LearningPage";
 import { NotetakerPage } from "./owl/NotetakerPage";
 import { SnippetsPage } from "./owl/SnippetsPage";
 import { useSettings } from "../hooks/useSettings";
@@ -63,6 +65,12 @@ export const SECTIONS_CONFIG = {
     labelKey: "sidebar.dictionary",
     icon: BookOpen,
     component: DictionaryPage,
+    enabled: () => true,
+  },
+  learning: {
+    labelKey: "sidebar.learning",
+    icon: GraduationCap,
+    component: LearningPage,
     enabled: () => true,
   },
   snippets: {

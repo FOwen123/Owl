@@ -92,13 +92,13 @@ pub(crate) fn is_cjk(c: char) -> bool {
     matches!(c, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}' | '\u{20000}'..='\u{2FFFF}')
 }
 
-fn is_cjk_token(t: &str) -> bool {
+pub(crate) fn is_cjk_token(t: &str) -> bool {
     t.chars().all(is_cjk)
 }
 
 /// English words and single Chinese characters. Spaces and punctuation are
 /// dropped, so punctuation-only edits never produce a suggestion.
-fn tokens(text: &str) -> Vec<String> {
+pub(crate) fn tokens(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut word = String::new();
     let flush = |word: &mut String, out: &mut Vec<String>| {
@@ -123,11 +123,11 @@ fn tokens(text: &str) -> Vec<String> {
 }
 
 /// A changed run: (range in the pasted tokens, range in the edited tokens).
-type Change = (Range<usize>, Range<usize>);
+pub(crate) type Change = (Range<usize>, Range<usize>);
 
 /// Longest-common-subsequence alignment. Returns the number of matching
 /// tokens and the changed runs.
-fn diff(a: &[String], b: &[String]) -> (usize, Vec<Change>) {
+pub(crate) fn diff(a: &[String], b: &[String]) -> (usize, Vec<Change>) {
     let (n, m) = (a.len(), b.len());
     let mut lcs = vec![vec![0u16; m + 1]; n + 1];
     for i in (0..n).rev() {

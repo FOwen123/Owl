@@ -339,6 +339,10 @@ pub async fn send_chat_completion_with_schema(
     json_schema: Option<Value>,
     disable_reasoning: bool,
 ) -> Result<Option<String>, String> {
+    // Owl: Sign in with ChatGPT runs on the user's plan through the Responses API.
+    if provider.id == crate::chatgpt::PROVIDER_ID {
+        return crate::chatgpt::complete(model, system_prompt, user_content).await;
+    }
     let base_url = provider.base_url.trim_end_matches('/');
     let url = format!("{}/chat/completions", base_url);
 
@@ -471,6 +475,9 @@ pub async fn fetch_models(
     provider: &PostProcessProvider,
     api_key: String,
 ) -> Result<Vec<String>, String> {
+    if provider.id == crate::chatgpt::PROVIDER_ID {
+        return crate::chatgpt::models().await;
+    }
     let base_url = provider.base_url.trim_end_matches('/');
     let url = format!("{}/models", base_url);
 

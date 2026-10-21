@@ -8,6 +8,8 @@ import { Dropdown } from "../ui/Dropdown";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Textarea } from "../ui/Textarea";
+import { SettingContainer } from "../ui/SettingContainer";
+import { IconButton } from "../settings/history/HistorySettings";
 
 /** Every template, built-in and the user's, for the template dropdowns. */
 export const useTemplateOptions = (builtIn: string[]) => {
@@ -42,15 +44,18 @@ export const MeetingTemplates: React.FC<{ builtIn: string[] }> = ({
       title={t("owl.notetaker.templates.title")}
       description={t("owl.notetaker.templates.description")}
     >
-      <div className="flex items-center justify-between gap-4 px-4 py-3">
-        <span className="text-sm">{t("owl.notetaker.templates.default")}</span>
+      <SettingContainer
+        title={t("owl.notetaker.templates.default")}
+        description={t("owl.notetaker.templates.defaultDescription")}
+        descriptionMode="inline"
+        grouped
+      >
         <Dropdown
           options={options}
           selectedValue={getSetting("meeting_template") ?? "general"}
           onSelect={(value) => updateSetting("meeting_template", value)}
-          className="w-48"
         />
-      </div>
+      </SettingContainer>
       {own.map((tpl) => (
         <TemplateEditor
           key={tpl.id}
@@ -110,14 +115,12 @@ const TemplateEditor: React.FC<{
           onBlur={save}
           className="flex-1"
         />
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={t("owl.notetaker.templates.remove")}
+        <IconButton
+          title={t("owl.notetaker.templates.remove")}
           onClick={onRemove}
         >
-          <Trash2 className="w-4 h-4" />
-        </Button>
+          <Trash2 width={16} height={16} />
+        </IconButton>
       </div>
       <Textarea
         value={draft.prompt}

@@ -6,7 +6,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  ArrowUp,
+  Check,
   Copy,
   Sparkles,
   MoreHorizontal,
@@ -22,10 +22,14 @@ import {
 import { formatDateTime } from "@/utils/dateFormat";
 import { SettingsGroup } from "../ui/SettingsGroup";
 import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
+import { SettingContainer } from "../ui/SettingContainer";
 import { Alert } from "../ui/Alert";
 import { Dropdown } from "../ui/Dropdown";
 import { ToggleSwitch } from "../ui/ToggleSwitch";
 import { MarkdownContent } from "../whats-new/MarkdownContent";
+import { IconButton } from "../settings/history/HistorySettings";
+import { copyToClipboard } from "../settings/history/clipboard";
 import {
   SpeakerChips,
   SpeakerModelRow,
@@ -66,6 +70,27 @@ const aiError = (error: string, t: TFunction) => {
   } else {
     toast.error(error);
   }
+};
+
+/** `on` for 2 s after `flash()`: a blue tick in place of an icon, as
+ * History's copy button shows. */
+const useFlash = () => {
+  const [on, setOn] = useState(false);
+  const flash = () => {
+    setOn(true);
+    setTimeout(() => setOn(false), 2000);
+  };
+  return { on, flash };
+};
+
+const useCopy = () => {
+  const { t } = useTranslation();
+  const { on: copied, flash } = useFlash();
+  const copy = async (text: string) => {
+    if (await copyToClipboard(text)) flash();
+    else toast.error(t("settings.history.copyError"));
+  };
+  return { copied, copy };
 };
 
 /** The notes' first sentence, without Markdown, for the meeting list. */
@@ -122,10 +147,12 @@ export const NotetakerPage: React.FC = () => {
   return (
     <div className="max-w-3xl w-full mx-auto space-y-6">
       <SettingsGroup title={t("owl.notetaker.title")}>
-        <div className="flex items-center justify-between gap-4 p-4">
-          <p className="text-sm text-mid-gray">
-            {t("owl.notetaker.description")}
-          </p>
+        <SettingContainer
+          title={t("owl.notetaker.startTitle")}
+          description={t("owl.notetaker.description")}
+          descriptionMode="inline"
+          grouped
+        >
           <Button
             disabled={busy || !!recording}
             onClick={() => run(commands.startMeeting)}
@@ -133,7 +160,7 @@ export const NotetakerPage: React.FC = () => {
           >
             {t("owl.notetaker.start")}
           </Button>
-        </div>
+        </SettingContainer>
         <SpeakerModelRow />
         <ToggleSwitch
           checked={getSetting("meeting_detection") ?? true}
@@ -148,7 +175,7 @@ export const NotetakerPage: React.FC = () => {
 
       <SettingsGroup title={t("owl.notetaker.meetings")}>
         {meetings.length === 0 ? (
-          <p className="p-4 text-sm text-mid-gray">
+          <p className="px-4 py-3 text-center text-text/60">
             {t("owl.notetaker.empty")}
           </p>
         ) : (
@@ -199,14 +226,12 @@ const AskMeetings: React.FC = () => {
         <div className="max-h-80 overflow-y-auto rounded-xl border border-border bg-surface p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
             <p className="text-sm font-medium">{asked}</p>
-            <button
-              type="button"
-              aria-label={t("common.close")}
+            <IconButton
+              title={t("common.close")}
               onClick={() => setAsked(null)}
-              className="text-mid-gray hover:text-text cursor-pointer"
             >
-              <X className="w-4 h-4" />
-            </button>
+              <X width={16} height={16} />
+            </IconButton>
           </div>
           {answer ? (
             <MarkdownContent markdown={answer} />
@@ -217,25 +242,19 @@ const AskMeetings: React.FC = () => {
           )}
         </div>
       )}
-      <form
-        onSubmit={ask}
-        className="flex items-center gap-2 rounded-full border border-border bg-surface ps-4 pe-1.5 py-1.5 shadow-sm"
-      >
-        <input
+      <form onSubmit={ask} className="flex items-center gap-2">
+        <Input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder={t("owl.notetaker.askPlaceholder")}
           aria-label={t("owl.notetaker.askPlaceholder")}
-          className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-mid-gray"
+          className="flex-1 min-w-0"
         />
         <Button
           type="submit"
-          size="sm"
           disabled={!question.trim() || (!!asked && !answer)}
-          aria-label={t("owl.notetaker.askSend")}
-          className="rounded-full! p-1.5!"
         >
-          <ArrowUp className="w-4 h-4" />
+          {t("owl.notetaker.askSend")}
         </Button>
       </form>
     </div>
@@ -319,7 +338,7 @@ const MoreMenu: React.FC<{
         {label ?? <MoreHorizontal className="w-4 h-4" />}
       </Button>
       {open && (
-        <div className="absolute end-0 mt-1 min-w-40 z-20 py-1 rounded-lg border border-border bg-surface shadow-lg">
+        <div className="absolute end-0 mt-1 min-w-40 z-50 p-1 rounded-lg border border-border bg-surface shadow-[0_12px_28px_-18px_rgb(0_0_0/40%)]">
           {items.map((item) => (
             <button
               key={item.label}
@@ -328,7 +347,7 @@ const MoreMenu: React.FC<{
                 setOpen(false);
                 item.onSelect();
               }}
-              className={`w-full px-3 py-1.5 text-start text-sm hover:bg-mid-gray/10 cursor-pointer ${item.danger ? "text-error" : ""}`}
+              className={`w-full px-2 py-1 text-start text-sm rounded-md hover:bg-surface-raised transition-colors duration-150 cursor-pointer ${item.danger ? "text-error" : ""}`}
             >
               {item.label}
             </button>
@@ -354,12 +373,12 @@ const MeetingTitle: React.FC<{ meeting: Meeting; fallback: string }> = ({
   };
   if (editing) {
     return (
-      <input
+      <Input
         autoFocus
         defaultValue={meeting.title ?? ""}
         placeholder={fallback}
         aria-label={t("owl.notetaker.rename")}
-        className="w-full text-lg font-semibold bg-transparent border-b border-mid-gray/30 outline-none"
+        className="w-full text-lg! font-semibold"
         onBlur={(e) => save(e.currentTarget.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
@@ -389,6 +408,9 @@ const MeetingDetail: React.FC<{
   const speaker = useSpeakerLabel(meeting.speaker_names);
   const fillSpeakers = useFillSpeakers(meeting.speaker_names);
   const templates = useTemplateOptions(options.built_in_templates);
+  const notesCopy = useCopy();
+  const transcriptCopy = useCopy();
+  const exported = useFlash();
   const [template, setTemplate] = useState<string | null>(meeting.template);
   const [provider, setProvider] = useState<string | null>(null);
   const { getSetting } = useSettings();
@@ -428,9 +450,7 @@ const MeetingDetail: React.FC<{
       filters: [{ name: extension.toUpperCase(), extensions: [extension] }],
     });
     if (!path) return;
-    act(commands.exportMeeting(meeting.id, format, path), () =>
-      toast.success(t("owl.notetaker.exported")),
-    );
+    act(commands.exportMeeting(meeting.id, format, path), exported.flash);
   };
 
   const act = async (
@@ -458,7 +478,11 @@ const MeetingDetail: React.FC<{
           <MoreMenu
             label={
               <>
-                <Download className="w-4 h-4" />
+                {exported.on ? (
+                  <Check className="w-4 h-4 text-accent" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
                 {t("owl.notetaker.export")}
               </>
             }
@@ -523,20 +547,19 @@ const MeetingDetail: React.FC<{
                 <div className="flex-1 min-w-0">
                   <MarkdownContent markdown={fillSpeakers(meeting.summary)} />
                 </div>
-                <button
-                  type="button"
-                  aria-label={t("common.copy")}
+                <IconButton
+                  active={notesCopy.copied}
                   title={t("common.copy")}
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(
-                      fillSpeakers(meeting.summary ?? ""),
-                    );
-                    toast.success(t("owl.notetaker.notesCopied"));
-                  }}
-                  className="text-mid-gray hover:text-text cursor-pointer"
+                  onClick={() =>
+                    notesCopy.copy(fillSpeakers(meeting.summary ?? ""))
+                  }
                 >
-                  <Copy className="w-4 h-4" />
-                </button>
+                  {notesCopy.copied ? (
+                    <Check width={16} height={16} />
+                  ) : (
+                    <Copy width={16} height={16} />
+                  )}
+                </IconButton>
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2">
@@ -578,11 +601,11 @@ const MeetingDetail: React.FC<{
 
       <SettingsGroup title={t("owl.notetaker.transcript")}>
         {meeting.status === "transcribing" ? (
-          <p className="p-4 text-sm text-mid-gray">
+          <p className="px-4 py-3 text-center text-text/60">
             {t("owl.notetaker.status.transcribing")}
           </p>
         ) : meeting.transcript.length === 0 ? (
-          <p className="p-4 text-sm text-mid-gray">
+          <p className="px-4 py-3 text-center text-text/60">
             {t("owl.notetaker.noSpeech")}
           </p>
         ) : (
@@ -591,12 +614,13 @@ const MeetingDetail: React.FC<{
               variant="secondary"
               size="sm"
               className="inline-flex items-center gap-1.5"
-              onClick={async () => {
-                await navigator.clipboard.writeText(transcriptText);
-                toast.success(t("owl.notetaker.copied"));
-              }}
+              onClick={() => transcriptCopy.copy(transcriptText)}
             >
-              <Copy className="w-3.5 h-3.5" />
+              {transcriptCopy.copied ? (
+                <Check className="w-3.5 h-3.5 text-accent" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
               {t("owl.notetaker.copy")}
             </Button>
             <ul className="space-y-2">

@@ -42,7 +42,7 @@ export const DictionaryPage: React.FC = () => {
           title={t("owl.dictionary.suggestionsTitle")}
           description={t("owl.dictionary.suggestionsDescription")}
         >
-          <ul className="divide-y divide-mid-gray/20">
+          <ul className="divide-y divide-border">
             {suggestions.map((s) => (
               <li
                 key={`${s.from}→${s.to}`}
@@ -80,7 +80,7 @@ export const DictionaryPage: React.FC = () => {
           title={t("owl.learning.riskyTitle")}
           description={t("owl.learning.riskyDescription")}
         >
-          <ul className="divide-y divide-mid-gray/20">
+          <ul className="divide-y divide-border">
             {risky.map((r) => (
               <li
                 key={`${r.from}→${r.to}`}

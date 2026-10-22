@@ -295,11 +295,19 @@ fn unit(c: char) -> Option<u64> {
 
 fn cn_value(s: &[char]) -> Option<u64> {
     let (mut total, mut section, mut current) = (0u64, 0u64, 0u64);
+    let mut after_digit = false;
     for &c in s {
         if let Some(d) = digit(c) {
+            // 二三十, 兩三百: two digits in a row are a range ("twenty or
+            // thirty"), not one number. 一千零二's 零 only holds a place.
+            if after_digit && d != 0 {
+                return None;
+            }
+            after_digit = d != 0;
             current = d;
             continue;
         }
+        after_digit = false;
         let u = unit(c)?;
         if u >= 10_000 {
             let part = section + current;
@@ -512,6 +520,9 @@ mod tests {
             "一點五十分開會",
             "三點五分到",
             "一點一滴累積經驗",
+            // Ranges stay as said.
+            "二三十個人",
+            "兩三百塊",
         ] {
             assert_eq!(f(s), s);
         }

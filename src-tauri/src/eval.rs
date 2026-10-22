@@ -73,10 +73,35 @@ impl Item {
 pub fn load_set(dir: &Path) -> Result<Vec<Item>> {
     let text = std::fs::read_to_string(dir.join("set.jsonl"))
         .with_context(|| format!("no set.jsonl in {}", dir.display()))?;
-    text.lines()
+    let mut items: Vec<Item> = text
+        .lines()
         .filter(|l| !l.trim().is_empty())
         .map(|l| serde_json::from_str(l).context("bad line in set.jsonl"))
-        .collect()
+        .collect::<Result<_>>()?;
+    apply_labels(dir, &mut items)?;
+    Ok(items)
+}
+
+/// Hand labels from `scripts/eval/label.py` (`labels.json`) replace a set's
+/// keys, which for a Wispr set are Wispr's own text and so miss its mistakes.
+fn apply_labels(dir: &Path, items: &mut [Item]) -> Result<()> {
+    #[derive(Deserialize)]
+    struct Label {
+        status: String,
+        verbatim: String,
+        clean: String,
+    }
+    let Ok(text) = std::fs::read_to_string(dir.join("labels.json")) else {
+        return Ok(());
+    };
+    let labels: HashMap<String, Label> = serde_json::from_str(&text).context("bad labels.json")?;
+    for item in items {
+        if let Some(l) = labels.get(&item.id).filter(|l| l.status == "done") {
+            item.hearing = Some(l.verbatim.clone());
+            item.kept = Some(l.clean.clone());
+        }
+    }
+    Ok(())
 }
 
 /// Oldest 80% to learn from, newest 20% to judge with, so a change is never

@@ -1,7 +1,7 @@
 # /// script
 # dependencies = []
 # ///
-"""Compare two `handy --eval` runs: what moved, and which items got worse.
+"""Compare two `owl --eval` runs: what moved, and which items got worse.
 
 Usage: uv run scripts/eval/compare.py SET_DIR OLD NEW [--top N]
 OLD and NEW are run names (SET_DIR/results/NAME.json) or paths to them.

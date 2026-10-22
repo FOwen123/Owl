@@ -11,7 +11,7 @@ Sets (all open on Hugging Face, no account needed):
   librispeech  LibriSpeech test-clean (English, CC BY 4.0)
 
 Writes OUT_DIR/clips/*.wav (16 kHz mono 16-bit, via macOS afconvert) and
-OUT_DIR/set.jsonl for `handy --eval OUT_DIR`. Each item's answer key is the
+OUT_DIR/set.jsonl for `owl --eval OUT_DIR`. Each item's answer key is the
 human transcript, so these score hearing, not cleanup.
 """
 import argparse

@@ -140,16 +140,22 @@ To let Claude Code read your meetings and dictations, run
 
 ## Troubleshooting
 
-**The shortcut does nothing.** macOS Secure Input is probably on. Password
-fields and some apps turn it on, and it usually goes away by itself. To find
-the app holding it, run `ioreg -l -w 0 | grep kCGSSessionSecureInputPID`, then
-`ps -p <PID>`, and quit that app.
+### Shortcuts stopped working (Secure Input)
 
-**Accessibility stays on "Waiting..." after a rebuild.** Quit Owl, run
-`tccutil reset Accessibility com.hao.owl`, open Owl and allow it again.
+macOS Secure Input is probably on. Password fields and some apps turn it on,
+and it usually goes away by itself. To find the app holding it, run
+`ioreg -l -w 0 | grep kCGSSessionSecureInputPID`, then `ps -p <PID>`, and quit
+that app.
 
-**Meetings only have my side.** Turn Owl on in **System Settings > Privacy &
-Security > System Audio Recording**.
+### Accessibility stays on "Waiting..." after a rebuild
+
+Quit Owl, run `tccutil reset Accessibility com.hao.owl`, open Owl and allow it
+again.
+
+### Meetings only have my side
+
+Turn Owl on in **System Settings > Privacy & Security > System Audio
+Recording**.
 
 [BUILD.md](BUILD.md) has more, including build errors.
 

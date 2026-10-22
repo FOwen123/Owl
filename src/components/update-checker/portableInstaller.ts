@@ -9,7 +9,7 @@
 // `releases/download/v<version>/…` tag URL instead of a moving `latest` link.
 
 export const PORTABLE_RELEASES_URL =
-  "https://github.com/cjpais/Handy/releases/latest";
+  "https://github.com/FOwen123/Owl/releases/latest";
 
 /**
  * Pick the NSIS installer URL for the running target out of the update manifest.

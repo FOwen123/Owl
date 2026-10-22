@@ -789,7 +789,10 @@
     "addingToDictionary": "正在加入字典",
     "addedToDictionary": "已加入字典",
     "dontAdd": "不要加入",
-    "loadingModel": "正在載入模型..."
+    "loadingModel": "正在載入模型...",
+    "selectTextBox": "請先選擇一個文字框",
+    "copy": "複製",
+    "copied": "已複製"
   },
   "whatsNew": {
     "title": "Owl v{{version}} 新功能"

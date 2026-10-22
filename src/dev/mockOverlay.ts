@@ -1,12 +1,18 @@
 // Dev-only: plays the recording overlay in a browser with fake mic levels.
 // `bun run dev`, then open http://localhost:1420/src/overlay/index.html?mock
-// (add `&state=transcribing` for the working pill).
+// (add `&state=transcribing` for the working pill, `&state=notice` for
+// "Select a text box first").
 import { emit } from "@tauri-apps/api/event";
 
 export function playMockOverlay() {
   const state = new URLSearchParams(location.search).get("state");
   document.body.style.background = "#3a3a3a";
   setTimeout(async () => {
+    if (state === "notice")
+      await emit("no-text-box", {
+        text: "Let's meet on Thursday at three to go over the plan.",
+        seconds: 6,
+      });
     await emit("show-overlay", state ?? "recording");
     // Arming (sleepy owl) for a moment, as when the mic is starting.
     setTimeout(() => emit("recording-ready"), 1200);

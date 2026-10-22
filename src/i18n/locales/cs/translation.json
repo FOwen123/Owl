@@ -789,7 +789,10 @@
     "addingToDictionary": "Adding to dictionary",
     "addedToDictionary": "Added to dictionary",
     "dontAdd": "Don't add",
-    "loadingModel": "Načítání modelu..."
+    "loadingModel": "Načítání modelu...",
+    "selectTextBox": "Select a text box first",
+    "copy": "Copy",
+    "copied": "Copied"
   },
   "whatsNew": {
     "title": "Novinky v Owl v{{version}}"

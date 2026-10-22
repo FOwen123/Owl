@@ -7,6 +7,7 @@
     "core:default",
     "core:window:allow-start-dragging",
     "core:window:allow-hide",
+    "clipboard-manager:allow-write-text",
     "opener:default",
     "store:default",
     "updater:default",

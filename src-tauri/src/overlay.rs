@@ -61,7 +61,7 @@ const OVERLAY_SUGGESTION_HEIGHT: f64 = 64.0;
 fn overlay_dimensions(state: &str) -> (f64, f64) {
     match state {
         "streaming" => (OVERLAY_STREAM_WIDTH, OVERLAY_STREAM_HEIGHT),
-        "suggestion" => (OVERLAY_SUGGESTION_WIDTH, OVERLAY_SUGGESTION_HEIGHT),
+        "suggestion" | "notice" => (OVERLAY_SUGGESTION_WIDTH, OVERLAY_SUGGESTION_HEIGHT),
         _ => (OVERLAY_WIDTH, OVERLAY_HEIGHT),
     }
 }
@@ -72,6 +72,11 @@ static OVERLAY_MODE: AtomicU8 = AtomicU8::new(MODE_HIDDEN);
 const MODE_HIDDEN: u8 = 0;
 const MODE_DICTATION: u8 = 1;
 const MODE_SUGGESTION: u8 = 2;
+const MODE_NOTICE: u8 = 3;
+
+/// Bumped by every notice, so an older one's timer can't hide a newer one.
+static NOTICES: AtomicU64 = AtomicU64::new(0);
+const NOTICE_SECONDS: u64 = 6;
 
 static LAST_MIC_LEVEL_EMIT: AtomicU64 = AtomicU64::new(0);
 const EMIT_THROTTLE_MS: u64 = 33; // ~30 FPS
@@ -504,10 +509,10 @@ fn show_overlay_state(app_handle: &AppHandle, state: &str) {
     if settings.overlay_style == OverlayStyle::None {
         return;
     }
-    let mode = if state == "suggestion" {
-        MODE_SUGGESTION
-    } else {
-        MODE_DICTATION
+    let mode = match state {
+        "suggestion" => MODE_SUGGESTION,
+        "notice" => MODE_NOTICE,
+        _ => MODE_DICTATION,
     };
     OVERLAY_MODE.store(mode, Ordering::SeqCst);
 
@@ -670,6 +675,31 @@ pub fn show_suggestion_overlay(
     );
     show_overlay_state(app_handle, "suggestion");
     true
+}
+
+/// Owl: "Select a text box first", with the dictation and a Copy button, when
+/// a dictation had nowhere to go. Hides itself after a few seconds.
+pub fn show_no_text_box_overlay(app_handle: &AppHandle, text: &str) {
+    if settings::get_settings(app_handle).overlay_style == OverlayStyle::None {
+        hide_recording_overlay(app_handle);
+        return;
+    }
+    let notice = NOTICES.fetch_add(1, Ordering::SeqCst) + 1;
+    let _ = app_handle.emit_to(
+        "recording_overlay",
+        "no-text-box",
+        serde_json::json!({ "text": text, "seconds": NOTICE_SECONDS }),
+    );
+    show_overlay_state(app_handle, "notice");
+    let handle = app_handle.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(NOTICE_SECONDS));
+        if NOTICES.load(Ordering::SeqCst) == notice
+            && OVERLAY_MODE.load(Ordering::SeqCst) == MODE_NOTICE
+        {
+            hide_recording_overlay(&handle);
+        }
+    });
 }
 
 /// Owl: hides the suggestion, unless a dictation has taken the overlay since.

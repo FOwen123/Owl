@@ -5,7 +5,13 @@ description = "Handy"
 authors = ["cjpais"]
 edition = "2021"
 license = "MIT"
-default-run = "handy"
+default-run = "owl"
+
+# Owl: the program is `owl` (target/debug/owl); the package keeps Handy's
+# name so upstream merges stay small.
+[[bin]]
+name = "owl"
+path = "src/main.rs"
 
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.

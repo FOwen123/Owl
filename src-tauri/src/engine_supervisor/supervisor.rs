@@ -1478,7 +1478,7 @@ mod unit_tests {
 /// need a debug worker exe (fault injection is compiled out of release), and
 /// the stream tests a model that can stream.
 /// Run with:
-/// `HANDY_TRANSCRIBE_WORKER_EXE=target/debug/handy HANDY_TEST_MODEL=<gguf>
+/// `HANDY_TRANSCRIBE_WORKER_EXE=target/debug/owl HANDY_TEST_MODEL=<gguf>
 ///  HANDY_TEST_WAV=<16 kHz mono wav> cargo test --lib engine_supervisor --
 ///  --ignored --nocapture --test-threads=1`
 #[cfg(test)]

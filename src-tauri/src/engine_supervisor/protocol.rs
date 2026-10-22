@@ -1,4 +1,4 @@
-//! Wire protocol between Handy and its transcribe.cpp worker process.
+//! Wire protocol between Owl and its transcribe.cpp worker process.
 //!
 //! Strict request/response: every [`Request`] gets exactly one [`Response`].
 //! Each message is one frame: `[u32 json_len][json][u32 pcm_len][pcm bytes]`

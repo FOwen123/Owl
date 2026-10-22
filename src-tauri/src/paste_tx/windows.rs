@@ -49,7 +49,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_DESTROYCLIPBOARD, WM_RENDERALLFORMATS, WM_RENDERFORMAT, WM_TIMER, WNDCLASSW,
 };
 
-const CLASS_NAME: PCWSTR = w!("HandyPasteTxWindow");
+const CLASS_NAME: PCWSTR = w!("OwlPasteTxWindow");
 const TIMER_ID: usize = 1;
 const TIMER_INTERVAL_MS: u32 = 25;
 /// Skip clipboard formats larger than this when snapshotting.
@@ -509,7 +509,7 @@ fn pump_thread(shared: Arc<WinTxShared>, ready: Sender<Result<(), String>>) {
         let hwnd = match CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             CLASS_NAME,
-            w!("HandyPasteTx"),
+            w!("OwlPasteTx"),
             WINDOW_STYLE::default(),
             0,
             0,

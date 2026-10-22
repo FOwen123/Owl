@@ -323,7 +323,7 @@ impl SoundTheme {
 }
 
 /// UI appearance mode. `System` follows the OS `prefers-color-scheme`; `Light`
-/// and `Dark` force one of the two palettes Handy already ships.
+/// and `Dark` force one of the two palettes Owl already ships.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum Theme {
@@ -1470,14 +1470,14 @@ fn apply_settings_migrations(
 }
 
 /// Owl: update checks are always forced off. Owl has no release feed yet, and
-/// the updater must never fetch Handy's releases (they would replace Owl).
-/// Restore the `HANDY_DISABLE_UPDATER` check once Owl publishes its own feed.
+/// the updater must never fetch Owl's releases (they would replace Owl).
+/// Restore the `OWL_DISABLE_UPDATER` check once Owl publishes its own feed.
 pub fn update_checks_forced_disabled() -> bool {
     true
 }
 
 /// Effective updater state: the user's stored preference, overridden to `false`
-/// while `HANDY_DISABLE_UPDATER` is set. Callers deciding whether to actually
+/// while `OWL_DISABLE_UPDATER` is set. Callers deciding whether to actually
 /// check for updates must use this rather than reading `update_checks_enabled`
 /// directly, so the forced-off state never leaks into the persisted setting.
 pub fn update_checks_effectively_enabled(settings: &AppSettings) -> bool {

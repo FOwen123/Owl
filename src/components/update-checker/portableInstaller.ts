@@ -14,7 +14,7 @@ export const PORTABLE_RELEASES_URL =
 /**
  * Pick the NSIS installer URL for the running target out of the update manifest.
  * Falls back to the generic releases page whenever there is no matching entry —
- * e.g. a portable install on a platform Handy ships no NSIS bundle for.
+ * e.g. a portable install on a platform Owl ships no NSIS bundle for.
  *
  * @param rawJson `Update.rawJson`, the deserialized `latest.json` manifest
  * @param platformName value from `@tauri-apps/plugin-os` `platform()`

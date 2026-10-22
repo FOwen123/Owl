@@ -121,7 +121,7 @@ export const MODEL_CAPABILITY_LANGUAGES: Language[] = LANGUAGES.filter(
   (language) => language.value !== "auto",
 );
 
-// Collapse a language tag to the canonical recognition intent Handy exposes in
+// Collapse a language tag to the canonical recognition intent Owl exposes in
 // the UI. BCP-47 region/script subtags are dropped ("en-US" → "en",
 // "zh-Hant" → "zh"), and model-specific base-code equivalents are mapped to a
 // stable intent. Norwegian Bokmål (`nb`) maps to Norwegian (`no`), while

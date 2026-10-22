@@ -87,7 +87,7 @@ fn get_windows_microphone_permission_status_impl() -> WindowsMicrophonePermissio
     let app_access = read_registry_permission_access(HKEY_CURRENT_USER, MICROPHONE_PATH);
     let desktop_app_access = read_registry_permission_access(HKEY_CURRENT_USER, DESKTOP_APPS_PATH);
 
-    // Handy is a desktop app, so the NonPackaged key (desktop_app_access) is
+    // Owl is a desktop app, so the NonPackaged key (desktop_app_access) is
     // the relevant permission scope. The UWP master key (app_access) can be
     // "deny" on systems with debloaters (e.g. O&O ShutUp10) without actually
     // blocking desktop app microphone access.

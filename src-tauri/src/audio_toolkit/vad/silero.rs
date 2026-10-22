@@ -20,7 +20,7 @@ pub struct SileroVad {
 fn init_cpu_backends() -> Result<()> {
     static INIT: OnceLock<Result<(), String>> = OnceLock::new();
     INIT.get_or_init(|| {
-        // Route native/ggml diagnostics into Handy's log; must precede any
+        // Route native/ggml diagnostics into Owl's log; must precede any
         // native call.
         transcribe_cpp::init_logging();
         transcribe_cpp::init_backends_with(None::<&Path>, BackendMask::CPU)

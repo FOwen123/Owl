@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "檢查更新",
         "description": "自動檢查 Owl 的新版本",
-        "lockedDescription": "已被系統設定停用 (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "已被系統設定停用 (OWL_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "聲音主題",

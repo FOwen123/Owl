@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "Kontrolovat aktualizace",
         "description": "Automaticky kontrolovat nové verze Owl",
-        "lockedDescription": "Zakázáno systémovou konfigurací (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Zakázáno systémovou konfigurací (OWL_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "Zvukový motiv",

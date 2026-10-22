@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use tauri::AppHandle;
 
 /// The words (lowercased) the spell checker knows. `None` when there is no
-/// spell checker to ask; callers then keep Handy's behaviour.
+/// spell checker to ask; callers then keep Owl's behaviour.
 // shortcut: macOS only; wire the Windows Spell Checking API when Owl ships there.
 pub fn known_words(app: &AppHandle, words: &[String]) -> Option<HashSet<String>> {
     if words.is_empty() {

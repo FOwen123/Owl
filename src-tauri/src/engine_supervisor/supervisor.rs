@@ -1103,15 +1103,15 @@ impl Worker {
         // this at the built app instead.
         #[cfg(test)]
         let exe = PathBuf::from(
-            std::env::var_os("HANDY_TRANSCRIBE_WORKER_EXE")
-                .expect("set HANDY_TRANSCRIBE_WORKER_EXE"),
+            std::env::var_os("OWL_TRANSCRIBE_WORKER_EXE")
+                .expect("set OWL_TRANSCRIBE_WORKER_EXE"),
         );
         #[cfg(not(test))]
         let exe = worker_exe()?;
         let mut command = ProcessCommand::new(exe);
         #[cfg(target_os = "linux")]
         if let Some(arg0) = std::env::args_os().next() {
-            // Keep `ps` showing Handy's own path rather than /proc/self/exe.
+            // Keep `ps` showing Owl's own path rather than /proc/self/exe.
             use std::os::unix::process::CommandExt;
             command.arg0(arg0);
         }
@@ -1325,7 +1325,7 @@ fn wait_exit(child: &mut Child, timeout: Duration) -> Option<ExitStatus> {
 #[cfg(test)]
 static LIVE_WORKERS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-/// The file Handy was started from, with its identity (device and inode),
+/// The file Owl was started from, with its identity (device and inode),
 /// recorded at startup; see [`worker_exe`]. `None` if either couldn't be
 /// read, which skips the check.
 #[cfg(all(unix, not(test)))]
@@ -1348,14 +1348,14 @@ fn record_launched_exe() {
                 let id = file_id(&path)?;
                 Ok((path, id))
             })
-            .inspect_err(|e| warn!("Could not identify Handy's executable: {}", e))
+            .inspect_err(|e| warn!("Could not identify Owl's executable: {}", e))
             .ok()
     });
 }
 
 /// The executable a worker runs: always this very binary, so the two agree
 /// on the protocol and on transcribe.cpp's backend libraries. Upgrading or
-/// moving Handy while it runs replaces or removes the file it started from,
+/// moving Owl while it runs replaces or removes the file it started from,
 /// and a worker started from there would be the new version (macOS), or this
 /// binary loading the new version's backend libraries (Linux). Only a
 /// restart fixes that, so refuse to start one and say so. Windows locks a
@@ -1367,7 +1367,7 @@ fn worker_exe() -> io::Result<PathBuf> {
     if let Some((path, launched)) = LAUNCHED_EXE.get().and_then(Option::as_ref) {
         if file_id(path).ok().as_ref() != Some(launched) {
             return Err(io::Error::other(
-                "Handy was updated or moved while it was running; restart Handy",
+                "Owl was updated or moved while it was running; restart Owl",
             ));
         }
     }
@@ -1478,8 +1478,8 @@ mod unit_tests {
 /// need a debug worker exe (fault injection is compiled out of release), and
 /// the stream tests a model that can stream.
 /// Run with:
-/// `HANDY_TRANSCRIBE_WORKER_EXE=target/debug/owl HANDY_TEST_MODEL=<gguf>
-///  HANDY_TEST_WAV=<16 kHz mono wav> cargo test --lib engine_supervisor --
+/// `OWL_TRANSCRIBE_WORKER_EXE=target/debug/owl OWL_TEST_MODEL=<gguf>
+///  OWL_TEST_WAV=<16 kHz mono wav> cargo test --lib engine_supervisor --
 ///  --ignored --nocapture --test-threads=1`
 #[cfg(test)]
 mod tests {
@@ -1490,12 +1490,12 @@ mod tests {
     }
 
     fn test_pcm() -> Vec<f32> {
-        crate::audio_toolkit::read_wav_samples(env_path("HANDY_TEST_WAV")).expect("read wav")
+        crate::audio_toolkit::read_wav_samples(env_path("OWL_TEST_WAV")).expect("read wav")
     }
 
     fn spec() -> LoadSpec {
         LoadSpec {
-            path: env_path("HANDY_TEST_MODEL"),
+            path: env_path("OWL_TEST_MODEL"),
             backend: Backend::Auto,
             device: DeviceSelector::Auto,
         }
@@ -1503,20 +1503,20 @@ mod tests {
 
     /// Faults are read by each worker at spawn, so set them before loading.
     fn set_fault(fault: Option<&str>, gpu_only: bool) {
-        let marker = std::env::temp_dir().join("handy-worker-fault-once");
+        let marker = std::env::temp_dir().join("owl-worker-fault-once");
         let _ = std::fs::remove_file(&marker);
-        std::env::remove_var("HANDY_WORKER_FAULT_ONCE");
-        std::env::remove_var("HANDY_WORKER_FAULT_GPU_ONLY");
+        std::env::remove_var("OWL_WORKER_FAULT_ONCE");
+        std::env::remove_var("OWL_WORKER_FAULT_GPU_ONLY");
         match fault {
             Some(fault) => {
-                std::env::set_var("HANDY_WORKER_FAULT", fault);
+                std::env::set_var("OWL_WORKER_FAULT", fault);
                 if gpu_only {
-                    std::env::set_var("HANDY_WORKER_FAULT_GPU_ONLY", "1");
+                    std::env::set_var("OWL_WORKER_FAULT_GPU_ONLY", "1");
                 } else {
-                    std::env::set_var("HANDY_WORKER_FAULT_ONCE", marker);
+                    std::env::set_var("OWL_WORKER_FAULT_ONCE", marker);
                 }
             }
-            None => std::env::remove_var("HANDY_WORKER_FAULT"),
+            None => std::env::remove_var("OWL_WORKER_FAULT"),
         }
     }
 
@@ -1911,7 +1911,7 @@ mod tests {
         };
         wait_in_flight(&engine, "transcription");
         // Cancel only once the worker is actually hung, not on its way there.
-        let marker = std::env::temp_dir().join("handy-worker-fault-once");
+        let marker = std::env::temp_dir().join("owl-worker-fault-once");
         while !marker.exists() {
             thread::sleep(Duration::from_millis(1));
         }

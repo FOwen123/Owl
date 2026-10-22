@@ -231,6 +231,6 @@ for (name, badge) in [("tray_idle", Badge.none), ("tray_recording", .dot), ("tra
     save(tray(.black, badge), "\(res)/\(name)_dark.png")  // for light menu bars
 }
 // "Colored" tray theme: the full-colour mark.
-for (name, badge) in [("handy", Badge.none), ("recording", .dot), ("transcribing", .ring), ("handy_warning", .warning)] {
+for (name, badge) in [("owl", Badge.none), ("recording", .dot), ("transcribing", .ring), ("owl_warning", .warning)] {
     save(tray(.black, badge, paper: .white), "\(res)/\(name).png")
 }

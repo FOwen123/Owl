@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "Проверка за актуализации",
         "description": "Автоматична проверка за нови версии на Owl",
-        "lockedDescription": "Деактивирано от системната конфигурация (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Деактивирано от системната конфигурация (OWL_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "Звукова тема",

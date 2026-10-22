@@ -6,21 +6,21 @@ fn main() {
 
     // Linux ships transcribe-cpp as a shared libtranscribe + loadable ggml
     // backend modules (the `dynamic-backends` posture in Cargo.toml). Bake an
-    // $ORIGIN-relative rpath into the `handy` binary so it finds libtranscribe
+    // $ORIGIN-relative rpath into the `owl` binary so it finds libtranscribe
     // next to it in the package — deb/rpm install into the app-private
-    // `/usr/lib/Handy` (the dir tauri already uses for resources; keeps
-    // Handy's libs out of the ldconfig-scanned `/usr/lib`, issue #1639) while
+    // `/usr/lib/Owl` (the dir tauri already uses for resources; keeps
+    // Owl's libs out of the ldconfig-scanned `/usr/lib`, issue #1639) while
     // the AppImage keeps them in `usr/lib` (linuxdeploy's layout), hence both
     // entries. transcribe's
     // init_backends_default() then loads the ggml modules co-located there.
     // (Windows resolves DLLs from the exe directory, so it needs no rpath;
     // macOS links transcribe-cpp statically via the `metal` feature.)
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
-        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib/Handy:$ORIGIN/../lib");
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN/../lib/Owl:$ORIGIN/../lib");
     }
 
     // CPAL (handy-recorder's and rodio's) links two CoreAudio functions that
-    // only exist on macOS 14.2+. Weak-link the framework so Handy still
+    // only exist on macOS 14.2+. Weak-link the framework so Owl still
     // launches on older macOS (minimumSystemVersion is 10.15).
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         println!("cargo:rustc-link-arg=-Wl,-weak_framework,CoreAudio");
@@ -34,7 +34,7 @@ fn main() {
 
     // When ORT is dynamically linked (Windows CI sets ORT_LIB_LOCATION +
     // ORT_PREFER_DYNAMIC_LINK to a baseline ONNX Runtime), ship its onnxruntime.dll
-    // next to Handy.exe so the app loads our baseline build instead of statically
+    // next to Owl.exe so the app loads our baseline build instead of statically
     // embedding pyke's /arch:AVX2 one (which crashes at startup on pre-Haswell CPUs).
     stage_onnxruntime_dll();
 
@@ -46,19 +46,19 @@ fn main() {
 
 /// Stage the MSVC runtime DLLs into `transcribe-libs/` for app-local deployment.
 ///
-/// Handy's native stack links the VC++ runtime dynamically (/MD). Shipping the
-/// DLLs beside `handy.exe` covers machines with no redistributable installed and
+/// Owl's native stack links the VC++ runtime dynamically (/MD). Shipping the
+/// DLLs beside `Owl.exe` covers machines with no redistributable installed and
 /// machines whose system redist is older than the CI toolset (issue #1527).
 ///
-/// Driven by `HANDY_VC_REDIST_DIRS`, set by CI to the redist dirs from the same
+/// Driven by `OWL_VC_REDIST_DIRS`, set by CI to the redist dirs from the same
 /// Visual Studio install that compiled the native code. Copies only the runtime
-/// DLL families Handy imports and no-ops when the env var is unset.
+/// DLL families Owl imports and no-ops when the env var is unset.
 fn stage_vc_runtime_dlls() {
     use std::path::PathBuf;
 
-    println!("cargo:rerun-if-env-changed=HANDY_VC_REDIST_DIRS");
+    println!("cargo:rerun-if-env-changed=OWL_VC_REDIST_DIRS");
 
-    let Some(redist_dirs) = std::env::var_os("HANDY_VC_REDIST_DIRS") else {
+    let Some(redist_dirs) = std::env::var_os("OWL_VC_REDIST_DIRS") else {
         return;
     };
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
@@ -71,7 +71,7 @@ fn stage_vc_runtime_dlls() {
     let mut copied: Vec<String> = Vec::new();
     for dir in std::env::split_paths(&redist_dirs) {
         for entry in std::fs::read_dir(&dir)
-            .unwrap_or_else(|e| panic!("HANDY_VC_REDIST_DIRS: read {}: {e}", dir.display()))
+            .unwrap_or_else(|e| panic!("OWL_VC_REDIST_DIRS: read {}: {e}", dir.display()))
             .flatten()
         {
             let src = entry.path();
@@ -97,8 +97,8 @@ fn stage_vc_runtime_dlls() {
     for required in ["msvcp140.dll", "vcruntime140.dll"] {
         if !copied.iter().any(|n| n == required) {
             panic!(
-                "HANDY_VC_REDIST_DIRS is set but {required} was not found in it; \
-                 the app-local VC++ runtime would be incomplete and Handy would \
+                "OWL_VC_REDIST_DIRS is set but {required} was not found in it; \
+                 the app-local VC++ runtime would be incomplete and Owl would \
                  crash on machines without a current redist (issue #1527)"
             );
         }
@@ -111,7 +111,7 @@ fn stage_vc_runtime_dlls() {
 
 /// Copy the dynamically-linked ONNX Runtime `onnxruntime.dll` into the
 /// `transcribe-libs/` staging dir so `tauri.windows.conf.json` bundles it beside
-/// `Handy.exe` (Windows resolves DLLs from the executable's directory).
+/// `Owl.exe` (Windows resolves DLLs from the executable's directory).
 ///
 /// No-op unless `ORT_PREFER_DYNAMIC_LINK` + `ORT_LIB_LOCATION` are set for a Windows
 /// target — i.e. the CI dynamic-link path. A plain static build (no env) skips this
@@ -166,8 +166,8 @@ fn stage_onnxruntime_dll() {
 /// this is a no-op there. `RUNTIME_DIR` (core libs) and `MODULE_DIR` (dlopen'd
 /// ggml modules) may be the same dir — the `BTreeSet` below dedups them.
 ///
-/// Where the staged dir lands: Windows bundles it beside `handy.exe` (DLLs resolve
-/// from the exe dir); Linux deb/rpm map it into the app-private `/usr/lib/Handy`
+/// Where the staged dir lands: Windows bundles it beside `Owl.exe` (DLLs resolve
+/// from the exe dir); Linux deb/rpm map it into the app-private `/usr/lib/Owl`
 /// and the AppImage into `usr/lib`, both on the binary's rpath.
 fn stage_transcribe_runtime_libs() {
     use std::collections::BTreeSet;
@@ -424,11 +424,11 @@ fn build_apple_intelligence_bridge() {
     // Check if the SDK supports FoundationModels (required for Apple Intelligence)
     let framework_path =
         Path::new(&sdk_path).join("System/Library/Frameworks/FoundationModels.framework");
-    // HANDY_FORCE_AI_STUB=1 is an explicit escape hatch: force the stub even when
+    // OWL_FORCE_AI_STUB=1 is an explicit escape hatch: force the stub even when
     // the active toolchain could build the real path (e.g. to skip the Swift
     // compile, or if the auto-detection below misfires). The common CLT-only case
     // is detected automatically just below, so this flag is rarely needed.
-    let force_stub = env::var("HANDY_FORCE_AI_STUB").as_deref() == Ok("1");
+    let force_stub = env::var("OWL_FORCE_AI_STUB").as_deref() == Ok("1");
 
     // Auto-detect a Command-Line-Tools-only toolchain. The CLT SDK contains
     // FoundationModels.framework, so the `framework_path.exists()` check alone
@@ -443,7 +443,7 @@ fn build_apple_intelligence_bridge() {
         println!(
             "cargo:warning=Command Line Tools-only toolchain detected; Apple Intelligence \
              (FoundationModels) needs full Xcode. Falling back to stubs. Install Xcode and run \
-             `sudo xcode-select -s /Applications/Xcode.app`, or set HANDY_FORCE_AI_STUB=1 to \
+             `sudo xcode-select -s /Applications/Xcode.app`, or set OWL_FORCE_AI_STUB=1 to \
              silence this message."
         );
     }
@@ -455,7 +455,7 @@ fn build_apple_intelligence_bridge() {
         REAL_SWIFT_FILE
     } else {
         // The SDK genuinely lacking FoundationModels is only one reason we build
-        // stubs — CLT-only detection and HANDY_FORCE_AI_STUB (each warned about
+        // stubs — CLT-only detection and OWL_FORCE_AI_STUB (each warned about
         // above) also land here, and for those the framework does exist. Only
         // claim it's "not found" when that's actually true.
         if framework_path.exists() {

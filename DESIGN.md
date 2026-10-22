@@ -1,6 +1,6 @@
 # DESIGN.md
 
-Visual direction for the Owl UI redesign (Owl is this fork of Handy). Read this before changing colors, surfaces, or component styling. Token values live in `src/styles/theme.css`; this file says which values to use and why.
+Visual direction for the Owl UI redesign (Owl started as a fork of Handy). Read this before changing colors, surfaces, or component styling. Token values live in `src/styles/theme.css`; this file says which values to use and why.
 
 **Visual reference:** Paper file "Projects", Page 1. "Owl — Design System (proposed)" is the target and matches this file. "Owl — Design System (current)" shows the app as it is today. "Owl — Accent options (no pink)" records the accent choice. "Owl — Logo" shows the logo, where it appears and the options it was picked from. If this file and the proposed board disagree, fix whichever is wrong; they must not drift.
 
@@ -119,7 +119,7 @@ As drawn on the proposed board, in both themes.
 
 ## Migration
 
-Steps 1–3 are implemented. Each step is a separate, reviewable change. Steps 1 and 2 change values and add tokens without renaming the ~100 existing `*-logo-primary` classes, so this fork stays easy to merge with upstream Handy.
+Steps 1–3 are implemented. Each step is a separate, reviewable change. Steps 1 and 2 change values and add tokens without renaming the ~100 existing `*-logo-primary` classes, which kept Owl easy to merge with Handy back when it still did.
 
 **Step 1: tokens (`src/styles/theme.css`).**
 
@@ -135,7 +135,7 @@ Steps 1–3 are implemented. Each step is a separate, reviewable change. Steps 1
 
 **Step 3: components adopt the tokens.** Button (inset highlight, destructive as ghost), toggle size and off state, input focus ring, settings-group label case and card surface, Alert's status colors, and a new segmented control for the theme selector.
 
-**Step 4 (optional): rename** to the semantic token names, if the upstream merge cost is acceptable.
+**Step 4 (optional): rename** to the semantic token names, now that Owl no longer merges Handy.
 
 | Current                                                               | Usages | Becomes                                             |
 | --------------------------------------------------------------------- | ------ | --------------------------------------------------- |

@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "Controleren op updates",
         "description": "Automatisch controleren op nieuwe versies van Owl",
-        "lockedDescription": "Uitgeschakeld door systeemconfiguratie (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Uitgeschakeld door systeemconfiguratie (OWL_DISABLE_UPDATER)"
       },
       "whatsNewPreview": {
         "title": "Voorbeeld van release-notes",

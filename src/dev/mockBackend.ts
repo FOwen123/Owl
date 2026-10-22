@@ -170,7 +170,7 @@ const responses: Record<string, unknown> = {
     entries: [
       {
         id: 1,
-        file_name: "handy-1.wav",
+        file_name: "owl-1.wav",
         timestamp: Math.floor(Date.now() / 1000) - 120,
         saved: false,
         title: "",

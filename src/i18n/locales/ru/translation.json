@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "Проверять наличие обновлений",
         "description": "Автоматически проверять наличие новых версий Owl",
-        "lockedDescription": "Отключено системной конфигурацией (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Отключено системной конфигурацией (OWL_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "Звуковая тема",

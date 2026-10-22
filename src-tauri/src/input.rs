@@ -12,7 +12,7 @@ mod macos {
     type CfDataRef = *const c_void;
     type CfStringRef = *const c_void;
 
-    // kVK_ANSI_V. This is the behavior Handy used before layout-aware
+    // kVK_ANSI_V. This is the behavior Owl used before layout-aware
     // resolution and remains the safest fallback if macOS cannot expose the
     // active layout.
     const ANSI_V_KEYCODE: u16 = 9;
@@ -72,7 +72,7 @@ mod macos {
     /// held. Including Command is important: non-Latin layouts commonly map
     /// Cmd shortcuts to their ANSI equivalents, while standard Dvorak does not.
     ///
-    /// TIS APIs must run on the main thread. Handy's paste path already enters
+    /// TIS APIs must run on the main thread. Owl's paste path already enters
     /// through `AppHandle::run_on_main_thread` before reaching this function.
     fn resolve_command_v_keycode() -> Result<u16, String> {
         // SAFETY: This function is called on the macOS main thread. The returned

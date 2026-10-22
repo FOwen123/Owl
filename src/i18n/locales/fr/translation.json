@@ -26,6 +26,7 @@
     "showMeetings": "Show Meetings"
   },
   "sidebar": {
+    "learning": "Learning",
     "general": "Général",
     "models": "Modèles",
     "advanced": "Avancé",
@@ -470,6 +471,19 @@
           "description": "URL de base de l'API pour le fournisseur sélectionné. Seul le fournisseur personnalisé peut être modifié.",
           "placeholder": "https://api.openai.com/v1"
         },
+        "chatgpt": {
+          "title": "ChatGPT account",
+          "description": "Uses your ChatGPT plan instead of an API key.",
+          "signIn": "Continue with ChatGPT",
+          "waiting": "Finish signing in in your browser…",
+          "signedIn": "Signed in",
+          "signedInAs": "Signed in as {{email}}",
+          "signOut": "Sign out",
+          "failed": "Couldn't sign in with ChatGPT",
+          "limitTitle": "Owl reached its ChatGPT limit",
+          "limitDescription": "AI cleanup pauses until your plan's allowance resets.",
+          "usage": "View usage"
+        },
         "apiKey": {
           "title": "Clé API",
           "description": "Clé API pour le fournisseur sélectionné.",
@@ -792,6 +806,51 @@
     "dismiss": "Ignorer"
   },
   "owl": {
+    "learning": {
+      "title": "Learning",
+      "enableLabel": "Learn from my dictations",
+      "enableDescription": "Owl learns your words and style from the fixes you make.",
+      "progressTitle": "Progress",
+      "stats": "{{keyed}} of {{dictations}} dictations have your fixes",
+      "needMore": "Owl starts learning after {{min}} fixed dictations. Edit a dictation right after it's pasted, or fix it in History.",
+      "learnNow": "Learn now",
+      "learning": "Learning…",
+      "lastRun": "Last run {{when}}",
+      "outcome": {
+        "learned": "Kept {{count}} of {{tried}} changes. Words left to fix: {{before}}% → {{after}}%.",
+        "nothing_new": "Nothing new helped this time.",
+        "need_more": "Needs {{min}} fixed dictations to start.",
+        "off": "Learning is off.",
+        "busy": "Already learning.",
+        "interrupted": "Paused for a dictation. Owl will try again."
+      },
+      "changesTitle": "What Owl learned",
+      "changesEmpty": "Nothing yet.",
+      "undo": "Undo",
+      "undone": "Undone",
+      "change": {
+        "add_word": "Added “{{word}}” to Words",
+        "add_swap": "Writes “{{to}}” when it hears “{{from}}”",
+        "remove_swap": "Stopped changing “{{from}}” to “{{to}}”",
+        "priority": "Listens harder for {{words}}",
+        "context": "Told the speech model what you talk about",
+        "word_limit": "Gives the speech model your {{count}} most useful words",
+        "examples": "Shows the AI your past fixes"
+      },
+      "contextTitle": "What you talk about",
+      "contextDescription": "Helps Owl hear your names and terms. Owl updates it as it learns.",
+      "contextPlaceholder": "e.g. I build Owl, a dictation app, with Supabase and Tauri.",
+      "examplesLabel": "Use my past fixes",
+      "examplesDescription": "Shows the AI how you corrected earlier dictations.",
+      "riskyTitle": "These replacements change real words",
+      "riskyDescription": "Owl changes these words every time you say them.",
+      "remove": "Remove",
+      "fix": "Fix",
+      "fixTitle": "Fix this dictation",
+      "fixSave": "Save",
+      "fixCancel": "Cancel",
+      "fixSaved": "Owl will learn from this fix."
+    },
     "pairs": {
       "add": "Add",
       "remove": "Remove {{item}}"

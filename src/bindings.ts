@@ -971,7 +971,8 @@ async stopMeeting() : Promise<Result<null, string>> {
 }
 },
 /**
- * Async, so reading every meeting never blocks the main thread.
+ * Async, with the read on a blocking thread: every meeting's transcript is
+ * read, which must hold up neither the main thread nor the async runtime.
  */
 async getMeetings() : Promise<Result<Meeting[], string>> {
     try {
@@ -1120,6 +1121,88 @@ async dismissEditSuggestion(suggestion: Replacement) : Promise<void> {
 async changeLearnFromEditsSetting(enabled: boolean) : Promise<void> {
     await TAURI_INVOKE("change_learn_from_edits_setting", { enabled });
 },
+async getLearningOverview() : Promise<Result<LearningOverview, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_learning_overview") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async runLearningNow() : Promise<Result<LearnReport, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("run_learning_now") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async undoLearnedChange(id: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("undo_learned_change", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async changeLearningEnabledSetting(enabled: boolean) : Promise<void> {
+    await TAURI_INVOKE("change_learning_enabled_setting", { enabled });
+},
+async changeHearingContextSetting(context: string) : Promise<void> {
+    await TAURI_INVOKE("change_hearing_context_setting", { context });
+},
+async changeCleanupExamplesSetting(enabled: boolean) : Promise<void> {
+    await TAURI_INVOKE("change_cleanup_examples_setting", { enabled });
+},
+/**
+ * Saves the text a History entry should have been. With Learning on, it
+ * becomes that dictation's answer key; returns whether it was in the log.
+ */
+async fixHistoryEntry(id: number, text: string) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("fix_history_entry", { id, text }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * History entries that are in the learning log, so History can offer Fix.
+ */
+async loggedHistoryFiles(files: string[]) : Promise<Result<string[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("logged_history_files", { files }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Dictionary swaps that rewrite a real word every time it's said
+ * ("threat → threads").
+ */
+async riskyReplacements() : Promise<Replacement[]> {
+    return await TAURI_INVOKE("risky_replacements");
+},
+async chatgptStatus() : Promise<ChatGptStatus> {
+    return await TAURI_INVOKE("chatgpt_status");
+},
+async chatgptSignIn() : Promise<Result<ChatGptStatus, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("chatgpt_sign_in") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async chatgptSignOut() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("chatgpt_sign_out") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async changeCleanupLevelSetting(level: CleanupLevel) : Promise<void> {
     await TAURI_INVOKE("change_cleanup_level_setting", { level });
 },
@@ -1216,6 +1299,29 @@ meeting_template?: string;
  */
 learn_from_edits?: boolean; 
 /**
+ * Owl: a few sentences about the speaker's topics, given to speech
+ * models that take context (`hearing.rs`). Written by the learner or
+ * the user.
+ */
+hearing_context?: string; 
+/**
+ * Owl: Words the learner saw misheard; they go first in the hint list.
+ */
+hearing_priority?: string[]; 
+/**
+ * Owl: how many Words the speech model hears as hints (`None`: all).
+ */
+hearing_word_limit?: number | null; 
+/**
+ * Owl: keep each dictation's audio and text on this Mac to learn from
+ * (`learning.rs`). Off until the user turns it on.
+ */
+learning_enabled?: boolean; 
+/**
+ * Owl: show the AI cleanup a few of the user's own past fixes as examples.
+ */
+cleanup_examples?: boolean; 
+/**
  * Owl: ask to take notes when another app starts using the microphone
  * (`meeting_detect.rs`).
  */
@@ -1271,6 +1377,11 @@ export type AudioDevice = { index: string; name: string; is_default: boolean }
 export type AutoSubmitKey = "enter" | "ctrl_enter" | "cmd_enter"
 export type AvailableAccelerators = { transcribe: string[]; ort: string[]; gpu_devices: GpuDeviceOption[] }
 export type BindingResponse = { success: boolean; binding: ShortcutBinding | null; error: string | null }
+/**
+ * One change the learner can make, with what it replaced, so it can be undone.
+ */
+export type Change = { kind: "add_word"; word: string } | { kind: "add_swap"; from: string; to: string } | { kind: "remove_swap"; from: string; to: string } | { kind: "priority"; before: string[]; after: string[] } | { kind: "context"; before: string; after: string } | { kind: "word_limit"; before: number | null; after: number | null } | { kind: "examples"; before: boolean; after: boolean }
+export type ChatGptStatus = { signed_in: boolean; email: string | null }
 export type ChineseScript = 
 /**
  * Keep whatever script the model produced.
@@ -1325,6 +1436,26 @@ export type KeyboardDiagnosticReport = { secure_input_enabled: boolean; culprit_
 key_down: number; key_up: number; flags_changed: number; mouse: number; duration_ms: number }
 export type KeyboardImplementation = "tauri" | "handy_keys"
 export type LLMPrompt = { id: string; name: string; prompt: string }
+export type LearnReport = { 
+/**
+ * "learned", "nothing_new", "interrupted" (a dictation started; the rest waits), "need_more", "off" or "busy".
+ */
+outcome: string; keyed: number; judged: number; 
+/**
+ * Edits still needed per word, before and after (lower is better).
+ */
+before: number | null; after: number | null; kept: Change[]; tried: number }
+export type LearnedChange = { id: number; at: number; change: Change; before: number; after: number; undone: boolean; 
+/**
+ * False for an older change to a value a newer change set again.
+ */
+can_undo: boolean }
+export type LearningOverview = { stats: LearningStats; min_keyed: number; running: boolean; last_run_at: number | null; last_report: LearnReport | null; changes: LearnedChange[] }
+export type LearningStats = { dictations: number; 
+/**
+ * Dictations with an answer key (edited after the paste, or fixed in History).
+ */
+keyed: number; audio_bytes: number }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type Meeting = { id: number; 
 /**

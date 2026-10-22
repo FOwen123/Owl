@@ -265,6 +265,9 @@ pub struct TranscriptionManager {
     engine: EngineSupervisor,
     /// The loaded ONNX engine, if the current model is an ONNX one.
     onnx: Arc<Mutex<Option<OnnxEngine>>>,
+    /// Owl: one batch transcription at a time, so the learner's replays
+    /// (`learner.rs`) never take the ONNX engine out from under a dictation.
+    run_gate: Arc<Mutex<()>>,
     model_manager: Arc<ModelManager>,
     app_handle: AppHandle,
     current_model_id: Arc<Mutex<Option<String>>>,
@@ -318,6 +321,7 @@ impl TranscriptionManager {
             loading_condvar: Arc::new(Condvar::new()),
             reload_model_on_next_use: Arc::new(AtomicBool::new(false)),
             router: Arc::new(StreamRouter::new()),
+            run_gate: Arc::new(Mutex::new(())),
             stream_active: Arc::new(AtomicBool::new(false)),
             next_stream_worker_id: Arc::new(AtomicU64::new(1)),
             active_stream_worker: Arc::new(AtomicU64::new(0)),
@@ -1149,6 +1153,24 @@ impl TranscriptionManager {
     }
 
     pub fn transcribe(&self, audio: Vec<f32>) -> Result<String> {
+        self.run_transcription(audio, &get_settings(&self.app_handle), true)
+    }
+
+    /// Owl: a replay (`eval.rs`, `learner.rs`): `transcribe` with the given
+    /// settings instead of the saved ones, so the learner can try a change
+    /// without applying it. It never unloads the model, even when set to
+    /// unload immediately: a dictation started meanwhile is counting on it.
+    pub fn transcribe_with(&self, audio: Vec<f32>, settings: &AppSettings) -> Result<String> {
+        self.run_transcription(audio, settings, false)
+    }
+
+    fn run_transcription(
+        &self,
+        audio: Vec<f32>,
+        settings: &AppSettings,
+        may_unload: bool,
+    ) -> Result<String> {
+        let _one_at_a_time = self.run_gate.lock().unwrap_or_else(|e| e.into_inner());
         #[cfg(debug_assertions)]
         if std::env::var("HANDY_FORCE_TRANSCRIPTION_FAILURE").is_ok() {
             return Err(anyhow::anyhow!(
@@ -1166,7 +1188,9 @@ impl TranscriptionManager {
 
         if audio.is_empty() {
             debug!("Empty audio vector");
-            self.maybe_unload_immediately("empty audio");
+            if may_unload {
+                self.maybe_unload_immediately("empty audio");
+            }
             return Ok(String::new());
         }
 
@@ -1183,9 +1207,6 @@ impl TranscriptionManager {
             }
         }
 
-        // Get current settings for configuration
-        let settings = get_settings(&self.app_handle);
-
         // Validate selected language against the model's supported languages.
         // If the language isn't supported, fall back to "auto" to prevent errors.
         // Validate against the model that's actually loaded (which can differ
@@ -1200,7 +1221,7 @@ impl TranscriptionManager {
         // never receives "auto") and computed fresh here — it is never written
         // back to settings, so the intent survives switching models and back.
         let validated_language =
-            effective_language_for_model(&settings, self.model_manager.as_ref(), &active_model);
+            effective_language_for_model(settings, self.model_manager.as_ref(), &active_model);
         if validated_language != settings.selected_language {
             debug!(
                 "Language intent '{}' resolved to '{}' for model '{}'",
@@ -1211,14 +1232,14 @@ impl TranscriptionManager {
         // Perform transcription with the appropriate engine.
         let run = match self.engine.loaded() {
             Some(info) => {
-                self.transcribe_cpp(info, audio, &settings, &validated_language, &active_model)?
+                self.transcribe_cpp(info, audio, settings, &validated_language, &active_model)?
             }
-            None => self.transcribe_onnx(&audio, &settings, &validated_language, &active_model)?,
+            None => self.transcribe_onnx(&audio, settings, &validated_language, &active_model)?,
         };
 
         let output_language = with_model_detected_language(
             resolve_output_language_evidence(
-                &settings,
+                settings,
                 run.applied_language_hint.as_deref(),
                 &run.languages,
                 run.output_was_translated,
@@ -1229,10 +1250,10 @@ impl TranscriptionManager {
 
         // Apply fuzzy word correction if custom words are configured — UNLESS the
         // words were already handed to the model as vocabulary hints.
-        let real_words = self.real_words(&settings, &run.text);
+        let real_words = self.real_words(settings, &run.text);
         let filtered_result = post_process_transcription_text_with(
             run.text,
-            &settings,
+            settings,
             run.words_prompted,
             &output_language,
             &run.languages,
@@ -1267,7 +1288,9 @@ impl TranscriptionManager {
             );
         }
 
-        self.maybe_unload_immediately("transcription");
+        if may_unload {
+            self.maybe_unload_immediately("transcription");
+        }
 
         Ok(final_result)
     }
@@ -1301,17 +1324,22 @@ impl TranscriptionManager {
         // Qwen3-ASR, FunASR-Nano, Granite, MOSS); transcribe.cpp formats them
         // per model. The rest (Nemotron, Parakeet) get the fuzzy fix-up.
         let vocabulary = if info.supports_vocabulary {
-            let mut words = settings.custom_words.clone();
             // Qwen3-ASR heeds the start of the list most ("Owl" was heard first
             // of 51, missed last), so the newest words go first.
-            if active_model.to_lowercase().contains("qwen3-asr") {
-                words.reverse();
-            }
-            words
+            crate::hearing::hearing_words(
+                &settings.custom_words,
+                &settings.hearing_priority,
+                active_model.to_lowercase().contains("qwen3-asr"),
+                settings.hearing_word_limit,
+            )
         } else {
             Vec::new()
         };
         let words_prompted = !vocabulary.is_empty();
+        // Owl: a few sentences about the speaker's topics, for models that
+        // take free-text context (Qwen3-ASR).
+        let context = (info.supports_context && !settings.hearing_context.trim().is_empty())
+            .then(|| settings.hearing_context.trim().to_string());
 
         let run_plan = transcribe_cpp_run_plan(
             settings.translate_to_english,
@@ -1327,6 +1355,7 @@ impl TranscriptionManager {
             language: run_plan.language,
             target_language: run_plan.target_language,
             vocabulary,
+            prompt: context,
             ..Default::default()
         };
 
@@ -1791,6 +1820,19 @@ fn post_process_transcription_text(
     )
 }
 
+/// Owl: Chinese mixed into speech the model labelled as another language
+/// ("学过 tennis" detected as English) still gets the user's script. Text
+/// with Japanese kana, or labelled Japanese or Korean, is left alone.
+fn mixed_chinese(text: &str, language: Option<&str>) -> Option<ChineseVariety> {
+    let base = language.map(|l| l.split(['-', '_']).next().unwrap_or(l));
+    if matches!(base, Some("ja" | "ko")) {
+        return None;
+    }
+    let kana = |c: char| ('\u{3040}'..='\u{30FF}').contains(&c);
+    let han = text.chars().any(crate::correction::is_cjk);
+    (han && !text.chars().any(kana)).then_some(ChineseVariety::Mandarin)
+}
+
 /// Owl: `real_words` (lowercased, from the OS spell checker) are words the
 /// Words fix-up must not rewrite.
 fn post_process_transcription_text_with(
@@ -1829,7 +1871,8 @@ fn post_process_transcription_text_with(
         // e.g. Japanese kanji are never rewritten.
         let variety = output_language
             .language()
-            .and_then(ChineseVariety::from_language);
+            .and_then(ChineseVariety::from_language)
+            .or_else(|| mixed_chinese(&raw, output_language.language()));
         let raw = match variety {
             Some(variety) if converts_script => {
                 convert_chinese_script(&raw, variety, settings.chinese_script)
@@ -2353,6 +2396,34 @@ mod tests {
         );
 
         assert_eq!(result, "我们今天下午一起去学校图书馆看书，然后再去吃晚饭。");
+    }
+
+    #[test]
+    fn chinese_in_speech_labelled_english_still_gets_the_users_script() {
+        let settings = AppSettings {
+            chinese_script: ChineseScript::Traditional,
+            filler_word_removal_enabled: false,
+            ..Default::default()
+        };
+        let english = OutputLanguageEvidence::ModelDetected("en".to_string());
+        let result = post_process_transcription_text(
+            "学过 tennis".to_string(),
+            &settings,
+            false,
+            &english,
+            &languages(&["zh", "en", "ja"]),
+        );
+        assert_eq!(result, "學過 tennis");
+        // Japanese keeps its kanji.
+        let japanese = OutputLanguageEvidence::ModelDetected("ja".to_string());
+        let result = post_process_transcription_text(
+            "日本语を学ぶ".to_string(),
+            &settings,
+            false,
+            &japanese,
+            &languages(&["zh", "en", "ja"]),
+        );
+        assert_eq!(result, "日本语を学ぶ");
     }
 
     #[test]

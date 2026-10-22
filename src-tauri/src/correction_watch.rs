@@ -19,15 +19,18 @@ use tauri::AppHandle;
 static PASTES: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(target_os = "macos")]
-pub fn start(app: AppHandle, pasted: String) {
+/// `learning_id`: the dictation's row in the learning log, which gets the
+/// user's edit as its answer key.
+pub fn start(app: AppHandle, pasted: String, learning_id: Option<i64>) {
     let paste = PASTES.fetch_add(1, Ordering::SeqCst) + 1;
-    if crate::settings::get_settings(&app).learn_from_edits && !pasted.trim().is_empty() {
-        std::thread::spawn(move || mac::watch(app, pasted, paste));
+    let wanted = crate::settings::get_settings(&app).learn_from_edits || learning_id.is_some();
+    if wanted && !pasted.trim().is_empty() {
+        std::thread::spawn(move || mac::watch(app, pasted, paste, learning_id));
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn start(_app: AppHandle, _pasted: String) {}
+pub fn start(_app: AppHandle, _pasted: String, _learning_id: Option<i64>) {}
 
 /// Stops the watcher of the last dictation, so text Owl itself changes next
 /// (Edit by voice) isn't learned as the user's fix.
@@ -91,7 +94,7 @@ mod mac {
     use std::sync::atomic::Ordering;
     use std::thread::sleep;
     use std::time::{Duration, Instant};
-    use tauri::{AppHandle, Emitter};
+    use tauri::{AppHandle, Emitter, Manager};
 
     const WATCH_FOR: Duration = Duration::from_secs(45);
     const POLL_EVERY: Duration = Duration::from_millis(500);
@@ -100,7 +103,7 @@ mod mac {
     /// How long the overlay offers a fix before adding it.
     const COUNTDOWN: Duration = Duration::from_secs(5);
 
-    pub fn watch(app: AppHandle, pasted: String, paste: u64) {
+    pub fn watch(app: AppHandle, pasted: String, paste: u64, learning_id: Option<i64>) {
         // The paste can land a little later (the reliable paste path is
         // asynchronous), so look for the pasted text for up to 2 s.
         let Some((field, baseline)) = (0..4).find_map(|_| {
@@ -119,7 +122,12 @@ mod mac {
             if super::PASTES.load(Ordering::SeqCst) != paste {
                 return; // a newer dictation was pasted
             }
-            if !settings::get_settings(&app).learn_from_edits {
+            let s = settings::get_settings(&app);
+            let (suggest_fixes, log_edit) = (
+                s.learn_from_edits,
+                learning_id.is_some() && s.learning_enabled,
+            );
+            if !suggest_fixes && !log_edit {
                 return; // turned off while watching
             }
             let Some((now_field, text)) = focused_text() else {
@@ -135,7 +143,25 @@ mod mac {
                 changed_at = Instant::now();
             } else if last != checked && changed_at.elapsed() >= QUIET_FOR {
                 checked = last.clone();
-                if let Some(edited) = edited_span(&baseline, &last, &pasted) {
+                let Some(edited) = edited_span(&baseline, &last, &pasted) else {
+                    continue;
+                };
+                // Only a fix becomes the answer key: a box cleared by sending
+                // the message, or a new message typed over it, is not one.
+                let fix = crate::correction::is_fix(&pasted, &edited);
+                if let (true, true, Some(id)) = (log_edit, fix, learning_id) {
+                    if let Some(learning) =
+                        app.try_state::<std::sync::Arc<crate::learning::Learning>>()
+                    {
+                        match learning.set_edited(id, edited.trim()) {
+                            Ok(()) => {
+                                let _ = app.emit("learning-changed", ());
+                            }
+                            Err(e) => debug!("Learning: couldn't save the edit: {e:#}"),
+                        }
+                    }
+                }
+                if suggest_fixes {
                     let words = crate::spelling::words_in(&[&pasted, &edited]);
                     let known = crate::spelling::known_words(&app, &words);
                     // No spell checker: Handy's rules, which treat no word as known.

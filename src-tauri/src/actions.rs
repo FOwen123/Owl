@@ -151,7 +151,7 @@ fn legacy_prompt(template: &str, transcript: &str) -> String {
 
 /// Owl: the AI cleanup runs at Light and Medium, and only while Post Process
 /// is on, so a cleanup level alone never starts sending dictations out.
-fn ai_cleanup_on(settings: &AppSettings) -> bool {
+pub(crate) fn ai_cleanup_on(settings: &AppSettings) -> bool {
     settings.post_process_enabled && settings.cleanup_level != CleanupLevel::None
 }
 
@@ -159,13 +159,36 @@ fn ai_cleanup_on(settings: &AppSettings) -> bool {
 /// list; `cleanup_rules::format_lists` then puts each item on its own line.
 const LIST_RULE: &str = "When the speaker lists items (\"one … two …\", \"first … second …\", 第一…第二…), number them: 1. … 2. …";
 
+/// Owl: numbers as digits, with examples, since a rule alone is often
+/// ignored. `numbers::format_numbers` catches the clear cases the AI misses.
+const NUMBER_RULE: &str = "Write quantities, versions, percentages, money and dates as digits: \"five point five\" → 5.5, \"twenty percent\" → 20%, \"ten dollars\" → $10, 二點五 → 2.5, 百分之二十 → 20%. Keep \"one\" and small numbers in phrases like \"one of them\" or 一個 as words.";
+
+/// Owl: how many of the user's past fixes the AI cleanup sees as examples.
+const EXAMPLES: usize = 3;
+
+/// Owl: the user's past fixes as examples of their spellings and style.
+/// Research on AI correction of speech recognition found a few examples help
+/// where an instruction alone doesn't.
+fn examples_rule(examples: &[(String, String)]) -> String {
+    if examples.is_empty() {
+        return String::new();
+    }
+    let mut rule = String::from(
+        "\n\nHow this speaker corrected past dictations (what was pasted → what they kept). Follow their spellings and style; never copy the examples' content:",
+    );
+    for (pasted, kept) in examples {
+        rule.push_str(&format!("\n\"{pasted}\" → \"{kept}\""));
+    }
+    rule
+}
+
 /// Owl: both levels format lists; Medium also lets the AI reword.
 fn prompt_for_level(prompt: &str, level: CleanupLevel) -> String {
     match level {
         CleanupLevel::Medium => format!(
-            "{prompt}\n\n{LIST_RULE}\nYou may reword for clarity and conciseness, keeping the meaning."
+            "{prompt}\n\n{LIST_RULE}\n{NUMBER_RULE}\nYou may reword for clarity and conciseness, keeping the meaning."
         ),
-        _ => format!("{prompt}\n\n{LIST_RULE}"),
+        _ => format!("{prompt}\n\n{LIST_RULE}\n{NUMBER_RULE}"),
     }
 }
 
@@ -211,6 +234,7 @@ fn should_use_streaming_overlay(style: OverlayStyle, is_streaming: bool) -> bool
 pub(crate) async fn post_process_transcription(
     settings: &AppSettings,
     transcription: &str,
+    examples: &[(String, String)],
 ) -> Option<String> {
     if is_blank_transcription(transcription) {
         debug!("Post-processing skipped because the transcription is empty");
@@ -272,6 +296,7 @@ pub(crate) async fn post_process_transcription(
     if let Some(rule) = crate::dictionary::spelling_rule(settings) {
         prompt.push_str(&format!("\n{rule}"));
     }
+    prompt.push_str(&examples_rule(examples));
 
     debug!(
         "Starting LLM post-processing with provider '{}' (model: {})",
@@ -515,20 +540,25 @@ async fn edit_text(
     instruction: &str,
     selection: Option<&str>,
 ) -> Result<String, String> {
-    let (provider, model) = edit_ai(settings).ok_or("Choose an AI on the Post Process page")?;
     let mut user = format!("<instruction>\n{instruction}\n</instruction>");
     if let Some(text) = selection {
         user = format!("<selected_text>\n{text}\n</selected_text>\n{user}");
     }
+    ask_ai(settings, EDIT_PROMPT, user).await
+}
+
+/// Owl: one answer from the Post Process AI, for Edit by voice and the learner.
+pub(crate) async fn ask_ai(
+    settings: &AppSettings,
+    system: &str,
+    user: String,
+) -> Result<String, String> {
+    let (provider, model) = edit_ai(settings).ok_or("Choose an AI on the Post Process page")?;
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     if provider.id == APPLE_INTELLIGENCE_PROVIDER_ID {
         let token_limit = model.trim().parse::<i32>().unwrap_or(0);
-        return apple_intelligence::process_text_with_system_prompt(
-            EDIT_PROMPT,
-            &user,
-            token_limit,
-        )
-        .map(|t| strip_invisible_chars(&t).trim().to_string());
+        return apple_intelligence::process_text_with_system_prompt(system, &user, token_limit)
+            .map(|t| strip_invisible_chars(&t).trim().to_string());
     }
     let api_key = settings
         .post_process_api_keys
@@ -541,7 +571,7 @@ async fn edit_text(
         api_key,
         &model,
         user,
-        Some(EDIT_PROMPT.to_string()),
+        Some(system.to_string()),
         None,
         disable_reasoning,
     )
@@ -572,6 +602,7 @@ async fn edited(
         post_processed_text: Some(text.clone()).filter(|t| !t.is_empty()),
         final_text: text,
         post_process_prompt: None,
+        ai_rejected: None,
     }
 }
 
@@ -579,6 +610,8 @@ pub(crate) struct ProcessedTranscription {
     pub final_text: String,
     pub post_processed_text: Option<String>,
     pub post_process_prompt: Option<String>,
+    /// Owl: why the AI cleanup's reply was thrown out, if it was.
+    pub ai_rejected: Option<&'static str>,
 }
 
 pub(crate) async fn process_transcription_output(
@@ -587,7 +620,35 @@ pub(crate) async fn process_transcription_output(
     post_process: bool,
 ) -> ProcessedTranscription {
     let settings = get_settings(app);
+    process_with(
+        app,
+        &settings,
+        transcription,
+        post_process,
+        CleanupRun::default(),
+    )
+    .await
+}
 
+/// Owl: how a cleanup runs when Owl replays past dictations (`eval.rs`,
+/// `learner.rs`) instead of handling a live one.
+#[derive(Default, Clone, Copy)]
+pub(crate) struct CleanupRun<'a> {
+    /// Saved AI replies, so a test run doesn't pay for the same call twice.
+    pub cache: Option<&'a crate::eval::AiCache>,
+    /// Only fixes made before this time are shown as examples, so a test
+    /// never shows the AI the answer it's graded on.
+    pub examples_before: Option<i64>,
+}
+
+/// `process_transcription_output` with the given settings.
+pub(crate) async fn process_with(
+    app: &AppHandle,
+    settings: &AppSettings,
+    transcription: &str,
+    post_process: bool,
+    run: CleanupRun<'_>,
+) -> ProcessedTranscription {
     // Owl: a snippet trigger pastes its saved text as-is, skipping AI cleanup.
     // History keeps the spoken trigger and records the pasted text.
     if let Some(text) = crate::snippets::match_snippet(transcription, &settings.snippets) {
@@ -595,27 +656,56 @@ pub(crate) async fn process_transcription_output(
             final_text: text.to_string(),
             post_processed_text: Some(text.to_string()),
             post_process_prompt: None,
+            ai_rejected: None,
         };
     }
 
     let mut final_text = transcription.to_string();
     let mut post_processed_text: Option<String> = None;
     let mut post_process_prompt: Option<String> = None;
+    let mut ai_rejected = None;
 
     if post_process && crate::cleanup_guard::worth_cleaning(&final_text) {
+        // Owl: the user's own past fixes most like this dictation, as examples.
+        let examples = if settings.cleanup_examples {
+            app.try_state::<Arc<crate::learning::Learning>>()
+                .map(|l| l.examples(&final_text, EXAMPLES, run.examples_before))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let key = run
+            .cache
+            .map(|_| crate::eval::AiCache::key(settings, &final_text, &examples));
+        let cached = run.cache.zip(key.as_deref()).and_then(|(c, k)| c.get(k));
         // Owl: a slow or off-topic AI reply falls back to the rule-cleaned text.
         let limit = crate::cleanup_guard::time_limit(&final_text);
-        let reply = tokio::time::timeout(limit, post_process_transcription(&settings, &final_text))
-            .await
-            .unwrap_or_else(|_| {
-                debug!("AI cleanup took longer than {limit:?}; pasting the rule-cleaned text");
-                None
-            })
-            .and_then(|reply| {
-                crate::cleanup_guard::check(&final_text, &reply)
-                    .inspect_err(|why| debug!("AI cleanup reply rejected: {why}"))
-                    .ok()
-            });
+        let reply = match cached {
+            Some(reply) => Some(reply),
+            None => {
+                let reply = tokio::time::timeout(
+                    limit,
+                    post_process_transcription(settings, &final_text, &examples),
+                )
+                .await
+                .unwrap_or_else(|_| {
+                    debug!("AI cleanup took longer than {limit:?}; pasting the rule-cleaned text");
+                    None
+                });
+                if let (Some(cache), Some(key), Some(reply)) = (run.cache, &key, &reply) {
+                    cache.put(key, reply);
+                }
+                reply
+            }
+        };
+        let reply = reply.and_then(|reply| {
+            crate::cleanup_guard::check(&final_text, &reply, &settings.custom_words)
+                .inspect_err(|why| {
+                    debug!("AI cleanup reply rejected: {why}");
+                    ai_rejected = Some(*why);
+                })
+                .ok()
+        });
         if let Some(processed_text) = reply {
             // Owl: the dictionary runs again in case the AI rewrote a fixed word.
             let processed_text =
@@ -636,10 +726,21 @@ pub(crate) async fn process_transcription_output(
         }
     }
 
+    // Owl: spoken numbers as digits, whether or not the AI ran. History shows
+    // the pasted text whenever it differs from what was heard.
+    if settings.cleanup_level != CleanupLevel::None {
+        let formatted = crate::numbers::format_numbers(&final_text);
+        if formatted != final_text || post_processed_text.is_some() {
+            post_processed_text = Some(formatted.clone());
+        }
+        final_text = formatted;
+    }
+
     ProcessedTranscription {
         final_text,
         post_processed_text,
         post_process_prompt,
+        ai_rejected,
     }
 }
 
@@ -1006,6 +1107,32 @@ impl ShortcutAction for TranscribeAction {
                                 return;
                             }
 
+                            // Owl: with Learning on, the dictation and its audio are
+                            // kept to learn from; the user's edit becomes its key.
+                            let learning_id = (wav_saved
+                                && !edit
+                                && !processed.final_text.trim().is_empty()
+                                && get_settings(&ah).learning_enabled)
+                                .then(|| {
+                                    let learning =
+                                        ah.try_state::<Arc<crate::learning::Learning>>()?;
+                                    learning
+                                        .record(
+                                            &hm.get_audio_file_path(&file_name),
+                                            &file_name,
+                                            &tm.get_current_model().unwrap_or_default(),
+                                            &transcription,
+                                            processed.post_processed_text.as_deref(),
+                                            &processed.final_text,
+                                        )
+                                        .inspect_err(|e| error!("Learning: {e:#}"))
+                                        .ok()
+                                })
+                                .flatten();
+                            if learning_id.is_some() {
+                                let _ = ah.emit("learning-changed", ());
+                            }
+
                             // Save to history if WAV was saved
                             if wav_saved {
                                 if let Err(err) = hm.save_entry(
@@ -1052,6 +1179,7 @@ impl ShortcutAction for TranscribeAction {
                                                 crate::correction_watch::start(
                                                     ah_clone.clone(),
                                                     final_text,
+                                                    learning_id,
                                                 );
                                             }
                                         }
@@ -1203,7 +1331,7 @@ mod tests {
     use super::{
         ai_cleanup_on, complete_unless_cancelled, edit_text, is_blank_transcription, legacy_prompt,
         prompt_for_level, prompt_messages, should_use_streaming_overlay, strip_think_block,
-        wants_post_process, LIST_RULE,
+        wants_post_process, LIST_RULE, NUMBER_RULE,
     };
     use crate::settings::OverlayStyle;
     use crate::settings::{get_default_settings, AppSettings, CleanupLevel};
@@ -1373,11 +1501,11 @@ mod tests {
     fn medium_lets_the_ai_reword() {
         assert_eq!(
             prompt_for_level("Clean it.", CleanupLevel::Light),
-            format!("Clean it.\n\n{LIST_RULE}")
+            format!("Clean it.\n\n{LIST_RULE}\n{NUMBER_RULE}")
         );
         assert_eq!(
             prompt_for_level("Clean it.", CleanupLevel::Medium),
-            format!("Clean it.\n\n{LIST_RULE}\nYou may reword for clarity and conciseness, keeping the meaning.")
+            format!("Clean it.\n\n{LIST_RULE}\n{NUMBER_RULE}\nYou may reword for clarity and conciseness, keeping the meaning.")
         );
     }
 }

@@ -92,13 +92,13 @@ pub(crate) fn is_cjk(c: char) -> bool {
     matches!(c, '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}' | '\u{20000}'..='\u{2FFFF}')
 }
 
-fn is_cjk_token(t: &str) -> bool {
+pub(crate) fn is_cjk_token(t: &str) -> bool {
     t.chars().all(is_cjk)
 }
 
 /// English words and single Chinese characters. Spaces and punctuation are
 /// dropped, so punctuation-only edits never produce a suggestion.
-fn tokens(text: &str) -> Vec<String> {
+pub(crate) fn tokens(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut word = String::new();
     let flush = |word: &mut String, out: &mut Vec<String>| {
@@ -123,11 +123,11 @@ fn tokens(text: &str) -> Vec<String> {
 }
 
 /// A changed run: (range in the pasted tokens, range in the edited tokens).
-type Change = (Range<usize>, Range<usize>);
+pub(crate) type Change = (Range<usize>, Range<usize>);
 
 /// Longest-common-subsequence alignment. Returns the number of matching
 /// tokens and the changed runs.
-fn diff(a: &[String], b: &[String]) -> (usize, Vec<Change>) {
+pub(crate) fn diff(a: &[String], b: &[String]) -> (usize, Vec<Change>) {
     let (n, m) = (a.len(), b.len());
     let mut lcs = vec![vec![0u16; m + 1]; n + 1];
     for i in (0..n).rev() {
@@ -163,6 +163,17 @@ fn diff(a: &[String], b: &[String]) -> (usize, Vec<Change>) {
 }
 
 /// The edit kept enough of the text that it is a fix, not a new message.
+/// Owl: whether `edited` is a fix of `pasted`, not a cleared box (the message
+/// was sent) or a different message typed over it.
+pub fn is_fix(pasted: &str, edited: &str) -> bool {
+    let (a, b) = (tokens(pasted), tokens(edited));
+    if b.is_empty() || a.len() > MAX_TOKENS || b.len() > MAX_TOKENS {
+        return false;
+    }
+    let (matched, _) = diff(&a, &b);
+    shares_context(&a, &b, matched)
+}
+
 fn shares_context(a: &[String], b: &[String], matched: usize) -> bool {
     if matched > 0 && matched * 2 >= a.len() {
         return true;
@@ -428,6 +439,18 @@ mod tests {
 
     fn none(pasted: &str, edited: &str) {
         assert_eq!(pairs(pasted, edited), vec![], "{pasted:?} -> {edited:?}");
+    }
+
+    #[test]
+    fn a_sent_or_retyped_message_is_not_a_fix() {
+        let pasted = "Restart Open Claw and check the logs.";
+        assert!(super::is_fix(
+            pasted,
+            "Restart OpenClaw and check the logs."
+        ));
+        assert!(!super::is_fix(pasted, "")); // the box cleared when it was sent
+        assert!(!super::is_fix(pasted, "lunch at noon tomorrow?"));
+        assert!(super::is_fix("Owel", "Owen"));
     }
 
     #[test]

@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "Periksa Pembaruan",
         "description": "Periksa versi baru Owl secara otomatis",
-        "lockedDescription": "Dinonaktifkan oleh konfigurasi sistem (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Dinonaktifkan oleh konfigurasi sistem (OWL_DISABLE_UPDATER)"
       },
       "whatsNewPreview": {
         "title": "Pratinjau Yang Baru",

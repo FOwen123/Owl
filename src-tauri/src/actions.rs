@@ -868,7 +868,7 @@ impl ShortcutAction for TranscribeAction {
                     // arming animation on hardware that normally starts too fast
                     // to make it visible.
                     #[cfg(debug_assertions)]
-                    if let Ok(delay_ms) = std::env::var("HANDY_DEBUG_MIC_READY_DELAY_MS")
+                    if let Ok(delay_ms) = std::env::var("OWL_DEBUG_MIC_READY_DELAY_MS")
                         .unwrap_or_default()
                         .parse::<u64>()
                     {
@@ -1441,12 +1441,12 @@ mod tests {
         assert!(!should_use_streaming_overlay(OverlayStyle::None, true));
     }
 
-    const HANDY_STYLE: &str =
+    const OWL_STYLE: &str =
         "<transcript>\n${output}\n</transcript>\n\nThe above is a transcript. Clean it.";
 
     #[test]
     fn instructions_go_in_the_system_message_and_the_transcript_in_tags() {
-        let (system, user) = prompt_messages(HANDY_STYLE, "sorry, I mean Wednesday");
+        let (system, user) = prompt_messages(OWL_STYLE, "sorry, I mean Wednesday");
         // No empty <transcript></transcript> left behind to tell the model
         // the transcript is empty.
         assert!(!system.contains("<transcript>"), "{system}");

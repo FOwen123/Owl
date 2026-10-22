@@ -60,7 +60,7 @@ fn native_windows_machine() -> Option<u16> {
 
     type IsWow64Process2 = unsafe extern "system" fn(HANDLE, *mut u16, *mut u16) -> BOOL;
 
-    // Resolve IsWow64Process2 dynamically so merely starting Handy never raises
+    // Resolve IsWow64Process2 dynamically so merely starting Owl never raises
     // the minimum Windows version. Windows-on-ARM versions provide this API,
     // while a missing symbol or failed query safely preserves the x64 behavior.
     unsafe {
@@ -186,20 +186,20 @@ mod tests {
     #[test]
     fn env_flag_enabled_true_for_truthy_values() {
         for value in ["1", "true", "TRUE", "yes", "on", " 1 "] {
-            std::env::set_var("HANDY_TEST_FLAG_TRUTHY", value);
-            assert!(env_flag_enabled("HANDY_TEST_FLAG_TRUTHY"), "{value:?}");
+            std::env::set_var("OWL_TEST_FLAG_TRUTHY", value);
+            assert!(env_flag_enabled("OWL_TEST_FLAG_TRUTHY"), "{value:?}");
         }
-        std::env::remove_var("HANDY_TEST_FLAG_TRUTHY");
+        std::env::remove_var("OWL_TEST_FLAG_TRUTHY");
     }
 
     #[test]
     fn env_flag_enabled_false_for_falsy_or_unset() {
-        assert!(!env_flag_enabled("HANDY_TEST_FLAG_UNSET"));
+        assert!(!env_flag_enabled("OWL_TEST_FLAG_UNSET"));
 
         for value in ["0", "false", "FALSE", "no", "off", ""] {
-            std::env::set_var("HANDY_TEST_FLAG_FALSY", value);
-            assert!(!env_flag_enabled("HANDY_TEST_FLAG_FALSY"), "{value:?}");
+            std::env::set_var("OWL_TEST_FLAG_FALSY", value);
+            assert!(!env_flag_enabled("OWL_TEST_FLAG_FALSY"), "{value:?}");
         }
-        std::env::remove_var("HANDY_TEST_FLAG_FALSY");
+        std::env::remove_var("OWL_TEST_FLAG_FALSY");
     }
 }

@@ -2,12 +2,13 @@
 
 This file provides guidance to AI coding assistants working with code in this repository.
 
-## Owl (this fork)
+## Owl
 
-This repo is **Owl**, a personal fork of [Handy](https://github.com/cjpais/Handy) (`upstream` remote). Everything below this section describes Handy's architecture, which Owl keeps.
+This repo is **Owl**. It started as a fork of [Handy](https://github.com/cjpais/Handy) and now stands on its own: it no longer merges Handy, and its code uses Owl's names. Handy's MIT notice stays in `LICENSE`, and the README and About page credit it.
 
 - **Target:** macOS on Apple Silicon only. Don't spend effort on Windows/Linux paths.
-- **Rename only what users see.** Keep internal names (`handy` crate, `handy_app_lib`, `handy_keys`, `HANDY_*` env vars) so `git merge upstream/main` stays small.
+- **Names:** the crate is `owl`, the library `owl_app_lib`, environment variables `OWL_*`. "handy" left in the code names something outside Owl: the `handy-keys` and `handy-recorder` libraries (the keyboard setting value `handy_keys` is stored in users' settings), and the `handy-computer` Hugging Face org and `blob.handy.computer`, where models download from.
+- **Windows and Linux:** the code stays so Owl can ship there later, but it's untested and unsigned. Signing is added with Owl's own credentials when it ships (`tauri.conf.json` has no signing or updater key).
 - **App ID:** `com.hao.owl`. Data lives in `~/Library/Application Support/com.hao.owl/`.
 - **Updater:** forced off (`update_checks_forced_disabled()` in `settings.rs`), and the endpoint list in `tauri.conf.json` is empty. Never point it at Handy's releases. `src/components/update-checker/` is kept, unused, for when Owl has its own feed.
 - **Design:** follow `DESIGN.md` (tokens in `src/styles/theme.css`, no pink, one accent).
@@ -63,7 +64,7 @@ The voice-detection model is checked in, so nothing needs downloading.
 
 ## Architecture Overview
 
-Handy is a cross-platform desktop speech-to-text application built with Tauri 2.x (Rust backend + React/TypeScript frontend).
+Owl is a desktop speech-to-text application built with Tauri 2.x (Rust backend + React/TypeScript frontend).
 
 ### Backend Structure (src-tauri/src/)
 
@@ -180,7 +181,7 @@ src/i18n/
 
 ## CLI Parameters
 
-Handy supports command-line parameters on all platforms for integration with scripts, window managers, and autostart configurations.
+Owl supports command-line parameters on all platforms for integration with scripts, window managers, and autostart configurations.
 
 **Implementation:** `cli.rs` (definitions), `main.rs` (parsing), `lib.rs` (applying), `signal_handle.rs` (shared logic)
 
@@ -206,9 +207,9 @@ Access debug features: `Cmd+Shift+D` (macOS) or `Ctrl+Shift+D` (Windows/Linux)
 ## Platform Notes
 
 - **macOS**: Metal acceleration, accessibility permissions required for keyboard shortcuts
-- **Windows**: Vulkan acceleration, code signing. Implicit Vulkan layers (overlays, capture hooks) are disabled for the Handy process via `VK_LOADER_LAYERS_DISABLE=~implicit~` set in `main.rs`; opt out with `HANDY_KEEP_VULKAN_IMPLICIT_LAYERS=1` or by setting `VK_LOADER_LAYERS_DISABLE` yourself
-- **Linux**: OpenBLAS + Vulkan, limited Wayland support, overlay uses GTK layer shell (disable with `HANDY_NO_GTK_LAYER_SHELL=1`)
-- **Nix/NixOS**: the Nix package sets `HANDY_DISABLE_UPDATER=1` to force-disable the self-updater at runtime without touching the persisted setting (self-update can't work against an immutable `/nix/store`)
+- **Windows**: Vulkan acceleration, code signing. Implicit Vulkan layers (overlays, capture hooks) are disabled for the Owl process via `VK_LOADER_LAYERS_DISABLE=~implicit~` set in `main.rs`; opt out with `OWL_KEEP_VULKAN_IMPLICIT_LAYERS=1` or by setting `VK_LOADER_LAYERS_DISABLE` yourself
+- **Linux**: OpenBLAS + Vulkan, limited Wayland support, overlay uses GTK layer shell (disable with `OWL_NO_GTK_LAYER_SHELL=1`)
+- **Nix/NixOS**: the Nix package sets `OWL_DISABLE_UPDATER=1` to force-disable the self-updater at runtime without touching the persisted setting (self-update can't work against an immutable `/nix/store`)
 
 ## Troubleshooting
 

@@ -5,10 +5,9 @@ shortcut, talk, and Owl types what you said into whatever app you're in. It
 also takes meeting notes.
 
 > [!NOTE]
-> Owl is a fork of [Handy](https://github.com/cjpais/Handy) by CJ Pais and
-> contributors. It is not affiliated with or endorsed by Handy. Please don't
-> file Owl issues upstream. Handy's original README is kept in
-> [README.handy.md](README.handy.md).
+> Owl started as a fork of [Handy](https://github.com/cjpais/Handy) by CJ Pais
+> and contributors, and is now developed on its own. It is not affiliated with
+> or endorsed by Handy, so please don't file Owl issues there.
 
 ## Status
 

@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "בדוק עדכונים",
         "description": "בדוק אוטומטית אם קיימות גרסאות חדשות של Owl",
-        "lockedDescription": "מושבת על ידי תצורת המערכת (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "מושבת על ידי תצורת המערכת (OWL_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "ערכת צלילים",

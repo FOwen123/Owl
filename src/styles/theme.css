@@ -62,8 +62,8 @@
     var(--color-accent) var(--focus-ring-strength),
     transparent
   );
-  /* Handy's token names, kept so upstream merges stay small (DESIGN.md,
-     Migration step 4): logo-primary is the accent, background-ui the accent
+  /* Handy's token names, until they're renamed (DESIGN.md, Migration
+     step 4): logo-primary is the accent, background-ui the accent
      fill, logo-stroke the text color, mid-gray the muted text. */
   --color-logo-primary: var(--color-accent);
   --color-background-ui: var(--color-accent-fill);

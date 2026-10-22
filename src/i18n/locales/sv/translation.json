@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "Sök efter uppdateringar",
         "description": "Sök automatiskt efter nya versioner av Owl",
-        "lockedDescription": "Inaktiverad av systemkonfiguration (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Inaktiverad av systemkonfiguration (OWL_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "Ljudtema",

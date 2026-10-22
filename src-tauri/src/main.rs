@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use clap::Parser;
-use handy_app_lib::CliArgs;
+use owl_app_lib::CliArgs;
 
 /// Owl: launched through the `owl` link, run the real binary instead. Tauri
 /// won't resolve the app's resources (speech detection, echo removal) from a
@@ -48,7 +48,7 @@ fn main() {
         // Avoid overlay/capture layer crashes (#2049). Set before backend
         // initialization, preserving user overrides.
         if std::env::var_os("VK_LOADER_LAYERS_DISABLE").is_none()
-            && !handy_app_lib::env_flag_enabled("HANDY_KEEP_VULKAN_IMPLICIT_LAYERS")
+            && !owl_app_lib::env_flag_enabled("OWL_KEEP_VULKAN_IMPLICIT_LAYERS")
         {
             std::env::set_var("VK_LOADER_LAYERS_DISABLE", "~implicit~");
         }
@@ -57,24 +57,24 @@ fn main() {
     // Transcription worker: runs transcribe.cpp in isolation and never touches
     // Tauri, the CLI, or single-instance handling. Checked after the env setup
     // above so the worker inherits it (e.g. the Vulkan layer opt-out).
-    if handy_app_lib::engine_supervisor::is_worker_invocation() {
-        std::process::exit(handy_app_lib::engine_supervisor::run_worker());
+    if owl_app_lib::engine_supervisor::is_worker_invocation() {
+        std::process::exit(owl_app_lib::engine_supervisor::run_worker());
     }
     // Owl: the one-shot speaker-labelling process (see diarization.rs).
     if std::env::args_os().nth(1).as_deref()
         == Some(std::ffi::OsStr::new(
-            handy_app_lib::diarization::WORKER_FLAG,
+            owl_app_lib::diarization::WORKER_FLAG,
         ))
     {
-        std::process::exit(handy_app_lib::diarization::run_worker());
+        std::process::exit(owl_app_lib::diarization::run_worker());
     }
 
     let cli_args = CliArgs::parse();
     // Owl's read-only commands need no app at all.
     if let Some(command) = &cli_args.command {
-        if let Some(code) = handy_app_lib::owl_cli::run_offline(command) {
+        if let Some(code) = owl_app_lib::owl_cli::run_offline(command) {
             std::process::exit(code);
         }
     }
-    handy_app_lib::run(cli_args)
+    owl_app_lib::run(cli_args)
 }

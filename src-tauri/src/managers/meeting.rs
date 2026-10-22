@@ -1,7 +1,7 @@
 //! Owl notetaker: records a meeting as two 16 kHz tracks (your microphone and
 //! the system audio), transcribes each in speech chunks, and keeps the result
-//! in its own `meetings.db` (separate from Handy's history.db so upstream
-//! history migrations never collide with ours).
+//! in its own `meetings.db` (separate from history.db, so the two
+//! databases' migrations never collide).
 
 use crate::audio_toolkit::audio::{read_wav_samples, FrameResampler};
 use crate::managers::transcription::TranscriptionManager;

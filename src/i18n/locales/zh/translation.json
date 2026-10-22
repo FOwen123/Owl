@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "检查更新",
         "description": "自动检查 Owl 的新版本",
-        "lockedDescription": "已被系统配置禁用 (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "已被系统配置禁用 (OWL_DISABLE_UPDATER)"
       },
       "soundTheme": {
         "label": "声音主题",

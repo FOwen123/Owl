@@ -560,7 +560,7 @@
       "updateChecks": {
         "label": "Tjek for opdateringer",
         "description": "Tjek automatisk for nye versioner af Owl",
-        "lockedDescription": "Deaktiveret af systemkonfiguration (HANDY_DISABLE_UPDATER)"
+        "lockedDescription": "Deaktiveret af systemkonfiguration (OWL_DISABLE_UPDATER)"
       },
       "whatsNewPreview": {
         "title": "Forhåndsvisning af nyheder",

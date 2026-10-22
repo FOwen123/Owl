@@ -792,7 +792,10 @@
     "addingToDictionary": "Adding to dictionary",
     "addedToDictionary": "Added to dictionary",
     "dontAdd": "Don't add",
-    "loadingModel": "मॉडल लोड हो रहा है..."
+    "loadingModel": "मॉडल लोड हो रहा है...",
+    "selectTextBox": "Select a text box first",
+    "copy": "Copy",
+    "copied": "Copied"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} शायद 1 शॉर्टकट को ब्लॉक कर रहा है",

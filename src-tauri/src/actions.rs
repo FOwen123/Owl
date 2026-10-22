@@ -8,7 +8,7 @@ use crate::managers::model::ModelManager;
 use crate::managers::transcription::StreamWorkKind;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings::{
-    get_settings, AppSettings, CleanupLevel, OverlayStyle, PostProcessProvider,
+    get_settings, AppSettings, CleanupLevel, OverlayStyle, PasteMethod, PostProcessProvider,
     APPLE_INTELLIGENCE_PROVIDER_ID,
 };
 use crate::shortcut;
@@ -532,6 +532,19 @@ fn edit_target() -> Option<EditTarget> {
 fn still_there(target: &EditTarget) -> bool {
     frontmost_app() == target.app
         && crate::correction_watch::selection_spot().as_ref() == Some(&target.spot)
+}
+
+/// Owl: whether a dictation has nowhere to go. Asked twice, since a browser
+/// or Electron app may build its text tree only once asked.
+fn no_text_box() -> bool {
+    if !crate::correction_watch::no_text_box() {
+        return false;
+    }
+    if let Some(pid) = frontmost_app() {
+        crate::correction_watch::expose_text(pid);
+    }
+    std::thread::sleep(Duration::from_millis(200));
+    crate::correction_watch::no_text_box()
 }
 
 /// Owl: the AI's rewrite of `selection`, or its answer when there's none.
@@ -1150,6 +1163,13 @@ impl ShortcutAction for TranscribeAction {
                                 utils::hide_recording_overlay(&ah);
                                 set_tray_state(&ah, TrayIconState::Idle);
                             } else {
+                                // Owl: like Wispr Flow, a dictation with no text box
+                                // to land in stays on the clipboard instead.
+                                let nowhere = !edit
+                                    && get_settings(&ah).paste_method != PasteMethod::None
+                                    && tauri::async_runtime::spawn_blocking(no_text_box)
+                                        .await
+                                        .unwrap_or(false);
                                 let ah_clone = ah.clone();
                                 let paste_time = Instant::now();
                                 let final_text = processed.final_text;
@@ -1161,6 +1181,17 @@ impl ShortcutAction for TranscribeAction {
                                     if rm_for_paste.was_cancelled_since(cancel_generation) {
                                         debug!("Transcription operation cancelled before paste");
                                         utils::hide_recording_overlay(&ah_clone);
+                                        set_tray_state(&ah_clone, TrayIconState::Idle);
+                                        return;
+                                    }
+
+                                    if nowhere {
+                                        if let Err(e) =
+                                            utils::write_text_to_clipboard(&ah_clone, &final_text)
+                                        {
+                                            error!("Failed to copy the dictation: {e}");
+                                        }
+                                        utils::show_no_text_box_overlay(&ah_clone, &final_text);
                                         set_tray_state(&ah_clone, TrayIconState::Idle);
                                         return;
                                     }

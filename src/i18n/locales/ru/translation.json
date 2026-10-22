@@ -789,7 +789,10 @@
     "addingToDictionary": "Adding to dictionary",
     "addedToDictionary": "Added to dictionary",
     "dontAdd": "Don't add",
-    "loadingModel": "Загрузка модели..."
+    "loadingModel": "Загрузка модели...",
+    "selectTextBox": "Select a text box first",
+    "copy": "Copy",
+    "copied": "Copied"
   },
   "whatsNew": {
     "title": "Новое в Owl v{{version}}"

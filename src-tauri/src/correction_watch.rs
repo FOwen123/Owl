@@ -65,6 +65,19 @@ pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {
     None
 }
 
+/// Whether the focus is plainly not a text box: a web page itself, a link,
+/// a button, a file list. False when Owl can't tell (apps that hide their
+/// text), so those still get the paste.
+#[cfg(target_os = "macos")]
+pub fn no_text_box() -> bool {
+    mac::no_text_box()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn no_text_box() -> bool {
+    false
+}
+
 /// Asks an Electron app (Slack, VS Code, …) to expose its text, as screen
 /// readers do. Other apps ignore it.
 #[cfg(target_os = "macos")]
@@ -269,6 +282,47 @@ mod mac {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         field.hash(&mut hasher); // CFHash: the same element hashes the same
         Some((hasher.finish(), (range.location, range.length), text))
+    }
+
+    pub fn no_text_box() -> bool {
+        // Roles that never take typing. Anything else (a group, a window, no
+        // focus at all) may be an app hiding its text box, so it's pasted to.
+        const NOT_TEXT: [&str; 15] = [
+            "AXWebArea",
+            "AXLink",
+            "AXButton",
+            "AXImage",
+            "AXList",
+            "AXOutline",
+            "AXTable",
+            "AXBrowser",
+            "AXCheckBox",
+            "AXRadioButton",
+            "AXPopUpButton",
+            "AXMenuButton",
+            "AXTabGroup",
+            "AXSlider",
+            "AXStaticText",
+        ];
+        let Some(field) = focused_field() else {
+            return false;
+        };
+        unsafe {
+            let role = string_attribute(&field, "AXRole");
+            if !role.is_some_and(|r| NOT_TEXT.contains(&r.as_str())) {
+                return false;
+            }
+            // A page you can type into (contenteditable) is still a text box.
+            if attribute(&field, "AXEditableAncestor").is_some() {
+                return false;
+            }
+            let mut settable: u8 = 0;
+            field.is_attribute_settable(
+                &CFString::from_str("AXValue"),
+                NonNull::from(&mut settable),
+            );
+            settable == 0
+        }
     }
 
     pub fn expose_text(pid: i32) {

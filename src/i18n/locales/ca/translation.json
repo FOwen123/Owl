@@ -792,7 +792,10 @@
     "addingToDictionary": "Adding to dictionary",
     "addedToDictionary": "Added to dictionary",
     "dontAdd": "Don't add",
-    "loadingModel": "S'està carregant el model..."
+    "loadingModel": "S'està carregant el model...",
+    "selectTextBox": "Select a text box first",
+    "copy": "Copy",
+    "copied": "Copied"
   },
   "secureInput": {
     "blockedWithCulprit_one": "{{name}} pot estar blocant 1 drecera",

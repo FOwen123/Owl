@@ -1,7 +1,8 @@
 import { listen } from "@tauri-apps/api/event";
-import { BookPlus, Check } from "lucide-react";
+import { BookPlus, Check, Copy, TextCursorInput } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import "./RecordingOverlay.css";
 import { commands, events } from "@/bindings";
 import type {
@@ -22,7 +23,8 @@ type OverlayState =
   | "streaming"
   | "transcribing"
   | "processing"
-  | "suggestion";
+  | "suggestion"
+  | "notice";
 
 // A card's edge (a `width`x52 pill, 1px in so a 2px stroke stays inside),
 // starting at the top center and running clockwise.
@@ -35,6 +37,13 @@ const RING = ring(300);
 interface EditSuggestion {
   from: string;
   to: string;
+  seconds: number;
+}
+
+// Owl: a dictation that had no text box to go to (overlay.rs), shown until
+// its countdown runs out.
+interface NoTextBox {
+  text: string;
   seconds: number;
 }
 
@@ -95,6 +104,9 @@ const RecordingOverlay: React.FC = () => {
   const [overflowing, setOverflowing] = useState(false);
   const [suggestion, setSuggestion] = useState<EditSuggestion | null>(null);
   const [suggestionAdded, setSuggestionAdded] = useState(false);
+  // Owl: a dictation that had no text box to go to (overlay.rs).
+  const [notice, setNotice] = useState<NoTextBox | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Latest mic levels, read by the animation loop below. Kept out of React state
   // so ~24 level events a second don't re-render the overlay.
@@ -167,6 +179,11 @@ const RecordingOverlay: React.FC = () => {
         () => setSuggestionAdded(true),
       );
 
+      const unlistenNotice = await listen<NoTextBox>("no-text-box", (event) => {
+        setNotice(event.payload);
+        setCopied(false);
+      });
+
       const unlistenReady = await listen("recording-ready", () => {
         setElapsed(0);
         setCaptureReady(true);
@@ -218,6 +235,7 @@ const RecordingOverlay: React.FC = () => {
         unlistenHide();
         unlistenSuggestion();
         unlistenSuggestionAdded();
+        unlistenNotice();
         unlistenReady();
         unlistenLevel();
         unlistenStream();
@@ -234,7 +252,7 @@ const RecordingOverlay: React.FC = () => {
   // levels and animates the owl. Writing styles directly (no re-render, no CSS
   // transition restarted by every level event) is what keeps it smooth.
   useEffect(() => {
-    if (!isVisible || state === "suggestion") return;
+    if (!isVisible || state === "suggestion" || state === "notice") return;
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const shown = Array(WAVE_BARS).fill(0);
     let last = performance.now();
@@ -487,6 +505,47 @@ const RecordingOverlay: React.FC = () => {
                 style={{ animationDuration: `${suggestion.seconds}s` }}
               />
             )}
+          </svg>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Owl: "Select a text box first", the dictation, and Copy ----
+  if (state === "notice" && notice) {
+    const copy = () =>
+      writeText(notice.text).then(
+        () => setCopied(true),
+        () => setCopied(false),
+      );
+    return (
+      <div
+        dir={direction}
+        className={`ov-stage ${position} ov-fade ${isVisible ? "show" : ""}`}
+      >
+        <div
+          key={notice.text}
+          className={`scard ssug snotice ${copied ? "added" : ""}`}
+        >
+          <span className="ssug-book" aria-hidden="true">
+            {copied ? <Check /> : <TextCursorInput />}
+          </span>
+          <div className="ssug-text">
+            <span className="ssug-label">{t("overlay.selectTextBox")}</span>
+            <span className="ssug-to">{notice.text}</span>
+          </div>
+          <button className="scopy" onClick={copy}>
+            {!copied && <Copy />}
+            {copied ? t("overlay.copied") : t("overlay.copy")}
+          </button>
+          <svg className="ssug-ring" viewBox="0 0 300 52" aria-hidden="true">
+            <path className="ssug-track" d={RING} pathLength={100} />
+            <path
+              className="ssug-countdown"
+              d={RING}
+              pathLength={100}
+              style={{ animationDuration: `${notice.seconds}s` }}
+            />
           </svg>
         </div>
       </div>

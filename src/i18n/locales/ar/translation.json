@@ -791,7 +791,10 @@
     "dontAdd": "Don't add",
     "transcribing": "جاري التفريغ...",
     "processing": "جاري المعالجة...",
-    "loadingModel": "جارٍ تحميل النموذج..."
+    "loadingModel": "جارٍ تحميل النموذج...",
+    "selectTextBox": "Select a text box first",
+    "copy": "Copy",
+    "copied": "Copied"
   },
   "whatsNew": {
     "title": "الجديد في Owl v{{version}}"

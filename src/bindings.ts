@@ -1438,7 +1438,7 @@ export type KeyboardImplementation = "tauri" | "handy_keys"
 export type LLMPrompt = { id: string; name: string; prompt: string }
 export type LearnReport = { 
 /**
- * "learned", "nothing_new", "need_more", "off" or "busy".
+ * "learned", "nothing_new", "interrupted" (a dictation started; the rest waits), "need_more", "off" or "busy".
  */
 outcome: string; keyed: number; judged: number; 
 /**

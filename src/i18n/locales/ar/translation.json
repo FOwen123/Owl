@@ -823,7 +823,8 @@
         "nothing_new": "Nothing new helped this time.",
         "need_more": "Needs {{min}} fixed dictations to start.",
         "off": "Learning is off.",
-        "busy": "Already learning."
+        "busy": "Already learning.",
+        "interrupted": "Paused for a dictation. Owl will try again."
       },
       "changesTitle": "What Owl learned",
       "changesEmpty": "Nothing yet.",

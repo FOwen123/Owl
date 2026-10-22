@@ -107,16 +107,19 @@ impl Change {
         }
     }
 
-    /// For changes that set one value (rather than add to a list): which
-    /// value. Only the newest such change of a value can be undone, since
-    /// undoing an older one would overwrite the newer.
-    pub fn setting(&self) -> Option<&'static str> {
+    /// What the change touches: one value, one Word or one replacement. Only
+    /// the newest change to a thing can be undone, since undoing an older one
+    /// would overwrite the newer (or be a no-op the newer then contradicts).
+    pub fn target(&self) -> String {
         match self {
-            Change::Priority { .. } => Some("priority"),
-            Change::Context { .. } => Some("context"),
-            Change::WordLimit { .. } => Some("word_limit"),
-            Change::Examples { .. } => Some("examples"),
-            _ => None,
+            Change::AddWord { word } => format!("word:{}", word.to_lowercase()),
+            Change::AddSwap { from, .. } | Change::RemoveSwap { from, .. } => {
+                format!("swap:{from}")
+            }
+            Change::Priority { .. } => "priority".into(),
+            Change::Context { .. } => "context".into(),
+            Change::WordLimit { .. } => "word_limit".into(),
+            Change::Examples { .. } => "examples".into(),
         }
     }
 
@@ -171,7 +174,7 @@ impl Change {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Type, PartialEq)]
 pub struct LearnReport {
-    /// "learned", "nothing_new", "need_more", "off" or "busy".
+    /// "learned", "nothing_new", "interrupted" (a dictation started; the rest waits), "need_more", "off" or "busy".
     pub outcome: String,
     pub keyed: u32,
     pub judged: u32,
@@ -203,7 +206,9 @@ pub fn learn(app: &AppHandle) -> Result<LearnReport> {
     let report = learn_once(app);
     // A run a dictation interrupted didn't judge anything; don't record it,
     // so the next check tries again.
-    let finished = report.as_ref().is_ok_and(|r| r.outcome != "busy");
+    let finished = report
+        .as_ref()
+        .is_ok_and(|r| !matches!(r.outcome.as_str(), "busy" | "interrupted"));
     if let (true, Ok(report), Some(learning)) =
         (finished, &report, app.try_state::<Arc<Learning>>())
     {
@@ -284,15 +289,16 @@ fn learn_once(app: &AppHandle) -> Result<LearnReport> {
         )?;
         Ok(eval::summarize(&results, false))
     };
-    let busy = || LearnReport {
-        outcome: "busy".into(),
+    let interrupted_early = || LearnReport {
+        outcome: "interrupted".into(),
         keyed,
         ..Default::default()
     };
+    let mut interrupted = false;
 
     let mut current = settings.clone();
     let baseline = match replay(&current) {
-        Err(e) if e.is::<eval::Interrupted>() => return Ok(busy()),
+        Err(e) if e.is::<eval::Interrupted>() => return Ok(interrupted_early()),
         other => other?,
     };
     let mut best = baseline.clone();
@@ -314,7 +320,10 @@ fn learn_once(app: &AppHandle) -> Result<LearnReport> {
         let summary = match replay(&trial) {
             Ok(s) => s,
             // Keep what was already proven; the rest waits for the next run.
-            Err(e) if e.is::<eval::Interrupted>() => break,
+            Err(e) if e.is::<eval::Interrupted>() => {
+                interrupted = true;
+                break;
+            }
             Err(e) => {
                 log::warn!("Learner: couldn't test {change:?}: {e:#}");
                 continue;
@@ -364,7 +373,10 @@ fn learn_once(app: &AppHandle) -> Result<LearnReport> {
         );
     }
     Ok(LearnReport {
-        outcome: if kept.is_empty() {
+        // Interrupted: what was proven is kept, the rest is tried next time.
+        outcome: if interrupted {
+            "interrupted"
+        } else if kept.is_empty() {
             "nothing_new"
         } else {
             "learned"

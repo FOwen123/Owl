@@ -153,8 +153,11 @@ mod mac {
                     if let Some(learning) =
                         app.try_state::<std::sync::Arc<crate::learning::Learning>>()
                     {
-                        if let Err(e) = learning.set_edited(id, edited.trim()) {
-                            debug!("Learning: couldn't save the edit: {e:#}");
+                        match learning.set_edited(id, edited.trim()) {
+                            Ok(()) => {
+                                let _ = app.emit("learning-changed", ());
+                            }
+                            Err(e) => debug!("Learning: couldn't save the edit: {e:#}"),
                         }
                     }
                 }

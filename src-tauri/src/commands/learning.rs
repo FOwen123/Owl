@@ -44,10 +44,10 @@ fn learned_changes(learning: &Learning) -> Result<Vec<LearnedChange>, String> {
         .into_iter()
         .filter_map(|(id, at, change, before, after, undone)| {
             let change: Change = serde_json::from_str(&change).ok()?;
-            let setting = change.setting();
-            let can_undo = !undone && setting.is_none_or(|s| !newer_active.contains(s));
-            if let (false, Some(s)) = (undone, setting) {
-                newer_active.insert(s);
+            let target = change.target();
+            let can_undo = !undone && !newer_active.contains(&target);
+            if !undone {
+                newer_active.insert(target);
             }
             Some(LearnedChange {
                 id,

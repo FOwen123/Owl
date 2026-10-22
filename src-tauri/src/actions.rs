@@ -1129,6 +1129,9 @@ impl ShortcutAction for TranscribeAction {
                                         .ok()
                                 })
                                 .flatten();
+                            if learning_id.is_some() {
+                                let _ = ah.emit("learning-changed", ());
+                            }
 
                             // Save to history if WAV was saved
                             if wav_saved {

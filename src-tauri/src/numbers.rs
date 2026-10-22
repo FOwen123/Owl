@@ -351,7 +351,9 @@ fn chinese(text: &str) -> String {
         if chars[i..].starts_with(&['百', '分', '之']) {
             let start = i + 3;
             let (n, end) = cn_number(&chars, start);
-            if let Some(n) = n {
+            // A decimal that didn't convert whole (百分之二點五以上) stays as said.
+            let cut_short = matches!(chars.get(end), Some('點' | '点'));
+            if let Some(n) = n.filter(|_| !cut_short) {
                 out.push_str(&n);
                 out.push('%');
                 i = end;
@@ -488,6 +490,10 @@ mod tests {
     #[test]
     fn chinese_numbers_become_digits_when_clear() {
         assert_eq!(f("大概百分之二十的人"), "大概20%的人");
+        assert_eq!(f("百分之二點五"), "2.5%");
+        // A decimal that can't be read whole is left as said.
+        assert_eq!(f("百分之零點五以下"), "百分之零點五以下");
+        assert_eq!(f("百分之二點五以上"), "百分之二點五以上");
         assert_eq!(f("版本二點五"), "版本2.5");
         assert_eq!(f("版本二點五的功能"), "版本2.5的功能");
         assert_eq!(f("快了二點五倍"), "快了2.5倍");

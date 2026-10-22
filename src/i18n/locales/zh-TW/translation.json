@@ -821,7 +821,8 @@
         "nothing_new": "這次沒有找到有幫助的變更。",
         "need_more": "需要 {{min}} 則修正過的聽寫才能開始。",
         "off": "學習已關閉。",
-        "busy": "正在學習中。"
+        "busy": "正在學習中。",
+        "interrupted": "為了聽寫而暫停，Owl 稍後會再試。"
       },
       "changesTitle": "Owl 學到了什麼",
       "changesEmpty": "目前還沒有。",

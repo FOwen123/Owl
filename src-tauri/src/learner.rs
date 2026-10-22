@@ -120,6 +120,18 @@ impl Change {
         }
     }
 
+    /// Whether `s` still holds the value this change replaces. List changes
+    /// (Words, swaps) always apply.
+    fn still_before(&self, s: &AppSettings) -> bool {
+        match self {
+            Change::Priority { before, .. } => &s.hearing_priority == before,
+            Change::Context { before, .. } => &s.hearing_context == before,
+            Change::WordLimit { before, .. } => s.hearing_word_limit.map(|n| n as u32) == *before,
+            Change::Examples { before, .. } => s.cleanup_examples == *before,
+            _ => true,
+        }
+    }
+
     /// The change with its `before` taken from `current`.
     fn rebased(self, current: &AppSettings) -> Change {
         match self {
@@ -189,7 +201,12 @@ pub fn learn(app: &AppHandle) -> Result<LearnReport> {
     // Fixes made while this run works count toward the next one.
     let started = chrono::Utc::now().timestamp();
     let report = learn_once(app);
-    if let (Ok(report), Some(learning)) = (&report, app.try_state::<Arc<Learning>>()) {
+    // A run a dictation interrupted didn't judge anything; don't record it,
+    // so the next check tries again.
+    let finished = report.as_ref().is_ok_and(|r| r.outcome != "busy");
+    if let (true, Ok(report), Some(learning)) =
+        (finished, &report, app.try_state::<Arc<Learning>>())
+    {
         let saved = learning.add_run(
             started,
             report.keyed as i64,
@@ -325,12 +342,17 @@ fn learn_once(app: &AppHandle) -> Result<LearnReport> {
     }
 
     // Applied to the saved settings one by one, so anything the user changed
-    // meanwhile stays.
-    if !kept.is_empty() {
-        let mut live = get_settings(app);
-        for change in &kept {
-            change.apply(&mut live);
+    // meanwhile stays: a value they edited during the run is theirs, and its
+    // change is dropped (its Undo would restore a stale value).
+    let mut live = get_settings(app);
+    kept.retain(|c| {
+        let applies = c.still_before(&live);
+        if applies {
+            c.apply(&mut live);
         }
+        applies
+    });
+    if !kept.is_empty() {
         write_settings(app, live);
         let (before, after) = (score(&baseline), score(&best));
         for change in &kept {

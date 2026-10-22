@@ -282,7 +282,9 @@ pub fn score(
             _ => {}
         }
     }
-    let (said, have) = (numbers(key), numbers(&output));
+    // Keys spelled out ("twenty percent", 百分之二十) count as numbers too.
+    let digits = crate::numbers::format_numbers;
+    let (said, have) = (numbers(&digits(key)), numbers(&digits(&output)));
     ItemResult {
         id: item.id.clone(),
         source: item.source().to_string(),
@@ -330,8 +332,14 @@ impl AiCache {
             .as_ref()
             .and_then(|id| settings.post_process_prompts.iter().find(|p| &p.id == id))
             .map(|p| p.prompt.as_str());
+        // Where the request goes and how its reply is read, so a different
+        // server (a custom endpoint moved) isn't graded on old replies.
+        let endpoint = settings
+            .active_post_process_provider()
+            .map(|p| (p.base_url.as_str(), p.supports_structured_output));
         let input = serde_json::json!([
             provider,
+            endpoint,
             settings.post_process_models.get(provider),
             prompt,
             format!("{:?}", settings.cleanup_level),
@@ -540,6 +548,16 @@ mod tests {
         assert_eq!(s.term_recall, Some(0.5));
         assert_eq!(s.numbers_right, Some(1.0));
         assert_eq!(s.simplified_share, Some(1.0));
+        // A key spelled out still counts its numbers.
+        let r = score(
+            &item("about twenty percent"),
+            String::new(),
+            "about 30%".into(),
+            None,
+            &[],
+            1,
+        );
+        assert_eq!((r.numbers_said, r.numbers_missed), (1, 1));
     }
 
     #[test]

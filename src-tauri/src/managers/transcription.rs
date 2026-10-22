@@ -1153,12 +1153,23 @@ impl TranscriptionManager {
     }
 
     pub fn transcribe(&self, audio: Vec<f32>) -> Result<String> {
-        self.transcribe_with(audio, &get_settings(&self.app_handle))
+        self.run_transcription(audio, &get_settings(&self.app_handle), true)
     }
 
-    /// Owl: `transcribe` with the given settings instead of the saved ones,
-    /// so the learner can try a change without applying it (`learner.rs`).
+    /// Owl: a replay (`eval.rs`, `learner.rs`): `transcribe` with the given
+    /// settings instead of the saved ones, so the learner can try a change
+    /// without applying it. It never unloads the model, even when set to
+    /// unload immediately: a dictation started meanwhile is counting on it.
     pub fn transcribe_with(&self, audio: Vec<f32>, settings: &AppSettings) -> Result<String> {
+        self.run_transcription(audio, settings, false)
+    }
+
+    fn run_transcription(
+        &self,
+        audio: Vec<f32>,
+        settings: &AppSettings,
+        may_unload: bool,
+    ) -> Result<String> {
         let _one_at_a_time = self.run_gate.lock().unwrap_or_else(|e| e.into_inner());
         #[cfg(debug_assertions)]
         if std::env::var("HANDY_FORCE_TRANSCRIPTION_FAILURE").is_ok() {
@@ -1177,7 +1188,9 @@ impl TranscriptionManager {
 
         if audio.is_empty() {
             debug!("Empty audio vector");
-            self.maybe_unload_immediately("empty audio");
+            if may_unload {
+                self.maybe_unload_immediately("empty audio");
+            }
             return Ok(String::new());
         }
 
@@ -1275,7 +1288,9 @@ impl TranscriptionManager {
             );
         }
 
-        self.maybe_unload_immediately("transcription");
+        if may_unload {
+            self.maybe_unload_immediately("transcription");
+        }
 
         Ok(final_result)
     }

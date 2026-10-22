@@ -6,17 +6,18 @@ This file provides guidance to AI coding assistants working with code in this re
 
 This repo is **Owl**. It started as a fork of [Handy](https://github.com/cjpais/Handy) and now stands on its own: it no longer merges Handy, and its code uses Owl's names. Handy's MIT notice stays in `LICENSE`, and the README and About page credit it.
 
-- **Target:** macOS on Apple Silicon only. Don't spend effort on Windows/Linux paths.
 - **Names:** the crate is `owl`, the library `owl_app_lib`, environment variables `OWL_*`. "handy" left in the code names something outside Owl: the `handy-keys` and `handy-recorder` libraries (the keyboard setting value `handy_keys` is stored in users' settings), and the `handy-computer` Hugging Face org and `blob.handy.computer`, where models download from.
 - **Windows and Linux:** the code stays so Owl can ship there later, but it's untested and unsigned. Signing is added with Owl's own credentials when it ships (`tauri.conf.json` has no signing or updater key).
 - **App ID:** `com.hao.owl`. Data lives in `~/Library/Application Support/com.hao.owl/`.
 - **Updater:** forced off (`update_checks_forced_disabled()` in `settings.rs`), and the endpoint list in `tauri.conf.json` is empty. Never point it at Handy's releases. `src/components/update-checker/` is kept, unused, for when Owl has its own feed.
 - **Design:** follow `DESIGN.md` (tokens in `src/styles/theme.css`, no pink, one accent).
-- **Plan:** `TODO.md` (local only, kept out of git). Owl features live in: `src-tauri/src/snippets.rs`, `src-tauri/src/dictionary.rs`, `src-tauri/src/managers/meeting.rs` (+ `commands/meetings.rs`, `audio_toolkit/audio/system_capture.rs`), and their pages in `src/components/owl/`.
-- **UI without the backend:** `bun run dev`, then open `http://localhost:1420/?mock` (`src/dev/mockBackend.ts`, dev builds only). Add fake responses there when a page needs them.
+- **Plan:** the maintainer keeps a local `TODO.md`, out of git. Owl's own features live in: `src-tauri/src/snippets.rs`, `src-tauri/src/dictionary.rs`, `src-tauri/src/managers/meeting.rs` (+ `commands/meetings.rs`, `audio_toolkit/audio/system_capture.rs`), and their pages in `src/components/owl/`.
+- **UI without the backend:** `bun run dev`, then open `http://localhost:1420/?mock` (`src/dev/mockBackend.ts`, dev builds only). Add fake responses there when a page needs them. The overlay is at `/src/overlay/index.html?mock` (add `&state=transcribing` or `&state=notice`).
+- **README screenshots:** `docs/screenshots/` are taken from `?mock` at 1100×720, 2× scale, dark theme, so they never show real data. Retake them when a page they show changes.
+- **README:** it documents the build requirements and every user-facing feature. Check a feature in the code before the README mentions it, and update it when a feature, default shortcut, permission or requirement changes.
 - **Translations:** every new key goes into all locales (`bun run check:translations` fails otherwise). Write real `en`, `zh` and `zh-TW` strings; other locales get the English text.
 - **Logo and icons:** one hand-drawn source, `scripts/owl-icons/owl-source.png`. `swift scripts/owl-icons/build-icons.swift` writes the in-app mark (`src/assets/owl-mark.png`), the menu-bar icons (`src-tauri/resources/*.png`) and `/tmp/owl-app-icon.png`; then run `bun run tauri icon /tmp/owl-app-icon.png`.
-- **Dictation eval:** `owl --eval DIR [--post-process] [--eval-name NAME]` replays a test set (`set.jsonl` + audio) and scores hearing, final edits, Words, numbers and Traditional/Simplified script (`eval.rs`). Sets: the owner's Wispr Flow history (`scripts/eval/build_set.py`), public zh-TW / mixed / English recordings (`scripts/eval/fetch_public.py`), and Owl's own learning log (`owl --export-learning DIR`). Compare runs with `scripts/eval/compare.py DIR OLD NEW`. Clips, keys and results live in `~/Documents/Projects/Owl-evals/`, never in git. Test against a portable copy (a `portable` file next to the binary) so the real app data isn't touched.
+- **Dictation eval:** `owl --eval DIR [--post-process] [--eval-name NAME]` replays a test set (`set.jsonl` + audio) and scores hearing, final edits, Words, numbers and Traditional/Simplified script (`eval.rs`). Sets: a Wispr Flow history export (`scripts/eval/build_set.py`), public zh-TW / mixed / English recordings (`scripts/eval/fetch_public.py`), and Owl's own learning log (`owl --export-learning DIR`). Compare runs with `scripts/eval/compare.py DIR OLD NEW`. Keep clips, keys and results outside the repo and never commit them. Test against a portable copy (a `portable` file next to the binary) so the real app data isn't touched.
 - **Learning:** opt-in log of dictations and the user's fixes (`learning.rs`); `learner.rs` proposes changes (Words, swaps, hint order and cap, a context passage for the speech model, cleanup examples), keeps only those that score better on the newest fixed dictations, and lists them with Undo on the Learning page. `owl --learn` runs it once.
 - **Sign in with ChatGPT:** `chatgpt.rs`, OpenAI's open-source flow (loopback `127.0.0.1`, PKCE, self-registration as "Owl"); `llm_client.rs` routes the `chatgpt` provider to it, so every AI step can use the plan.
 - **Before calling a change done:** `bun run lint`, `bunx tsc --noEmit`, `bun run check:translations`, `cd src-tauri && cargo test && cargo clippy`.
@@ -59,7 +60,7 @@ bun run format:frontend   # Prettier only
 bun run format:backend    # cargo fmt only
 ```
 
-For prerequisites (cmake, Xcode) and troubleshooting, see [BUILD.md](BUILD.md).
+For prerequisites and troubleshooting, see [BUILD.md](BUILD.md).
 The voice-detection model is checked in, so nothing needs downloading.
 
 ## Architecture Overview
@@ -79,7 +80,7 @@ Owl is a desktop speech-to-text application built with Tauri 2.x (Rust backend +
   - `vad/` - Voice Activity Detection (Silero VAD)
 - `commands/` - Tauri command handlers for frontend communication
 - `cli.rs` - CLI argument definitions (clap derive)
-- `shortcut.rs` - Global keyboard shortcut handling
+- `shortcut/` - Global keyboard shortcut handling
 - `settings.rs` - Application settings management
 - `overlay.rs` - Recording overlay window (platform-specific)
 - `signal_handle.rs` - `send_transcription_input()` reusable function
@@ -92,7 +93,6 @@ Owl is a desktop speech-to-text application built with Tauri 2.x (Rust backend +
   - `settings/` - Settings UI
   - `model-selector/` - Model management interface
   - `onboarding/` - First-run experience
-  - `overlay/` - Recording overlay UI
   - `update-checker/` - App update notifications
   - `shared/`, `ui/`, `icons/`, `footer/` - Shared components
 - `hooks/useSettings.ts` - Settings state management hook
@@ -119,29 +119,29 @@ Owl is a desktop speech-to-text application built with Tauri 2.x (Rust backend +
 - `transcribe-rs` - ONNX speech recognition (Parakeet, Moonshine, SenseVoice, etc.)
 - `handy-recorder` - Microphone capture: device selection, resampling to 16 kHz, failure detection
 - `transcribe-cpp` (Silero VAD v6, CPU-only, in-process) / `earshot` - Voice Activity Detection
-- `rdev` - Global keyboard shortcuts
+- `handy-keys` - Global keyboard shortcuts
 - `rodio` - Audio playback for feedback sounds
 
 ### Application Flow
 
-1. **Initialization:** App starts minimized to tray, loads settings, initializes managers
-2. **Model Setup:** First-run downloads preferred Whisper model (Small/Medium/Turbo/Large)
-3. **Recording:** Global shortcut triggers audio recording with VAD filtering
-4. **Processing:** Audio sent to Whisper model for transcription
-5. **Output:** Text pasted to active application via system clipboard
+1. **Initialization:** App starts with its tray icon, loads settings, initializes managers
+2. **First run:** Accessibility and Microphone permissions, then the user picks a speech model (Parakeet Unified and Nemotron Streaming are featured), downloaded from Hugging Face
+3. **Recording:** Option+Space (hold to talk or tap to toggle) records with VAD filtering
+4. **Processing:** The speech model transcribes, then cleanup rules, the dictionary, snippets and optional AI cleanup run
+5. **Output:** Text pasted into the focused app through the clipboard; with no text box focused it stays on the clipboard instead
 
 ### Settings System
 
 Settings are stored using Tauri's store plugin with reactive updates:
 
-- Keyboard shortcuts (configurable, supports push-to-talk)
+- Keyboard shortcuts (configurable; hold or tap, hold only, or tap only)
 - Audio devices (microphone/output selection)
-- Model preferences (Small/Medium/Turbo/Large Whisper variants)
+- The selected speech model and its language
 - Audio feedback and translation options
 
 ### Single Instance Architecture
 
-The app enforces single instance behavior — launching when already running brings the settings window to front rather than creating a new process. Remote control flags (`--toggle-transcription`, etc.) work by launching a second instance that sends args to the running instance via `tauri_plugin_single_instance`, then exits.
+Owl runs as a single instance. Launching it again brings the settings window to the front instead of starting a new process. Remote control flags (`--toggle-transcription`, etc.) work by launching a second instance that sends args to the running instance via `tauri_plugin_single_instance`, then exits.
 
 ## Internationalization (i18n)
 
@@ -185,18 +185,26 @@ Owl supports command-line parameters on all platforms for integration with scrip
 
 **Implementation:** `cli.rs` (definitions), `main.rs` (parsing), `lib.rs` (applying), `signal_handle.rs` (shared logic)
 
-| Flag                     | Description                                                |
-| ------------------------ | ---------------------------------------------------------- |
-| `--toggle-transcription` | Toggle recording on/off on a running instance              |
-| `--toggle-post-process`  | Toggle recording with post-processing on/off               |
-| `--cancel`               | Cancel the current operation on a running instance         |
-| `--start-hidden`         | Launch without showing the main window (tray icon visible) |
-| `--no-tray`              | Launch without system tray (closing window quits the app)  |
-| `--debug`                | Enable debug mode with verbose (Trace) logging             |
+| Flag                       | Description                                                |
+| -------------------------- | ---------------------------------------------------------- |
+| `--toggle-transcription`   | Toggle recording on/off on a running instance              |
+| `--toggle-post-process`    | Toggle recording with post-processing on/off               |
+| `--cancel`                 | Cancel the current operation on a running instance         |
+| `--start-hidden`           | Launch without showing the main window (tray icon visible) |
+| `--no-tray`                | Launch without system tray (closing window quits the app)  |
+| `--debug`                  | Enable debug mode with verbose (Trace) logging             |
+| `-f, --transcribe-file`    | Transcribe a 16 kHz mono WAV headlessly and exit           |
+| `--model`, `--list-models` | Pick the model for `-f`, or list model ids                 |
+| `--post-process`           | Run cleanup, snippets and the dictionary on `-f`'s text    |
+| `--eval DIR`               | Replay and score a test set (`eval.rs`)                    |
+| `--export-learning DIR`    | Write the learning log's fixed dictations as a test set    |
+| `--learn`                  | Run the learner once and print its report                  |
+
+Subcommands (`owl_cli.rs`, no running app needed except `transcribe`): `owl meetings [--json]`, `owl meeting <id> [--notes|--transcript]`, `owl transcribe <file>` and `owl mcp` (read-only MCP server over stdio, `mcp.rs`). Settings > Advanced > Other apps > Command line links `owl` into `/usr/local/bin` or `~/.local/bin`.
 
 **Key design decisions:**
 
-- CLI flags are runtime-only overrides — they do NOT modify persisted settings
+- CLI flags are runtime-only overrides. They don't modify persisted settings
 - Remote control flags work via `tauri_plugin_single_instance`: second instance sends args, then exits
 - `send_transcription_input()` in `signal_handle.rs` is shared between signal handlers and CLI
 
@@ -209,7 +217,6 @@ Access debug features: `Cmd+Shift+D` (macOS) or `Ctrl+Shift+D` (Windows/Linux)
 - **macOS**: Metal acceleration, accessibility permissions required for keyboard shortcuts
 - **Windows**: Vulkan acceleration, code signing. Implicit Vulkan layers (overlays, capture hooks) are disabled for the Owl process via `VK_LOADER_LAYERS_DISABLE=~implicit~` set in `main.rs`; opt out with `OWL_KEEP_VULKAN_IMPLICIT_LAYERS=1` or by setting `VK_LOADER_LAYERS_DISABLE` yourself
 - **Linux**: OpenBLAS + Vulkan, limited Wayland support, overlay uses GTK layer shell (disable with `OWL_NO_GTK_LAYER_SHELL=1`)
-- **Nix/NixOS**: the Nix package sets `OWL_DISABLE_UPDATER=1` to force-disable the self-updater at runtime without touching the persisted setting (self-update can't work against an immutable `/nix/store`)
 
 ## Troubleshooting
 

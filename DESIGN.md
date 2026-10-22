@@ -2,7 +2,7 @@
 
 Visual direction for the Owl UI redesign (Owl started as a fork of Handy). Read this before changing colors, surfaces, or component styling. Token values live in `src/styles/theme.css`; this file says which values to use and why.
 
-**Visual reference:** Paper file "Projects", Page 1. "Owl — Design System (proposed)" is the target and matches this file. "Owl — Design System (current)" shows the app as it is today. "Owl — Accent options (no pink)" records the accent choice. "Owl — Logo" shows the logo, where it appears and the options it was picked from. If this file and the proposed board disagree, fix whichever is wrong; they must not drift.
+**Visual reference:** the maintainer's design boards in [Paper](https://paper.design) aren't public. This file and `src/styles/theme.css` are the source of truth for everyone else. To see the components in both themes, run `bun run dev` and open `http://localhost:1420/?mock`.
 
 **Status:** agreed 2026-10-06; migration steps 1–3 implemented 2026-10-07 (step 4, the rename, is skipped). See "Migration".
 
@@ -115,7 +115,7 @@ As drawn on the proposed board, in both themes.
 
 ## Signature gradient
 
-`linear-gradient(135deg, #182676 0%, #1f4195 35%, #3269bd 70%, #70b1ff 100%)`, sampled from T3 Code's sidebar header. Use it for the sidebar header, the onboarding welcome ("Welcome to Owl") and the About page, with white text. Never on buttons or other controls, and at most once per screen.
+`linear-gradient(135deg, #182676 0%, #1f4195 35%, #3269bd 70%, #70b1ff 100%)`, sampled from T3 Code's sidebar header. Use it for the sidebar header, with white text. Never on buttons or other controls, and at most once per screen.
 
 ## Migration
 
@@ -154,4 +154,4 @@ Steps 1–3 are implemented. Each step is a separate, reviewable change. Steps 1
 - Both themes and the `data-theme` override must work for every change.
 - The signature gradient appears at most once per screen.
 - New user-facing strings go through i18n (see `AGENTS.md`).
-- When a decision here changes, update the proposed Paper board in the same pass.
+- When a decision here changes, update this file in the same change. The maintainer keeps the Paper boards in step.

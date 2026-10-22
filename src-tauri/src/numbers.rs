@@ -302,7 +302,13 @@ fn cn_value(s: &[char]) -> Option<u64> {
         }
         let u = unit(c)?;
         if u >= 10_000 {
-            total += (section + current) * u;
+            let part = section + current;
+            // 一萬億: a large unit right after another scales everything.
+            total = if part == 0 {
+                total.checked_mul(u)?
+            } else {
+                total.checked_add(part.checked_mul(u)?)?
+            };
             section = 0;
         } else {
             // 十 alone is ten; 百 or 千 need a digit before them.
@@ -310,7 +316,14 @@ fn cn_value(s: &[char]) -> Option<u64> {
         }
         current = 0;
     }
-    Some(total + section + current)
+    // A last digit right after a unit counts in the next place down:
+    // 一萬五 is 15000, 一千二 is 1200, 三百五 is 350 (一千零二 says 1002).
+    if let [.., u, d] = s {
+        if let (Some(u), Some(d)) = (unit(*u).filter(|u| *u >= 100), digit(*d)) {
+            current = d * (u / 10);
+        }
+    }
+    total.checked_add(section)?.checked_add(current)
 }
 
 /// Measure words and units after which a number is clearly a quantity.
@@ -476,6 +489,13 @@ mod tests {
         assert_eq!(f("三百塊"), "300塊");
         assert_eq!(f("等十分鐘"), "等10分鐘");
         assert_eq!(f("兩萬三千人"), "23000人");
+        // The last digit after a unit is the next place down.
+        assert_eq!(f("預算一萬五元"), "預算15000元");
+        assert_eq!(f("一千二元"), "1200元");
+        assert_eq!(f("三百五塊"), "350塊");
+        assert_eq!(f("一千零二元"), "1002元");
+        assert_eq!(f("一億五千萬元"), "150000000元");
+        assert_eq!(f("一萬億元"), "1000000000000元");
     }
 
     #[test]

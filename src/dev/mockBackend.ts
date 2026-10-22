@@ -129,6 +129,7 @@ const responses: Record<string, unknown> = {
         before: 0.084,
         after: 0.061,
         undone: false,
+        can_undo: true,
       },
       {
         id: 2,
@@ -137,6 +138,7 @@ const responses: Record<string, unknown> = {
         before: 0.084,
         after: 0.061,
         undone: false,
+        can_undo: true,
       },
       {
         id: 1,
@@ -145,6 +147,7 @@ const responses: Record<string, unknown> = {
         before: 0.09,
         after: 0.088,
         undone: true,
+        can_undo: false,
       },
     ],
   },

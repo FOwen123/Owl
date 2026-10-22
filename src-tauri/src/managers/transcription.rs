@@ -265,6 +265,9 @@ pub struct TranscriptionManager {
     engine: EngineSupervisor,
     /// The loaded ONNX engine, if the current model is an ONNX one.
     onnx: Arc<Mutex<Option<OnnxEngine>>>,
+    /// Owl: one batch transcription at a time, so the learner's replays
+    /// (`learner.rs`) never take the ONNX engine out from under a dictation.
+    run_gate: Arc<Mutex<()>>,
     model_manager: Arc<ModelManager>,
     app_handle: AppHandle,
     current_model_id: Arc<Mutex<Option<String>>>,
@@ -318,6 +321,7 @@ impl TranscriptionManager {
             loading_condvar: Arc::new(Condvar::new()),
             reload_model_on_next_use: Arc::new(AtomicBool::new(false)),
             router: Arc::new(StreamRouter::new()),
+            run_gate: Arc::new(Mutex::new(())),
             stream_active: Arc::new(AtomicBool::new(false)),
             next_stream_worker_id: Arc::new(AtomicU64::new(1)),
             active_stream_worker: Arc::new(AtomicU64::new(0)),
@@ -1155,6 +1159,7 @@ impl TranscriptionManager {
     /// Owl: `transcribe` with the given settings instead of the saved ones,
     /// so the learner can try a change without applying it (`learner.rs`).
     pub fn transcribe_with(&self, audio: Vec<f32>, settings: &AppSettings) -> Result<String> {
+        let _one_at_a_time = self.run_gate.lock().unwrap_or_else(|e| e.into_inner());
         #[cfg(debug_assertions)]
         if std::env::var("HANDY_FORCE_TRANSCRIPTION_FAILURE").is_ok() {
             return Err(anyhow::anyhow!(

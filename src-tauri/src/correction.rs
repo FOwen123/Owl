@@ -163,6 +163,17 @@ pub(crate) fn diff(a: &[String], b: &[String]) -> (usize, Vec<Change>) {
 }
 
 /// The edit kept enough of the text that it is a fix, not a new message.
+/// Owl: whether `edited` is a fix of `pasted`, not a cleared box (the message
+/// was sent) or a different message typed over it.
+pub fn is_fix(pasted: &str, edited: &str) -> bool {
+    let (a, b) = (tokens(pasted), tokens(edited));
+    if b.is_empty() || a.len() > MAX_TOKENS || b.len() > MAX_TOKENS {
+        return false;
+    }
+    let (matched, _) = diff(&a, &b);
+    shares_context(&a, &b, matched)
+}
+
 fn shares_context(a: &[String], b: &[String], matched: usize) -> bool {
     if matched > 0 && matched * 2 >= a.len() {
         return true;
@@ -428,6 +439,18 @@ mod tests {
 
     fn none(pasted: &str, edited: &str) {
         assert_eq!(pairs(pasted, edited), vec![], "{pasted:?} -> {edited:?}");
+    }
+
+    #[test]
+    fn a_sent_or_retyped_message_is_not_a_fix() {
+        let pasted = "Restart Open Claw and check the logs.";
+        assert!(super::is_fix(
+            pasted,
+            "Restart OpenClaw and check the logs."
+        ));
+        assert!(!super::is_fix(pasted, "")); // the box cleared when it was sent
+        assert!(!super::is_fix(pasted, "lunch at noon tomorrow?"));
+        assert!(super::is_fix("Owel", "Owen"));
     }
 
     #[test]

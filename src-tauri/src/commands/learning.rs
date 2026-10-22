@@ -31,6 +31,35 @@ pub struct LearnedChange {
     pub before: f64,
     pub after: f64,
     pub undone: bool,
+    /// False for an older change to a value a newer change set again.
+    pub can_undo: bool,
+}
+
+/// The learner's changes, newest first, with which of them can be undone.
+fn learned_changes(learning: &Learning) -> Result<Vec<LearnedChange>, String> {
+    let mut newer_active = std::collections::HashSet::new();
+    Ok(learning
+        .learned()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter_map(|(id, at, change, before, after, undone)| {
+            let change: Change = serde_json::from_str(&change).ok()?;
+            let setting = change.setting();
+            let can_undo = !undone && setting.is_none_or(|s| !newer_active.contains(s));
+            if let (false, Some(s)) = (undone, setting) {
+                newer_active.insert(s);
+            }
+            Some(LearnedChange {
+                id,
+                at,
+                change,
+                before,
+                after,
+                undone,
+                can_undo,
+            })
+        })
+        .collect())
 }
 
 #[derive(Serialize, Deserialize, Type, Clone, Debug)]
@@ -48,21 +77,7 @@ pub struct LearningOverview {
 pub fn get_learning_overview(app: AppHandle) -> Result<LearningOverview, String> {
     let learning = learning(&app)?;
     let last = learning.last_run().map_err(|e| e.to_string())?;
-    let changes = learning
-        .learned()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .filter_map(|(id, at, change, before, after, undone)| {
-            Some(LearnedChange {
-                id,
-                at,
-                change: serde_json::from_str(&change).ok()?,
-                before,
-                after,
-                undone,
-            })
-        })
-        .collect();
+    let changes = learned_changes(&learning)?;
     Ok(LearningOverview {
         stats: learning.stats().map_err(|e| e.to_string())?,
         min_keyed: crate::learner::MIN_KEYED as u32,
@@ -87,6 +102,12 @@ pub async fn run_learning_now(app: AppHandle) -> Result<LearnReport, String> {
 #[specta::specta]
 pub fn undo_learned_change(app: AppHandle, id: i64) -> Result<(), String> {
     let learning = learning(&app)?;
+    let undoable = learned_changes(&learning)?
+        .iter()
+        .any(|c| c.id == id && c.can_undo);
+    if !undoable {
+        return Err("Undo the newer change to this first".into());
+    }
     let Some(change) = learning.undo_learned(id).map_err(|e| e.to_string())? else {
         return Ok(());
     };

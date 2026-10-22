@@ -188,13 +188,15 @@ export const LearningPage: React.FC = () => {
                       {t("owl.learning.undone")}
                     </span>
                   ) : (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => undo(c.id)}
-                    >
-                      {t("owl.learning.undo")}
-                    </Button>
+                    c.can_undo && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => undo(c.id)}
+                      >
+                        {t("owl.learning.undo")}
+                      </Button>
+                    )
                   )}
                 </li>
               ))}

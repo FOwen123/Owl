@@ -366,8 +366,22 @@ impl AiCache {
 
 // --- Runner -------------------------------------------------------------
 
+/// `replay` stopped because `stop` said so (the user started dictating).
+#[derive(Debug)]
+pub struct Interrupted;
+
+impl std::fmt::Display for Interrupted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("stopped for a dictation")
+    }
+}
+
+impl std::error::Error for Interrupted {}
+
 /// Replays `items` (audio under `dir`) through Owl with `settings`. Blocks;
-/// call it off the async runtime. The model must be loaded.
+/// call it off the async runtime. The model must be loaded. Stops before
+/// the next item once `stop` is true.
+#[allow(clippy::too_many_arguments)]
 pub fn replay(
     app: &AppHandle,
     settings: &AppSettings,
@@ -375,12 +389,16 @@ pub fn replay(
     dir: &Path,
     post_process: bool,
     cache: &AiCache,
+    stop: &dyn Fn() -> bool,
     mut progress: impl FnMut(usize, &ItemResult),
 ) -> Result<Vec<ItemResult>> {
     let tm = app.state::<Arc<TranscriptionManager>>();
     let model = tm.get_current_model().context("no model is loaded")?;
     let mut out = Vec::with_capacity(items.len());
     for (i, item) in items.iter().enumerate() {
+        if stop() {
+            return Err(Interrupted.into());
+        }
         // An "unload immediately" setting drops the model after each run.
         if !tm.is_model_loaded() {
             tm.load_model(&model)?;

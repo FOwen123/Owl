@@ -26,6 +26,7 @@
     "showMeetings": "顯示會議"
   },
   "sidebar": {
+    "learning": "學習",
     "general": "聽寫",
     "models": "模型",
     "advanced": "進階",
@@ -470,6 +471,19 @@
           "description": "所選供應商的 API 基礎網址，僅自訂供應商可編輯",
           "placeholder": "https://api.openai.com/v1"
         },
+        "chatgpt": {
+          "title": "ChatGPT 帳號",
+          "description": "使用你的 ChatGPT 方案，不需要 API 金鑰。",
+          "signIn": "使用 ChatGPT 繼續",
+          "waiting": "請在瀏覽器中完成登入…",
+          "signedIn": "已登入",
+          "signedInAs": "已用 {{email}} 登入",
+          "signOut": "登出",
+          "failed": "無法用 ChatGPT 登入",
+          "limitTitle": "Owl 已達 ChatGPT 使用上限",
+          "limitDescription": "在你的方案額度重置前，AI 整理會暫停。",
+          "usage": "查看用量"
+        },
         "apiKey": {
           "title": "API 金鑰",
           "description": "所選供應商的 API 金鑰",
@@ -792,6 +806,51 @@
     "dismiss": "關閉"
   },
   "owl": {
+    "learning": {
+      "title": "學習",
+      "enableLabel": "從我的聽寫中學習",
+      "enableDescription": "Owl 會從你的修正中學會你的用詞和風格。",
+      "progressTitle": "進度",
+      "stats": "{{dictations}} 則聽寫中有 {{keyed}} 則含有你的修正",
+      "needMore": "累積 {{min}} 則修正過的聽寫後，Owl 就會開始學習。在貼上後直接修改，或到「記錄」中修正。",
+      "learnNow": "立即學習",
+      "learning": "學習中…",
+      "lastRun": "上次執行：{{when}}",
+      "outcome": {
+        "learned": "保留了 {{tried}} 項中的 {{count}} 項變更。需要修正的字：{{before}}% → {{after}}%。",
+        "nothing_new": "這次沒有找到有幫助的變更。",
+        "need_more": "需要 {{min}} 則修正過的聽寫才能開始。",
+        "off": "學習已關閉。",
+        "busy": "正在學習中。",
+        "interrupted": "為了聽寫而暫停，Owl 稍後會再試。"
+      },
+      "changesTitle": "Owl 學到了什麼",
+      "changesEmpty": "目前還沒有。",
+      "undo": "復原",
+      "undone": "已復原",
+      "change": {
+        "add_word": "將「{{word}}」加入字詞",
+        "add_swap": "聽到「{{from}}」時寫成「{{to}}」",
+        "remove_swap": "不再把「{{from}}」改成「{{to}}」",
+        "priority": "更注意聽 {{words}}",
+        "context": "告訴語音模型你常談的主題",
+        "word_limit": "只給語音模型你最常用的 {{count}} 個字詞",
+        "examples": "讓 AI 參考你過去的修正"
+      },
+      "contextTitle": "你常談的內容",
+      "contextDescription": "幫助 Owl 聽懂你的名稱和用語。Owl 學習時會自動更新。",
+      "contextPlaceholder": "例如：我在開發 Owl，一個用 Supabase 和 Tauri 做的聽寫 App。",
+      "examplesLabel": "參考我過去的修正",
+      "examplesDescription": "讓 AI 看看你之前怎麼修正聽寫。",
+      "riskyTitle": "這些取代規則會改到真正的字",
+      "riskyDescription": "每次你說這些字，Owl 都會把它們改掉。",
+      "remove": "移除",
+      "fix": "修正",
+      "fixTitle": "修正這則聽寫",
+      "fixSave": "儲存",
+      "fixCancel": "取消",
+      "fixSaved": "Owl 會從這次修正中學習。"
+    },
     "pairs": {
       "add": "新增",
       "remove": "移除 {{item}}"

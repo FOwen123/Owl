@@ -1,7 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { Check, Copy, FolderOpen, RotateCcw, Star, Trash2 } from "lucide-react";
+import {
+  Check,
+  Copy,
+  FolderOpen,
+  PenLine,
+  RotateCcw,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -14,6 +22,7 @@ import { useOsType } from "@/hooks/useOsType";
 import { formatDateTime } from "@/utils/dateFormat";
 import { AudioPlayer, AudioPlayerGroup } from "../../ui/AudioPlayer";
 import { Button } from "../../ui/Button";
+import { Textarea } from "../../ui/Textarea";
 import { copyToClipboard } from "./clipboard";
 
 export const IconButton: React.FC<{
@@ -77,6 +86,15 @@ export const HistorySettings: React.FC = () => {
   // Keep ref in sync for use in IntersectionObserver callback
   useEffect(() => {
     entriesRef.current = entries;
+  }, [entries]);
+
+  // Owl: entries kept in the learning log can be fixed to teach Owl.
+  const [logged, setLogged] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (entries.length === 0) return;
+    commands
+      .loggedHistoryFiles(entries.map((e) => e.file_name))
+      .then((r) => r.status === "ok" && setLogged(new Set(r.data)));
   }, [entries]);
 
   const loadPage = useCallback(async (cursor?: number) => {
@@ -259,6 +277,7 @@ export const HistorySettings: React.FC = () => {
                 getAudioUrl={getAudioUrl}
                 deleteAudio={deleteAudioEntry}
                 retryTranscription={retryHistoryEntry}
+                canFix={logged.has(entry.file_name)}
               />
             ))}
           </div>
@@ -298,6 +317,7 @@ interface HistoryEntryProps {
   getAudioUrl: (fileName: string) => Promise<string | null>;
   deleteAudio: (id: number) => Promise<void>;
   retryTranscription: (id: number) => Promise<void>;
+  canFix: boolean;
 }
 
 const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
@@ -307,10 +327,23 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
   getAudioUrl,
   deleteAudio,
   retryTranscription,
+  canFix,
 }) => {
   const { t, i18n } = useTranslation();
   const [showCopied, setShowCopied] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [fix, setFix] = useState<string | null>(null);
+
+  const saveFix = async () => {
+    if (fix == null) return;
+    const result = await commands.fixHistoryEntry(entry.id, fix);
+    if (result.status === "ok") {
+      toast.success(t("owl.learning.fixSaved"));
+      setFix(null);
+    } else {
+      toast.error(result.error);
+    }
+  };
 
   const hasTranscription = entry.transcription_text.trim().length > 0;
 
@@ -374,6 +407,15 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
               <Copy width={16} height={16} />
             )}
           </IconButton>
+          {canFix && hasTranscription && (
+            <IconButton
+              onClick={() => setFix(pastedText(entry))}
+              disabled={retrying || fix != null}
+              title={t("owl.learning.fix")}
+            >
+              <PenLine width={16} height={16} />
+            </IconButton>
+          )}
           <IconButton
             onClick={onToggleSaved}
             disabled={retrying}
@@ -449,6 +491,32 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
             ? pastedText(entry)
             : t("settings.history.transcriptionFailed")}
       </p>
+
+      {fix != null && (
+        <div className="space-y-2">
+          <Textarea
+            value={fix}
+            onChange={(e) => setFix(e.target.value)}
+            aria-label={t("owl.learning.fixTitle")}
+            rows={3}
+            className="w-full"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setFix(null)}>
+              {t("owl.learning.fixCancel")}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={saveFix}
+              disabled={!fix.trim()}
+            >
+              {t("owl.learning.fixSave")}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <AudioPlayer onLoadRequest={handleLoadAudio} className="w-full" />
     </div>

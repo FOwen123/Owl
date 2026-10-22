@@ -2,6 +2,7 @@ pub mod audio;
 pub mod cleanup;
 pub mod edits;
 pub mod history;
+pub mod learning;
 pub mod meetings;
 pub mod models;
 pub mod transcription;

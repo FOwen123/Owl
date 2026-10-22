@@ -35,7 +35,10 @@ const settings: Record<string, unknown> = {
     { trigger: "my email", text: "owen@example.com" },
     { trigger: "我的地址", text: "台北市信義區市府路 1 號" },
   ],
-  replacements: [{ from: "cloud code", to: "Claude Code" }],
+  replacements: [
+    { from: "cloud code", to: "Claude Code" },
+    { from: "threat", to: "threads" },
+  ],
   meeting_template: "general",
   meeting_templates: [
     {
@@ -45,6 +48,12 @@ const settings: Record<string, unknown> = {
     },
   ],
   learn_from_edits: true,
+  learning_enabled: true,
+  hearing_context:
+    "Talks about building Owl, a dictation app, with Tauri, Supabase and Qwen3-ASR.",
+  hearing_priority: ["Owl"],
+  hearing_word_limit: null,
+  cleanup_examples: true,
   meeting_detection: true,
   local_api_enabled: false,
   local_api_token: "",
@@ -55,7 +64,19 @@ const settings: Record<string, unknown> = {
     { from: "Owel", to: "Owen" },
     { from: "公事", to: "公式" },
   ],
-  post_process_providers: [],
+  post_process_providers: [
+    {
+      id: "chatgpt",
+      label: "ChatGPT",
+      base_url: "https://api.openai.com/v1",
+      allow_base_url_edit: false,
+      models_endpoint: "/models",
+      supports_structured_output: false,
+    },
+  ],
+  post_process_provider_id: "chatgpt",
+  post_process_models: { chatgpt: "gpt-6.1-sol" },
+  post_process_api_keys: { chatgpt: "" },
   post_process_prompts: [],
 };
 
@@ -82,7 +103,57 @@ const model = {
   supports_language_detection: true,
 };
 
+const day = 24 * 60 * 60;
+const now = Math.floor(Date.now() / 1000);
+
 const responses: Record<string, unknown> = {
+  get_learning_overview: {
+    stats: { dictations: 64, keyed: 23, audio_bytes: 48_000_000 },
+    min_keyed: 10,
+    running: false,
+    last_run_at: now - day,
+    last_report: {
+      outcome: "learned",
+      keyed: 23,
+      judged: 4,
+      before: 0.084,
+      after: 0.061,
+      kept: [],
+      tried: 6,
+    },
+    changes: [
+      {
+        id: 3,
+        at: now - day,
+        change: { kind: "add_swap", from: "Open Claw", to: "OpenClaw" },
+        before: 0.084,
+        after: 0.061,
+        undone: false,
+        can_undo: true,
+      },
+      {
+        id: 2,
+        at: now - day,
+        change: { kind: "priority", before: [], after: ["Owl", "Supabase"] },
+        before: 0.084,
+        after: 0.061,
+        undone: false,
+        can_undo: true,
+      },
+      {
+        id: 1,
+        at: now - 3 * day,
+        change: { kind: "remove_swap", from: "mitigation", to: "medication" },
+        before: 0.09,
+        after: 0.088,
+        undone: true,
+        can_undo: false,
+      },
+    ],
+  },
+  risky_replacements: [{ from: "threat", to: "threads" }],
+  fix_history_entry: true,
+  chatgpt_status: { signed_in: false, email: null },
   get_app_settings: settings,
   get_default_settings: settings,
   get_available_models: [model],
@@ -181,6 +252,8 @@ export function installMockBackend() {
   mockIPC(
     (cmd, payload) => {
       if (cmd in responses) return responses[cmd];
+      if (cmd === "logged_history_files")
+        return (payload as { files: string[] }).files;
       if (cmd === "change_local_api_setting") {
         settings.local_api_enabled = (payload as { enabled: boolean }).enabled;
         settings.local_api_token ||=

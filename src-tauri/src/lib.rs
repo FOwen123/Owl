@@ -529,6 +529,7 @@ fn run_eval(app: &AppHandle, args: &CliArgs, dir: &std::path::Path) -> i32 {
         dir,
         args.post_process,
         &cache,
+        &|| false,
         |i, r| {
             eprintln!("[{}/{}] {} {}", i + 1, total, r.id, r.output);
         },

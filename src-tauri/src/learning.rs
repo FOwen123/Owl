@@ -46,6 +46,9 @@ static MIGRATIONS: &[M] = &[
         report TEXT NOT NULL
     );",
     ),
+    // When the answer key was last set, so new fixes (old dictations fixed in
+    // History included) are counted for scheduling.
+    M::up("ALTER TABLE dictations ADD COLUMN kept_at INTEGER;"),
 ];
 
 /// A learned change: (id, when, change JSON, score before, score after, undone).
@@ -99,35 +102,26 @@ impl Learning {
         self.dir.join(name)
     }
 
-    /// The newest keyed dictation's id: a watermark that only grows, unlike
-    /// the count, which tidying shrinks.
-    pub fn last_keyed_id(&self) -> Result<i64> {
-        Ok(self.conn()?.query_row(
-            "SELECT COALESCE(MAX(id), 0) FROM dictations WHERE kept IS NOT NULL",
-            [],
-            |r| r.get(0),
-        )?)
-    }
-
-    /// Keyed dictations newer than the `since` watermark.
+    /// Answer keys set or changed since `since` (unix seconds).
     pub fn keyed_since(&self, since: i64) -> Result<i64> {
         Ok(self.conn()?.query_row(
-            "SELECT COUNT(*) FROM dictations WHERE kept IS NOT NULL AND id > ?1",
+            "SELECT COUNT(*) FROM dictations WHERE kept IS NOT NULL AND kept_at >= ?1",
             params![since],
             |r| r.get(0),
         )?)
     }
 
-    /// Saves a learner run: the keyed watermark it saw and its report.
-    pub fn add_run(&self, keyed: i64, report: &str) -> Result<()> {
+    /// Saves a learner run that started at `at`: the keyed dictations it saw
+    /// and its report.
+    pub fn add_run(&self, at: i64, keyed: i64, report: &str) -> Result<()> {
         self.conn()?.execute(
             "INSERT INTO runs (at, keyed, report) VALUES (?1, ?2, ?3)",
-            params![now(), keyed, report],
+            params![at, keyed, report],
         )?;
         Ok(())
     }
 
-    /// The last learner run: (when, keyed watermark then, report JSON).
+    /// The last learner run: (when it started, keyed dictations then, report JSON).
     pub fn last_run(&self) -> Result<Option<(i64, i64, String)>> {
         Ok(self
             .conn()?
@@ -179,9 +173,9 @@ impl Learning {
     /// is never replaced by a later edit.
     pub fn set_edited(&self, id: i64, kept: &str) -> Result<()> {
         self.conn()?.execute(
-            "UPDATE dictations SET kept = ?1, kept_source = 'edit'
+            "UPDATE dictations SET kept = ?1, kept_source = 'edit', kept_at = ?3
              WHERE id = ?2 AND (kept_source IS NULL OR kept_source = 'edit')",
-            params![kept, id],
+            params![kept, id, now()],
         )?;
         Ok(())
     }
@@ -190,8 +184,9 @@ impl Learning {
     /// Returns whether that dictation is in the log.
     pub fn set_fixed(&self, history_file: &str, kept: &str) -> Result<bool> {
         let changed = self.conn()?.execute(
-            "UPDATE dictations SET kept = ?1, kept_source = 'fixed' WHERE history_file = ?2",
-            params![kept, history_file],
+            "UPDATE dictations SET kept = ?1, kept_source = 'fixed', kept_at = ?3
+             WHERE history_file = ?2",
+            params![kept, history_file, now()],
         )?;
         Ok(changed > 0)
     }

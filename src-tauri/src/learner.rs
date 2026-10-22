@@ -107,6 +107,19 @@ impl Change {
         }
     }
 
+    /// For changes that set one value (rather than add to a list): which
+    /// value. Only the newest such change of a value can be undone, since
+    /// undoing an older one would overwrite the newer.
+    pub fn setting(&self) -> Option<&'static str> {
+        match self {
+            Change::Priority { .. } => Some("priority"),
+            Change::Context { .. } => Some("context"),
+            Change::WordLimit { .. } => Some("word_limit"),
+            Change::Examples { .. } => Some("examples"),
+            _ => None,
+        }
+    }
+
     /// The change with its `before` taken from `current`.
     fn rebased(self, current: &AppSettings) -> Change {
         match self {
@@ -173,10 +186,16 @@ pub fn learn(app: &AppHandle) -> Result<LearnReport> {
         }
     }
     let _done = Done;
+    // Fixes made while this run works count toward the next one.
+    let started = chrono::Utc::now().timestamp();
     let report = learn_once(app);
     if let (Ok(report), Some(learning)) = (&report, app.try_state::<Arc<Learning>>()) {
-        let watermark = learning.last_keyed_id().unwrap_or(0);
-        if let Err(e) = learning.add_run(watermark, &serde_json::to_string(report)?) {
+        let saved = learning.add_run(
+            started,
+            report.keyed as i64,
+            &serde_json::to_string(report)?,
+        );
+        if let Err(e) = saved {
             log::warn!("Learner: couldn't save the run: {e:#}");
         }
     }
@@ -223,6 +242,13 @@ fn learn_once(app: &AppHandle) -> Result<LearnReport> {
     let tm = app.state::<Arc<TranscriptionManager>>();
     let post_process = crate::actions::ai_cleanup_on(&settings);
     let cache = AiCache::open(learning.file("ai_replies.json"));
+    // Dictation comes first: learning stops when the user starts one.
+    let dictating = || {
+        tm.is_streaming()
+            || app
+                .try_state::<Arc<crate::managers::audio::AudioRecordingManager>>()
+                .is_some_and(|rm| rm.is_recording())
+    };
     let replay = |s: &AppSettings| -> Result<Summary> {
         // An "unload immediately" setting drops the model after every run.
         if !tm.is_model_loaded() {
@@ -236,13 +262,22 @@ fn learn_once(app: &AppHandle) -> Result<LearnReport> {
             std::path::Path::new(""),
             post_process,
             &cache,
+            &dictating,
             |_, _| {},
         )?;
         Ok(eval::summarize(&results, false))
     };
+    let busy = || LearnReport {
+        outcome: "busy".into(),
+        keyed,
+        ..Default::default()
+    };
 
     let mut current = settings.clone();
-    let baseline = replay(&current)?;
+    let baseline = match replay(&current) {
+        Err(e) if e.is::<eval::Interrupted>() => return Ok(busy()),
+        other => other?,
+    };
     let mut best = baseline.clone();
     let mut kept = Vec::new();
     let candidates = propose(app, &settings, &study);
@@ -261,6 +296,8 @@ fn learn_once(app: &AppHandle) -> Result<LearnReport> {
         }
         let summary = match replay(&trial) {
             Ok(s) => s,
+            // Keep what was already proven; the rest waits for the next run.
+            Err(e) if e.is::<eval::Interrupted>() => break,
             Err(e) => {
                 log::warn!("Learner: couldn't test {change:?}: {e:#}");
                 continue;
@@ -537,9 +574,9 @@ pub fn start_background(app: &AppHandle) {
             continue;
         };
         let due = match learning.last_run() {
-            Ok(Some((at, watermark, _))) => {
+            Ok(Some((at, _, _))) => {
                 chrono::Utc::now().timestamp() - at >= 24 * 60 * 60
-                    && learning.keyed_since(watermark).unwrap_or(0) >= 5
+                    && learning.keyed_since(at).unwrap_or(0) >= 5
             }
             Ok(None) => learning.stats().map(|s| s.keyed).unwrap_or(0) >= MIN_KEYED as i64,
             Err(_) => false,

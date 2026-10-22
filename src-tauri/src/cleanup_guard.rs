@@ -103,6 +103,12 @@ fn invented(said: &str, reply: &str, known: &[String]) -> bool {
     use crate::correction::{diff, is_cjk_token, tokens};
     let lower = |t: &str| -> Vec<String> { tokens(t).iter().map(|w| w.to_lowercase()).collect() };
     let (a, b) = (lower(said), lower(reply));
+    // The alignment table grows with both lengths; past this (several
+    // minutes of speech) the length and new-word checks have to do.
+    const MAX_UNITS: usize = 1500;
+    if a.len() > MAX_UNITS || b.len() > MAX_UNITS {
+        return false;
+    }
     // An inflection of a word that was said ("talk" → "talking") isn't new.
     let heard = |w: &str| {
         a.iter().chain(known).any(|h| {

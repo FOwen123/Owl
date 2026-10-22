@@ -146,7 +146,10 @@ mod mac {
                 let Some(edited) = edited_span(&baseline, &last, &pasted) else {
                     continue;
                 };
-                if let (true, Some(id)) = (log_edit, learning_id) {
+                // Only a fix becomes the answer key: a box cleared by sending
+                // the message, or a new message typed over it, is not one.
+                let fix = crate::correction::is_fix(&pasted, &edited);
+                if let (true, true, Some(id)) = (log_edit, fix, learning_id) {
                     if let Some(learning) =
                         app.try_state::<std::sync::Arc<crate::learning::Learning>>()
                     {

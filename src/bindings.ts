@@ -1445,7 +1445,11 @@ outcome: string; keyed: number; judged: number;
  * Edits still needed per word, before and after (lower is better).
  */
 before: number | null; after: number | null; kept: Change[]; tried: number }
-export type LearnedChange = { id: number; at: number; change: Change; before: number; after: number; undone: boolean }
+export type LearnedChange = { id: number; at: number; change: Change; before: number; after: number; undone: boolean; 
+/**
+ * False for an older change to a value a newer change set again.
+ */
+can_undo: boolean }
 export type LearningOverview = { stats: LearningStats; min_keyed: number; running: boolean; last_run_at: number | null; last_report: LearnReport | null; changes: LearnedChange[] }
 export type LearningStats = { dictations: number; 
 /**

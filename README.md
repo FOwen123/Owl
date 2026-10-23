@@ -2,10 +2,10 @@
 
 # Owl
 
-**Private dictation for macOS, in English and Chinese.**
+**Private dictation and meeting notes, in English and Chinese. An open-source Wispr Flow alternative.**
 
 Press Option+Space, talk, and Owl types what you said into the app you're in.
-Speech recognition runs on your Mac. Owl also cleans up filler words, edits
+Speech recognition runs on your computer. Owl also cleans up filler words, edits
 selected text by voice and takes meeting notes.
 
 Owl started as a fork of [Handy](https://github.com/cjpais/Handy) by CJ Pais.
@@ -22,7 +22,7 @@ which it isn't affiliated with either.
   leaves the text on your clipboard and shows a Copy button.
 - **English and Chinese.** Several speech models handle Mandarin and English
   in one sentence. Owl writes Chinese in Traditional or Simplified characters.
-- **Cleanup.** Owl removes filler words and stutters on your Mac. With an AI
+- **Cleanup.** Owl removes filler words and stutters on your computer. With an AI
   provider it also fixes grammar, numbers and lists.
 - **Edit by voice.** Select text, press Option+Shift+Space and say what to
   change. Needs an AI provider.
@@ -43,7 +43,7 @@ The screenshots use Owl's fake demo data.
 
 ## Privacy
 
-Speech recognition, speaker labels and echo removal run on your Mac. Your
+Speech recognition, speaker labels and echo removal run on your computer. Your
 audio and text only leave it if you turn on an AI step and pick a hosted
 provider. The only other network use is downloading the models you choose.
 
@@ -58,8 +58,8 @@ lives in `~/Library/Application Support/com.hao.owl/`.
 ## Status
 
 Early, and built for one person's daily use. There are no downloads yet, so
-you build Owl yourself. I build and use it on Apple Silicon Macs running
-macOS 26.
+you build Owl yourself. I build and use it on macOS 26. The Windows and Linux
+code is there but untested.
 
 ## Requirements
 
@@ -68,8 +68,8 @@ macOS 26.
 - [CMake](https://cmake.org/download/)
 
 Meeting notes need macOS 14.2 or later to hear the other side of a call.
-Windows and Linux are untested; [Handy's build notes](https://github.com/cjpais/Handy/blob/main/BUILD.md)
-list what those need.
+For Windows and Linux, [Handy's build notes](https://github.com/cjpais/Handy/blob/main/BUILD.md)
+list what you need.
 
 ## Install
 

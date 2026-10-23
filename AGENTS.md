@@ -65,7 +65,7 @@ The voice-detection model is checked in, so nothing needs downloading.
 
 ## Architecture Overview
 
-Owl is a desktop speech-to-text application built with Tauri 2.x (Rust backend + React/TypeScript frontend).
+Owl is a private dictation and meeting-notes desktop app, specialized in English and Chinese, built with Tauri 2.x (Rust backend + React/TypeScript frontend).
 
 ### Backend Structure (src-tauri/src/)
 

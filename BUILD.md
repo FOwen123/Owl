@@ -4,7 +4,7 @@ The [README](README.md#install) has the short version. This page has the
 details: what each tool is for, what the build does, how to work on Owl, and
 what to do when a build fails.
 
-Owl is built and tested on Apple Silicon Macs. The Windows and Linux code from
+Owl is built and tested on macOS. The Windows and Linux code from
 Handy is untested; Handy's own notes for those are in
 [its repository](https://github.com/cjpais/Handy).
 

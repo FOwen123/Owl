@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+  <head>
+    <style>
+      html,
+      body {
+        margin: 0;
+      }
+      body {
+        width: 1400px;
+        height: 940px;
+        overflow: hidden;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(60% 70% at 15% 20%, #f3e9dc 0%, transparent 70%),
+          radial-gradient(55% 60% at 85% 85%, #b9c6e8 0%, transparent 70%),
+          radial-gradient(50% 55% at 80% 15%, #d9cfe6 0%, transparent 70%),
+          radial-gradient(60% 60% at 20% 90%, #e6d6c3 0%, transparent 70%),
+          #e9e2da;
+      }
+      .win {
+        position: relative;
+        width: 1100px;
+        height: 720px;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+          0 0 0 1px rgba(0, 0, 0, 0.45),
+          0 30px 80px rgba(40, 30, 60, 0.35),
+          0 10px 25px rgba(40, 30, 60, 0.25);
+      }
+      .win img {
+        display: block;
+        width: 1100px;
+        height: 720px;
+      }
+      .lights {
+        position: absolute;
+        top: 16px;
+        left: 18px;
+        display: flex;
+        gap: 8px;
+      }
+      .lights i {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.25);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="win">
+      <img id="shot" />
+      <div class="lights">
+        <i style="background: #ff5f57"></i><i style="background: #febc2e"></i
+        ><i style="background: #28c840"></i>
+      </div>
+    </div>
+    <script>
+      document.getElementById("shot").src = location.hash.slice(1);
+    </script>
+  </body>
+</html>

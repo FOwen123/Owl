@@ -2,6 +2,8 @@
 
 # Owl
 
+English | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
+
 **Private dictation and meeting notes, in English and Chinese. An open-source Wispr Flow alternative.**
 
 Press Option+Space, talk, and Owl types what you said into the app you're in.

@@ -155,7 +155,9 @@ export const Owl: React.FC<{
         nodAt = now;
       }
       const t = still ? 1e6 : now - since; // reduced motion: skip entrances
-      loud += ((p.voice?.current ?? 0) - loud) * (1 - Math.exp(-10 * dt));
+      // Reduced motion: the owl doesn't bob with your voice either.
+      if (!still)
+        loud += ((p.voice?.current ?? 0) - loud) * (1 - Math.exp(-10 * dt));
 
       const g: Pose = { ...REST };
       let blinks = true;
@@ -264,7 +266,7 @@ export const Owl: React.FC<{
         }
         case "noting": {
           // Eyes down on the notes, looking up now and then.
-          const up = pulse(now % 4200, 3300, 700);
+          const up = still ? 0 : pulse(now % 4200, 3300, 700);
           g.lookY = 4 - 6 * up;
           g.lidL = g.lidR = 0.2 * (1 - up);
           break;

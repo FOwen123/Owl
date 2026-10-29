@@ -1,38 +1,51 @@
 //! The focused text box through UI Automation, Windows' accessibility API.
-//! Offsets count UTF-16 units, as on macOS.
+//! Offsets count UTF-16 units, as on macOS. Each query runs on a thread of
+//! its own: called from the UI thread (the paste runs there), UI Automation
+//! can hang the app.
 
-use std::cell::RefCell;
-use windows::core::Interface;
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
 };
 use windows::Win32::System::Ole::SafeArrayDestroy;
 use windows::Win32::System::Variant::VariantToBoolean;
 use windows::Win32::UI::Accessibility::*;
 
-thread_local! {
-    static AUTOMATION: RefCell<Option<IUIAutomation>> = const { RefCell::new(None) };
+/// Runs `query` on a new thread with its own COM set-up, and waits for it.
+fn on_own_thread<T: Send>(query: impl FnOnce() -> Option<T> + Send) -> Option<T> {
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            if unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_err() {
+                return None;
+            }
+            // Dropped after the query's objects, even if it panics.
+            let _com = Com;
+            query()
+        })
+        .join()
+        .ok()
+        .flatten()
+    })
 }
 
-/// This thread's UI Automation client, made on first use.
-fn automation() -> Option<IUIAutomation> {
-    AUTOMATION.with(|cell| {
-        if cell.borrow().is_none() {
-            unsafe {
-                // A thread that already set up COM keeps its own mode.
-                let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-                let client: IUIAutomation =
-                    CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).ok()?;
-                // A hung app must not stall the watcher.
-                if let Ok(timeouts) = client.cast::<IUIAutomation2>() {
-                    let _ = timeouts.SetConnectionTimeout(500);
-                    let _ = timeouts.SetTransactionTimeout(500);
-                }
-                *cell.borrow_mut() = Some(client);
-            }
-        }
-        cell.borrow().clone()
-    })
+/// Undoes the query thread's COM set-up.
+struct Com;
+
+impl Drop for Com {
+    fn drop(&mut self) {
+        unsafe { CoUninitialize() }
+    }
+}
+
+/// A UI Automation client for this query's thread. The Windows 8 client,
+/// since only it takes timeouts: a hung app must not stall the paste.
+fn automation() -> Option<IUIAutomation2> {
+    unsafe {
+        let client: IUIAutomation2 =
+            CoCreateInstance(&CUIAutomation8, None, CLSCTX_INPROC_SERVER).ok()?;
+        client.SetConnectionTimeout(500).ok()?;
+        client.SetTransactionTimeout(500).ok()?;
+        Some(client)
+    }
 }
 
 /// The focused element, unless it's a password field.
@@ -65,7 +78,13 @@ fn runtime_id(element: &IUIAutomationElement) -> Option<Vec<i32>> {
 
 /// The focused text box (by runtime id) and its text, unless it's a
 /// password field or doesn't expose its text.
+/// Line breaks come back as \n, as Owl pastes them (edit boxes give \r\n,
+/// rich editors \r).
 pub fn focused_text() -> Option<(Vec<i32>, String)> {
+    on_own_thread(focused_text_here)
+}
+
+fn focused_text_here() -> Option<(Vec<i32>, String)> {
     let focused = focused_field()?;
     let text = unsafe {
         let value = focused
@@ -84,6 +103,7 @@ pub fn focused_text() -> Option<(Vec<i32>, String)> {
                 .or(value),
         }
     }?;
+    let text = text.replace("\r\n", "\n").replace('\r', "\n");
     Some((runtime_id(&focused)?, text))
 }
 
@@ -110,6 +130,10 @@ fn selection(
 }
 
 pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {
+    on_own_thread(selection_spot_here)
+}
+
+fn selection_spot_here() -> Option<(u64, (isize, isize), String)> {
     use std::hash::{Hash, Hasher};
     let field = focused_field()?;
     let (text, selected) = selection(&field)?;
@@ -137,6 +161,10 @@ pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {
 }
 
 pub fn no_text_box() -> bool {
+    on_own_thread(|| Some(no_text_box_here())).unwrap_or(false)
+}
+
+fn no_text_box_here() -> bool {
     // Controls that never take typing. Anything else (a pane, a window, no
     // focus at all) may be an app hiding its text box, so it's pasted to.
     const NOT_TEXT: [UIA_CONTROLTYPE_ID; 20] = [
@@ -192,6 +220,10 @@ pub fn no_text_box() -> bool {
 }
 
 pub fn char_before_cursor() -> Option<char> {
+    on_own_thread(char_before_cursor_here)
+}
+
+fn char_before_cursor_here() -> Option<char> {
     let field = focused_field()?;
     let (_, selected) = selection(&field)?;
     unsafe {

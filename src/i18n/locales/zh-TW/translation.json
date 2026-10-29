@@ -132,8 +132,7 @@
       },
       "systemAudio": {
         "title": "系統音訊",
-        "description": "需要聽到通話另一方的聲音。",
-        "asked": "已要求"
+        "description": "需要聽到通話另一方的聲音。"
       },
       "openSettings": "沒看到提示？打開系統設定"
     },

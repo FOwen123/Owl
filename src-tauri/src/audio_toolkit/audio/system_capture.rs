@@ -215,6 +215,26 @@ pub fn start() -> Result<(Source, SystemTap), String> {
     unsafe { start_inner() }
 }
 
+/// Whether macOS lets Owl tap system audio, judged by creating a tap and
+/// destroying it at once (Muesli's check; macOS has no permission query).
+pub fn permission_granted() -> bool {
+    unsafe {
+        let description = CATapDescription::initMonoGlobalTapButExcludeProcesses(
+            CATapDescription::alloc(),
+            &NSArray::<NSNumber>::from_retained_slice(&[]),
+        );
+        description.setPrivate(true);
+        let mut tap = kAudioObjectUnknown;
+        if AudioHardwareCreateProcessTap(Some(&description), &mut tap) != 0
+            || tap == kAudioObjectUnknown
+        {
+            return false;
+        }
+        AudioHardwareDestroyProcessTap(tap);
+        true
+    }
+}
+
 unsafe fn start_inner() -> Result<(Source, SystemTap), String> {
     let mut session = SystemTap {
         tap: kAudioObjectUnknown,

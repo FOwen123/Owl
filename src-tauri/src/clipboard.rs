@@ -110,6 +110,12 @@ fn paste_via_clipboard(
     })();
 
     finish_clipboard_paste(paste_result, paste_delay_after_ms, || {
+        // Owl: anything copied since the paste is the user's; it stays.
+        let current = clipboard.read_text().ok().map(|t| t.replace("\r\n", "\n"));
+        if current.as_deref() != Some(&text.replace("\r\n", "\n")) {
+            info!("The clipboard changed after the paste; not restoring it");
+            return;
+        }
         // Restore original clipboard content even when key injection failed.
         // Text takes priority so this path stays identical to the previous behavior;
         // an image is only restored when the clipboard held no text at all, which is

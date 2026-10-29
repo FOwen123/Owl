@@ -172,6 +172,24 @@ pub struct SystemTap {
 // The raw pointers are only touched on start/drop; the IOProc owns its side.
 unsafe impl Send for SystemTap {}
 
+impl SystemTap {
+    /// The rate audio arrives at now. It follows the output device, which can
+    /// change mid-meeting (AirPods leaving call mode: 16 kHz → 48 kHz).
+    pub fn rate(&self) -> Option<u32> {
+        unsafe {
+            get_property::<f64>(
+                self.aggregate,
+                kAudioDevicePropertyNominalSampleRate,
+                None,
+                0.0,
+            )
+        }
+        .ok()
+        .filter(|rate| *rate >= 8_000.0)
+        .map(|rate| rate.round() as u32)
+    }
+}
+
 impl Drop for SystemTap {
     fn drop(&mut self) {
         unsafe {

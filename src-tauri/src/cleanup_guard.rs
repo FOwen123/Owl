@@ -30,6 +30,100 @@ const PREAMBLES: &[&str] = &[
     "好的，以下",
 ];
 
+/// A line that heads one of several versions: "Option 1", "**Version 2:**", "方案二".
+static VERSION_HEADING: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?im)^[\s>*#_-]*(option|version|alternative|選項|选项|方案|版本)\s*[0-9一二三四五]",
+    )
+    .expect("valid regex")
+});
+
+/// An instruction asking for more than one version: "give me three options",
+/// 「給我幾種說法」.
+static ASKS_FOR_SEVERAL: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)\b(options|versions|alternatives|variations|ways)\b|(?:[幾几多兩两二三四五六七八九十2-9]|[1-9][0-9])\s*[個个種种]?\s*(版本|選項|选项|方案|說法|说法|寫法|写法)",
+    )
+    .expect("valid regex")
+});
+
+/// How a chat answer opens before the text it offers ("Here's the rewrite:").
+const EDIT_PREAMBLES: &[&str] = &[
+    "here is",
+    "here are",
+    "here's",
+    "sure",
+    "certainly",
+    "of course",
+    "以下是",
+    "好的",
+    "當然",
+    "当然",
+    "這是",
+    "这是",
+];
+
+/// Words that say a line introduces the edit rather than being part of it:
+/// "Here's a formal version.", "Sure, here it is."
+const EDIT_INTRO_WORDS: &[&str] = &[
+    "version",
+    "rewrite",
+    "rewritten",
+    "revised",
+    "translation",
+    "translated",
+    "polished",
+    "here it is",
+    "here you go",
+    "版本",
+    "翻譯",
+    "翻译",
+    "改寫",
+    "改写",
+    "修改",
+];
+
+/// Why an Edit by voice reply can't be pasted as it is: it opens like a chat
+/// answer, or offers several versions to choose from when one edit was asked for.
+pub fn edit_problem(
+    instruction: &str,
+    selection: Option<&str>,
+    reply: &str,
+) -> Option<&'static str> {
+    let given = selection.unwrap_or_default().trim().to_lowercase();
+    // Only a first line that introduces the edit below it: a bare "Sure!", or
+    // one that ends in a colon or names the edit. A translation that starts
+    // "Here is…" or "當然…", or is just "Of course.", is still pasted.
+    let first = reply
+        .trim()
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_lowercase();
+    let more = reply.trim().lines().count() > 1;
+    let introduces = |p: &str| {
+        let rest = first[p.len()..].trim_matches(|c: char| {
+            c.is_whitespace() || c.is_ascii_punctuation() || "！。，".contains(c)
+        });
+        more && (rest.is_empty()
+            || first.ends_with([':', '：'])
+            || EDIT_INTRO_WORDS.iter().any(|w| first.contains(w)))
+    };
+    if EDIT_PREAMBLES
+        .iter()
+        .any(|p| first.starts_with(p) && !given.starts_with(p) && introduces(p))
+    {
+        return Some("it started with a preamble");
+    }
+    if !ASKS_FOR_SEVERAL.is_match(instruction)
+        && VERSION_HEADING.find_iter(reply).count() > VERSION_HEADING.find_iter(&given).count() + 1
+    {
+        return Some("it offered several versions");
+    }
+    None
+}
+
 fn units(text: &str) -> Vec<String> {
     UNIT.find_iter(text)
         .map(|m| m.as_str().to_lowercase())

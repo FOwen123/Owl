@@ -901,6 +901,7 @@
       "copy": "Copy transcript",
       "systemAudioMissing": "Owl couldn't hear the system audio, so only your microphone is in this transcript. Allow Owl under System Settings → Privacy & Security → Screen & System Audio Recording.",
       "micFailed": "The microphone stopped during the meeting, so part of it may be missing.",
+      "transcriptGaps": "Parts of this meeting may be missing from the transcript. Try Transcribe again.",
       "speakerNumbered": "Speaker {{n}}",
       "speakerName": "Name",
       "speakerModel": {

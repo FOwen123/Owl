@@ -529,14 +529,17 @@ const MeetingDetail: React.FC<{
       )}
       {meeting.status === "ready" &&
         meeting.error &&
-        !["system_audio_missing", "mic_failed"].includes(meeting.error) && (
-          <Alert variant="warning">{meeting.error}</Alert>
-        )}
+        !["system_audio_missing", "mic_failed", "transcript_gaps"].includes(
+          meeting.error,
+        ) && <Alert variant="warning">{meeting.error}</Alert>}
       {meeting.error === "system_audio_missing" && (
         <Alert variant="warning">{t("owl.notetaker.systemAudioMissing")}</Alert>
       )}
       {meeting.error === "mic_failed" && (
         <Alert variant="warning">{t("owl.notetaker.micFailed")}</Alert>
+      )}
+      {meeting.error === "transcript_gaps" && (
+        <Alert variant="warning">{t("owl.notetaker.transcriptGaps")}</Alert>
       )}
 
       {meeting.status === "ready" && (

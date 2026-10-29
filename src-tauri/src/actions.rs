@@ -557,7 +557,22 @@ async fn edit_text(
     if let Some(text) = selection {
         user = format!("<selected_text>\n{text}\n</selected_text>\n{user}");
     }
-    ask_ai(settings, EDIT_PROMPT, user).await
+    let reply = ask_ai(settings, EDIT_PROMPT, user.clone()).await?;
+    let Some(problem) = crate::cleanup_guard::edit_problem(instruction, selection, &reply) else {
+        return Ok(reply);
+    };
+    // Asked once more, told why; a second miss pastes nothing.
+    warn!("Edit by voice: the AI's reply was rejected because {problem}; asking again");
+    let again = format!(
+        "{EDIT_PROMPT} Your previous reply was rejected because {problem}: reply with exactly one final text and nothing else."
+    );
+    let reply = ask_ai(settings, &again, user).await?;
+    match crate::cleanup_guard::edit_problem(instruction, selection, &reply) {
+        None => Ok(reply),
+        Some(problem) => Err(format!(
+            "The AI's edit wasn't pasted because {problem}. Try again."
+        )),
+    }
 }
 
 /// Owl: one answer from the Post Process AI, for Edit by voice and the learner.

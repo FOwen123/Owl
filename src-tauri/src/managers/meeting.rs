@@ -26,6 +26,10 @@ pub const SAMPLE_RATE: usize = 16_000;
 const LIVE_QUEUE: usize = 64;
 /// Imports are decoded whole, so they stop at 4 hours (about 1 GB of audio).
 const MAX_IMPORT_SECONDS: usize = 4 * 60 * 60;
+/// A microphone that stops mid-meeting is opened again this many times in a
+/// row, this far apart, before the meeting goes on without it.
+const MIC_REOPEN_TRIES: u32 = 5;
+const MIC_REOPEN_WAIT: Duration = Duration::from_secs(2);
 
 /// Every template starts with who's who and the language rule.
 const PROMPT_HEAD: &str = "You write meeting notes from a transcript. \"Me\" is the person taking the notes; call them \"you\". {OTHERS}
@@ -371,7 +375,7 @@ struct Active {
     /// Records both tracks; returns a warning code for the meeting, if any.
     recorder: JoinHandle<Result<Option<String>>>,
     /// Turns each stretch of speech into a line while the meeting runs.
-    transcriber: JoinHandle<Result<Vec<TranscriptLine>>>,
+    transcriber: JoinHandle<Result<(Vec<TranscriptLine>, Gaps)>>,
 }
 
 /// Where a meeting's speech detection and echo removal come from.
@@ -520,11 +524,16 @@ impl MeetingManager {
         id: i64,
         queue: mpsc::Receiver<(Speaker, Segment)>,
         behind: &AtomicBool,
-    ) -> Result<Vec<TranscriptLine>> {
+    ) -> Result<(Vec<TranscriptLine>, Gaps)> {
         let mut lines: Vec<TranscriptLine> = Vec::new();
+        let mut gaps = Gaps::default();
         let mut failed = None;
         for (speaker, segment) in queue {
-            match self.transcribe_segment(speaker, &segment) {
+            let line = self.transcribe_segment(speaker, &segment);
+            if let Ok(line) = &line {
+                gaps.note(speaker, &segment, line.is_some());
+            }
+            match line {
                 Ok(Some(line)) => {
                     let at = lines.partition_point(|l| l.start_ms <= line.start_ms);
                     lines.insert(at, line);
@@ -548,7 +557,7 @@ impl MeetingManager {
         }
         match failed {
             Some(e) => Err(e),
-            None => Ok(lines),
+            None => Ok((lines, gaps)),
         }
     }
 
@@ -645,17 +654,20 @@ impl MeetingManager {
                 .map_err(|_| anyhow!("The transcriber crashed"))
                 .and_then(|r| r);
             let result = recorded.and_then(|mic_warning| {
-                let lines = match lines {
-                    Ok(lines) => this.with_speakers(active.id, &folder, lines),
+                let (lines, warning) = match lines {
+                    Ok((lines, gaps)) => (
+                        this.with_speakers(active.id, &folder, lines),
+                        system_audio_warning(&folder).or(gaps.warning()),
+                    ),
                     Err(e) => {
                         log::warn!(
                             "Meeting {}: a live line failed ({e:#}); transcribing the saved audio",
                             active.id
                         );
-                        this.transcribe(active.id)?.0
+                        this.transcribe(active.id)?
                     }
                 };
-                Ok((lines, mic_warning.or(system_audio_warning(&folder))))
+                Ok((lines, mic_warning.or(warning)))
             });
             this.finish(active.id, result);
         });
@@ -892,18 +904,21 @@ impl MeetingManager {
             path.exists().then(|| read_wav_samples(&path)).transpose()
         };
         let mut lines = Vec::new();
+        let mut gaps = Gaps::default();
         {
             // Freed before speaker labels read the call audio again.
             let (mic, system) = (read("mic.wav")?.unwrap_or_default(), read("system.wav")?);
             let stages = self.stages();
             for (speaker, segment) in split_tracks(&stages, &mic, system.as_deref()) {
-                lines.extend(self.transcribe_segment(speaker, &segment)?);
+                let line = self.transcribe_segment(speaker, &segment)?;
+                gaps.note(speaker, &segment, line.is_some());
+                lines.extend(line);
             }
         }
         lines.sort_by_key(|l| l.start_ms);
         Ok((
             self.with_speakers(id, &folder, lines),
-            system_audio_warning(&folder),
+            system_audio_warning(&folder).or(gaps.warning()),
         ))
     }
 
@@ -1050,16 +1065,20 @@ impl MeetingManager {
             return Err("These notes are already being written.".into());
         }
         self.changed();
-        let reply = crate::llm_client::send_chat_completion_with_schema(
-            provider,
-            api_key,
-            model,
-            format!("<transcript>\n{transcript}\n</transcript>"),
-            Some(summary_prompt(&settings, &template, labelled, &transcript)),
-            None,
-            false,
-        )
-        .await;
+        let prompt = summary_prompt(&settings, &template, labelled, &transcript);
+        let send = || {
+            crate::llm_client::send_chat_completion_with_schema(
+                provider,
+                api_key.clone(),
+                model,
+                format!("<transcript>\n{transcript}\n</transcript>"),
+                Some(prompt.clone()),
+                None,
+                false,
+            )
+        };
+        // A network blip or a busy AI mustn't cost a meeting its notes.
+        let reply = crate::llm_client::retry_transient(send).await;
         let result = match reply {
             Ok(Some(text)) => Ok(crate::actions::strip_think_block(&text).trim().to_string()),
             Ok(None) => Ok(String::new()),
@@ -1147,11 +1166,15 @@ impl MeetingManager {
 /// and are written to a 16 kHz WAV.
 struct Track {
     consumer: rtrb::Consumer<f32>,
+    /// The rate samples arrive at.
+    rate: u32,
     resampler: FrameResampler,
     writer: hound::WavWriter<std::io::BufWriter<std::fs::File>>,
     /// When the file's header last caught up with its audio; None after a
     /// checkpoint failed.
     saved: Option<Instant>,
+    /// 16 kHz samples recorded so far.
+    written: usize,
 }
 
 impl Track {
@@ -1164,10 +1187,23 @@ impl Track {
         };
         Ok(Self {
             consumer,
+            rate,
             resampler: FrameResampler::new(rate as usize, SAMPLE_RATE, Duration::from_millis(30)),
             writer: hound::WavWriter::create(path, spec)?,
             saved: Some(Instant::now()),
+            written: 0,
         })
+    }
+
+    /// Samples arrive at `rate` from now on; returns the rest of the old
+    /// rate's audio at 16 kHz.
+    fn set_rate(&mut self, rate: u32) -> Vec<f32> {
+        let mut tail = Vec::new();
+        self.resampler.finish(|frame| tail.extend_from_slice(frame));
+        self.write(&tail);
+        self.rate = rate;
+        self.resampler = FrameResampler::new(rate as usize, SAMPLE_RATE, Duration::from_millis(30));
+        tail
     }
 
     /// Saves what arrived since the last call; returns it at 16 kHz.
@@ -1195,6 +1231,7 @@ impl Track {
     }
 
     fn write(&mut self, samples: &[f32]) {
+        self.written += samples.len();
         // After a failed checkpoint the file sits inside its header: writing
         // on would overwrite it, so the file keeps what it had.
         if self.saved.is_none() {
@@ -1221,9 +1258,10 @@ impl Track {
 
 /// Records until `stop`: the microphone to `mic.wav` and, on macOS, the
 /// system audio to `system.wav`, sending each finished stretch of speech to
-/// `segments` (the microphone after echo removal). Returns `mic_failed` when
-/// the microphone stopped mid-meeting (unplugged, asleep), so the meeting
-/// says so instead of ending in silence.
+/// `segments` (the microphone after echo removal). A microphone that stops
+/// mid-meeting (unplugged, AirPods switching modes) is opened again, with
+/// silence recorded meanwhile; `mic_failed` is returned when it never came
+/// back, so the meeting says so instead of ending in silence.
 fn record(
     folder: &Path,
     mic_name: Option<String>,
@@ -1233,14 +1271,17 @@ fn record(
     behind: &AtomicBool,
     started: mpsc::Sender<()>,
 ) -> Result<Option<String>> {
-    let (mic, mic_consumer, mic_lost) = open_mic(mic_name)?;
+    let mic_down = Arc::new(AtomicBool::new(false));
+    let mic_lost = Arc::new(AtomicUsize::new(0));
+    let (mic, mic_consumer) = open_mic(mic_name.clone(), &mic_down, &mic_lost)?;
+    let mut mic = Some(mic);
     let mut mic_track = Track::new(SAMPLE_RATE as u32, mic_consumer, &folder.join("mic.wav"))?;
     let mut system_track = None;
 
     #[cfg(target_os = "macos")]
     let mut system_lost = None;
     #[cfg(target_os = "macos")]
-    let _tap = match crate::audio_toolkit::audio::system_capture::start() {
+    let tap = match crate::audio_toolkit::audio::system_capture::start() {
         Ok((source, tap)) => {
             system_track = Some(Track::new(
                 source.rate,
@@ -1259,6 +1300,7 @@ fn record(
     let mut split = Splitter::new(stages, system_track.is_some());
     // Everything is open: the meeting has started.
     let _ = started.send(());
+    let began = Instant::now();
     // While recording, capture never waits on transcription: a full queue
     // gives up on live lines (the saved audio is transcribed instead).
     let queue = |found: Vec<(Speaker, Segment)>| {
@@ -1276,13 +1318,68 @@ fn record(
             }
         }
     };
+    let (mut reopen_at, mut reopen_tries) = (Instant::now(), 0);
+    #[cfg(target_os = "macos")]
+    let mut rate_checked = Instant::now();
     while !stop.load(Ordering::Relaxed) {
         std::thread::sleep(Duration::from_millis(50));
-        let mic_audio = mic_track.drain();
-        let system_audio = system_track.as_mut().map(Track::drain).unwrap_or_default();
+        let mut mic_audio = mic_track.drain();
+        if mic_down.load(Ordering::Relaxed) {
+            if let Some(failed) = mic.take() {
+                let reason = failed.stop().map(|s| s.end_reason);
+                log::error!("Meeting: the microphone stopped ({reason:?}); opening it again");
+                reopen_at = Instant::now();
+            }
+            // The chosen microphone first, then whichever the Mac uses now.
+            if reopen_tries < MIC_REOPEN_TRIES && Instant::now() >= reopen_at {
+                let name = mic_name.clone().filter(|_| reopen_tries == 0);
+                mic_down.store(false, Ordering::Relaxed);
+                match open_mic(name, &mic_down, &mic_lost) {
+                    Ok((reopened, consumer)) => {
+                        log::info!("Meeting: the microphone is back");
+                        mic_track.consumer = consumer;
+                        mic = Some(reopened);
+                        reopen_tries = 0;
+                    }
+                    Err(e) => {
+                        log::warn!("Meeting: the microphone didn't open again: {e:#}");
+                        mic_down.store(true, Ordering::Relaxed);
+                        reopen_tries += 1;
+                        reopen_at = Instant::now() + MIC_REOPEN_WAIT;
+                    }
+                }
+            }
+        }
+        let mut system_audio = system_track.as_mut().map(Track::drain).unwrap_or_default();
+        #[cfg(target_os = "macos")]
+        if rate_checked.elapsed() >= Duration::from_secs(1) {
+            rate_checked = Instant::now();
+            if let (Some(track), Some(rate)) =
+                (system_track.as_mut(), tap.as_ref().and_then(|t| t.rate()))
+            {
+                if rate != track.rate {
+                    log::warn!(
+                        "Meeting: system audio changed from {} Hz to {rate} Hz",
+                        track.rate
+                    );
+                    system_audio.extend(track.set_rate(rate));
+                }
+            }
+        }
+        // Without a microphone, its track records silence, so both tracks
+        // stay in step.
+        if mic.is_none() {
+            let due = match &system_track {
+                Some(track) => track.written,
+                None => (began.elapsed().as_secs_f64() * SAMPLE_RATE as f64) as usize,
+            };
+            let silence = vec![0.0; due.saturating_sub(mic_track.written)];
+            mic_track.write(&silence);
+            mic_audio.extend(silence);
+        }
         queue(split.push(&mic_audio, &system_audio));
     }
-    let stopped = mic.stop()?;
+    let stopped = mic.map(|mic| mic.stop()).transpose()?;
     let mic_audio = mic_track.finish()?;
     let system_audio = match system_track {
         Some(track) => track.finish()?,
@@ -1290,11 +1387,12 @@ fn record(
     };
     send(split.push(&mic_audio, &system_audio));
     send(split.finish());
-    if stopped.dropped_frames > 0 {
-        log::warn!(
-            "Meeting: the microphone dropped {} frames",
-            stopped.dropped_frames
-        );
+    if let Some(dropped) = stopped
+        .as_ref()
+        .map(|s| s.dropped_frames)
+        .filter(|n| *n > 0)
+    {
+        log::warn!("Meeting: the microphone dropped {dropped} frames");
     }
     // Samples the ring buffers had to drop while this loop fell behind.
     let lost = mic_lost.load(Ordering::Relaxed);
@@ -1303,10 +1401,10 @@ fn record(
     if lost > 0 {
         log::warn!("Meeting: the recording loop fell behind; {lost} samples were lost");
     }
-    Ok(match stopped.end_reason {
-        handy_recorder::EndReason::StopCalled => None,
+    Ok(match stopped.map(|s| s.end_reason) {
+        Some(handy_recorder::EndReason::StopCalled) => None,
         reason => {
-            log::error!("Meeting: the microphone stopped early: {reason:?}");
+            log::error!("Meeting: the microphone ended early: {reason:?}");
             Some("mic_failed".to_string())
         }
     })
@@ -1382,6 +1480,37 @@ fn system_audio_warning(folder: &Path) -> Option<String> {
     (seconds < 1).then(|| "system_audio_missing".to_string())
 }
 
+/// Notices speech the model keeps turning into nothing: a minute of it in a
+/// row on one track (stretches under 1.5 s, often noise, don't count) means
+/// part of the meeting is likely missing, from garbled audio or a failing
+/// model.
+#[derive(Default)]
+struct Gaps {
+    /// Per track (you, others): samples of speech in a row with no text.
+    unheard: [usize; 2],
+    found: bool,
+}
+
+impl Gaps {
+    fn note(&mut self, speaker: Speaker, segment: &Segment, heard: bool) {
+        let unheard = &mut self.unheard[match speaker {
+            Speaker::You => 0,
+            Speaker::Others => 1,
+        }];
+        if heard {
+            *unheard = 0;
+        } else if segment.samples.len() >= SAMPLE_RATE * 3 / 2 {
+            *unheard += segment.samples.len();
+            self.found |= *unheard >= SAMPLE_RATE * 60;
+        }
+    }
+
+    /// `transcript_gaps`, which the meeting page explains.
+    fn warning(&self) -> Option<String> {
+        self.found.then(|| "transcript_gaps".to_string())
+    }
+}
+
 /// Lines from the same person a moment apart become one line.
 fn join_lines(lines: Vec<TranscriptLine>) -> Vec<TranscriptLine> {
     const GAP_MS: i64 = 1_000;
@@ -1426,15 +1555,13 @@ impl handy_recorder::Sink for RingSink {
 }
 
 /// Opens the microphone chosen in Settings (by name), or the default one.
-/// The counter is the samples lost to a full ring buffer.
-#[allow(clippy::type_complexity)]
+/// `down` is set the moment it fails; `lost` counts the samples lost to a
+/// full ring buffer.
 fn open_mic(
     name: Option<String>,
-) -> Result<(
-    handy_recorder::Recorder<RingSink>,
-    rtrb::Consumer<f32>,
-    Arc<AtomicUsize>,
-)> {
+    down: &Arc<AtomicBool>,
+    lost: &Arc<AtomicUsize>,
+) -> Result<(handy_recorder::Recorder<RingSink>, rtrb::Consumer<f32>)> {
     let device = name.and_then(|name| {
         handy_recorder::list_input_devices()
             .ok()?
@@ -1442,19 +1569,22 @@ fn open_mic(
             .find(|d| d.name == name)
             .map(|d| d.id)
     });
-    let recorder = handy_recorder::Recorder::open(handy_recorder::RecorderConfig {
-        device,
-        ..handy_recorder::RecorderConfig::speech()
-    })?;
+    let down = down.clone();
+    let recorder = handy_recorder::Recorder::open_with_failure_handler(
+        handy_recorder::RecorderConfig {
+            device,
+            ..handy_recorder::RecorderConfig::speech()
+        },
+        move |_| down.store(true, Ordering::Relaxed),
+    )?;
     let (producer, consumer) = rtrb::RingBuffer::new(SAMPLE_RATE * 10);
-    let lost = Arc::new(AtomicUsize::new(0));
     recorder
         .start(RingSink {
             producer,
             lost: lost.clone(),
         })
         .map_err(|e| anyhow!("The microphone didn't start: {}", e.error))?;
-    Ok((recorder, consumer, lost))
+    Ok((recorder, consumer))
 }
 
 /// Every meeting in `conn`, newest first. Also read directly by the command

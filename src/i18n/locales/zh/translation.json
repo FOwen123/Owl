@@ -901,6 +901,7 @@
       "copy": "复制逐字稿",
       "systemAudioMissing": "Owl 无法收到系统音频，所以这份逐字稿只有你的麦克风。请到“系统设置 → 隐私与安全性 → 屏幕与系统音频录制”允许 Owl。",
       "micFailed": "会议中麦克风中断了，部分内容可能缺失。",
+      "transcriptGaps": "这份逐字稿可能少了部分内容，可以试试“重新转写”。",
       "speakerNumbered": "说话者 {{n}}",
       "speakerName": "名字",
       "speakerModel": {

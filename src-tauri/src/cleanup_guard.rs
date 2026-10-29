@@ -30,6 +30,47 @@ const PREAMBLES: &[&str] = &[
     "好的，以下",
 ];
 
+/// A line that heads one of several versions: "Option 1", "**Version 2:**", "方案二".
+static VERSION_HEADING: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?im)^[\s>*#_-]*(option|version|alternative|選項|选项|方案|版本)\s*[0-9一二三四五]",
+    )
+    .expect("valid regex")
+});
+
+/// An instruction asking for more than one version: "give me three options".
+static ASKS_FOR_SEVERAL: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)\b(options|versions|alternatives|variations|ways)\b|選項|选项|版本|方案|幾種|几种",
+    )
+    .expect("valid regex")
+});
+
+/// Why an Edit by voice reply can't be pasted as it is: it opens like a chat
+/// answer, or offers several versions to choose from when one edit was asked for.
+pub fn edit_problem(
+    instruction: &str,
+    selection: Option<&str>,
+    reply: &str,
+) -> Option<&'static str> {
+    let (given, reply_lower) = (
+        selection.unwrap_or_default().trim().to_lowercase(),
+        reply.trim().to_lowercase(),
+    );
+    if PREAMBLES
+        .iter()
+        .any(|p| reply_lower.starts_with(p) && !given.starts_with(p))
+    {
+        return Some("it started with a preamble");
+    }
+    if !ASKS_FOR_SEVERAL.is_match(instruction)
+        && VERSION_HEADING.find_iter(reply).count() > VERSION_HEADING.find_iter(&given).count() + 1
+    {
+        return Some("it offered several versions");
+    }
+    None
+}
+
 fn units(text: &str) -> Vec<String> {
     UNIT.find_iter(text)
         .map(|m| m.as_str().to_lowercase())

@@ -1,5 +1,5 @@
 use crate::settings::PostProcessProvider;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, REFERER, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -467,6 +467,44 @@ pub async fn send_chat_completion_with_schema(
         .choices
         .first()
         .and_then(|choice| choice.message.content.clone()))
+}
+
+/// Owl: whether a failed request may work when tried again: the AI couldn't
+/// be reached, was busy (429) or failed on its side (5xx). A timeout is
+/// final, since the request already waited minutes.
+pub fn is_transient(error: &str) -> bool {
+    let busy = |prefix: &str| {
+        error
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.get(..3)?.parse::<u16>().ok())
+            .is_some_and(|status| status == 429 || (500..600).contains(&status))
+    };
+    let unreachable =
+        error.starts_with("HTTP request failed") || error.starts_with("Couldn't reach OpenAI");
+    (unreachable && !error.contains("timeout") && !error.contains("timed out"))
+        || busy("API request failed with status ")
+        || busy("ChatGPT error ")
+}
+
+/// Owl: `send`, tried up to three more times (after 1, 2 and 4 s) while it
+/// fails in a way that may pass.
+pub async fn retry_transient<F, Fut>(send: F) -> Result<Option<String>, String>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = Result<Option<String>, String>>,
+{
+    let mut reply = send().await;
+    for wait in [1, 2, 4] {
+        match &reply {
+            Err(e) if is_transient(e) => {
+                warn!("AI request failed ({e}); trying again in {wait} s");
+                tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+                reply = send().await;
+            }
+            _ => break,
+        }
+    }
+    reply
 }
 
 /// Fetch available models from an OpenAI-compatible API

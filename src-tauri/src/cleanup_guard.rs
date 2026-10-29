@@ -42,7 +42,7 @@ static VERSION_HEADING: Lazy<Regex> = Lazy::new(|| {
 /// 「給我幾種說法」.
 static ASKS_FOR_SEVERAL: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)\b(options|versions|alternatives|variations|ways)\b|[幾几多兩两二三四五六七八九十0-9]\s*[個个種种]?\s*(版本|選項|选项|方案|說法|说法|寫法|写法)",
+        r"(?i)\b(options|versions|alternatives|variations|ways)\b|(?:[幾几多兩两二三四五六七八九十2-9]|[1-9][0-9])\s*[個个種种]?\s*(版本|選項|选项|方案|說法|说法|寫法|写法)",
     )
     .expect("valid regex")
 });

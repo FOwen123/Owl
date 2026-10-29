@@ -989,6 +989,8 @@ pub fn run(cli_args: CliArgs) {
             commands::meetings::speaker_model_installed,
             commands::meetings::download_speaker_model,
             commands::meetings::change_meeting_detection_setting,
+            commands::meetings::change_user_name_setting,
+            commands::meetings::request_system_audio_permission,
             commands::meetings::show_meeting_window,
             commands::meetings::resume_meeting,
             commands::edits::accept_edit_suggestion,

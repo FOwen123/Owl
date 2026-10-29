@@ -1,0 +1,53 @@
+/* Waveform — reactive only after the first microphone callback. While arming,
+   a muted travelling pulse acknowledges the shortcut without pretending that
+   audio levels are already being received. */
+/* Bars are a fixed 16px and scaled vertically (transform is composited, so it
+   stays smooth); Waveform.tsx eases them every frame. */
+.swave {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  height: 16px;
+  padding: 0 6px;
+  flex: none;
+}
+.swave i {
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transform: scaleY(0.3);
+  transition:
+    background-color 180ms ease,
+    opacity 180ms ease;
+}
+.swave.arming i {
+  transform: scaleY(0.3) !important;
+  background: var(--color-text-muted);
+  opacity: 0.35;
+  animation: swave-arming 900ms ease-in-out infinite;
+}
+.swave.arming i:nth-child(2),
+.swave.arming i:nth-child(8) {
+  animation-delay: 75ms;
+}
+.swave.arming i:nth-child(3),
+.swave.arming i:nth-child(7) {
+  animation-delay: 150ms;
+}
+.swave.arming i:nth-child(4),
+.swave.arming i:nth-child(6) {
+  animation-delay: 225ms;
+}
+.swave.arming i:nth-child(5) {
+  animation-delay: 300ms;
+}
+@keyframes swave-arming {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}

@@ -531,6 +531,10 @@ pub struct AppSettings {
     /// (`meeting_detect.rs`).
     #[serde(default = "default_meeting_detection")]
     pub meeting_detection: bool,
+    /// Owl: the user's name, asked at onboarding; meeting notes and
+    /// transcripts use it instead of "you".
+    #[serde(default)]
+    pub user_name: String,
     /// Owl: the local transcription API (`local_api.rs`), off by default.
     #[serde(default)]
     pub local_api_enabled: bool,
@@ -1110,6 +1114,7 @@ pub fn get_default_settings() -> AppSettings {
         learning_enabled: false,
         cleanup_examples: false,
         meeting_detection: default_meeting_detection(),
+        user_name: String::new(),
         local_api_enabled: false,
         local_api_token: Secret::default(),
         cleanup_level: CleanupLevel::default(),

@@ -125,7 +125,7 @@ Owl is a private dictation and meeting-notes desktop app, specialized in English
 ### Application Flow
 
 1. **Initialization:** App starts with its tray icon, loads settings, initializes managers
-2. **First run:** Accessibility and Microphone permissions, then the user picks a speech model (Parakeet Unified and Nemotron Streaming are featured), downloaded from Hugging Face
+2. **First run:** `components/onboarding/`: name and what Owl is for (dictation, meetings or both), a speech model (Parakeet Unified and Nemotron Streaming are featured; it downloads from Hugging Face while setup goes on), Microphone and Accessibility (plus System Audio for meetings), the shortcut, a dictation test, an optional AI, and meeting settings. Progress is saved, so quitting midway resumes; `?mock&onboarding` previews it
 3. **Recording:** Option+Space (hold to talk or tap to toggle) records with VAD filtering
 4. **Processing:** The speech model transcribes, then cleanup rules, the dictionary, snippets and optional AI cleanup run
 5. **Output:** Text pasted into the focused app through the clipboard; with no text box focused it stays on the clipboard instead

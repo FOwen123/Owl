@@ -100,9 +100,25 @@ const firstLine = (markdown: string) =>
     .map((l) => l.replace(/^[#>*\-\s]+/, "").replace(/[*_`]/g, ""))
     .find((l) => l.trim()) ?? "";
 
+/** "Ask when a call starts" (`meeting_detect.rs`); also in onboarding. */
+export const MeetingDetectionToggle: React.FC = () => {
+  const { t } = useTranslation();
+  const { getSetting, updateSetting, isUpdating } = useSettings();
+  return (
+    <ToggleSwitch
+      checked={getSetting("meeting_detection") ?? true}
+      onChange={(enabled) => updateSetting("meeting_detection", enabled)}
+      isUpdating={isUpdating("meeting_detection")}
+      label={t("owl.notetaker.detectLabel")}
+      description={t("owl.notetaker.detectDescription")}
+      descriptionMode="inline"
+      grouped
+    />
+  );
+};
+
 export const NotetakerPage: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const { getSetting, updateSetting, isUpdating } = useSettings();
   const meetings = useMeetings();
   const [openId, setOpenId] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -162,15 +178,7 @@ export const NotetakerPage: React.FC = () => {
           </Button>
         </SettingContainer>
         <SpeakerModelRow />
-        <ToggleSwitch
-          checked={getSetting("meeting_detection") ?? true}
-          onChange={(enabled) => updateSetting("meeting_detection", enabled)}
-          isUpdating={isUpdating("meeting_detection")}
-          label={t("owl.notetaker.detectLabel")}
-          description={t("owl.notetaker.detectDescription")}
-          descriptionMode="inline"
-          grouped
-        />
+        <MeetingDetectionToggle />
       </SettingsGroup>
 
       <SettingsGroup title={t("owl.notetaker.meetings")}>

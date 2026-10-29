@@ -1100,6 +1100,27 @@ async changeMeetingDetectionSetting(enabled: boolean) : Promise<Result<null, str
     else return { status: "error", error: e  as any };
 }
 },
+async changeUserNameSetting(name: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("change_user_name_setting", { name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Owl: asks macOS for System Audio Recording during onboarding. Starting a
+ * tap shows the prompt the first time; whether it was allowed can't be read
+ * back (a refused tap just hears silence), so this only asks.
+ */
+async requestSystemAudioPermission() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("request_system_audio_permission") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 /**
  * Opens the floating live-transcript window (`meeting_window.rs`).
  */
@@ -1326,6 +1347,11 @@ cleanup_examples?: boolean;
  * (`meeting_detect.rs`).
  */
 meeting_detection?: boolean; 
+/**
+ * Owl: the user's name, asked at onboarding; meeting notes and
+ * transcripts use it instead of "you".
+ */
+user_name?: string; 
 /**
  * Owl: the local transcription API (`local_api.rs`), off by default.
  */

@@ -25,6 +25,28 @@ export const useTemplateOptions = (builtIn: string[]) => {
   ];
 };
 
+/** The template new meeting notes use; also in onboarding. */
+export const DefaultTemplateRow: React.FC<{ builtIn: string[] }> = ({
+  builtIn,
+}) => {
+  const { t } = useTranslation();
+  const { getSetting, updateSetting } = useSettings();
+  return (
+    <SettingContainer
+      title={t("owl.notetaker.templates.default")}
+      description={t("owl.notetaker.templates.defaultDescription")}
+      descriptionMode="inline"
+      grouped
+    >
+      <Dropdown
+        options={useTemplateOptions(builtIn)}
+        selectedValue={getSetting("meeting_template") ?? "general"}
+        onSelect={(value) => updateSetting("meeting_template", value)}
+      />
+    </SettingContainer>
+  );
+};
+
 /** The default template, and the user's own templates to write and edit. */
 export const MeetingTemplates: React.FC<{ builtIn: string[] }> = ({
   builtIn,
@@ -32,7 +54,6 @@ export const MeetingTemplates: React.FC<{ builtIn: string[] }> = ({
   const { t } = useTranslation();
   const { getSetting, updateSetting } = useSettings();
   const own = getSetting("meeting_templates") ?? [];
-  const options = useTemplateOptions(builtIn);
 
   const save = (templates: MeetingTemplate[]) =>
     updateSetting("meeting_templates", templates);
@@ -44,18 +65,7 @@ export const MeetingTemplates: React.FC<{ builtIn: string[] }> = ({
       title={t("owl.notetaker.templates.title")}
       description={t("owl.notetaker.templates.description")}
     >
-      <SettingContainer
-        title={t("owl.notetaker.templates.default")}
-        description={t("owl.notetaker.templates.defaultDescription")}
-        descriptionMode="inline"
-        grouped
-      >
-        <Dropdown
-          options={options}
-          selectedValue={getSetting("meeting_template") ?? "general"}
-          onSelect={(value) => updateSetting("meeting_template", value)}
-        />
-      </SettingContainer>
+      <DefaultTemplateRow builtIn={builtIn} />
       {own.map((tpl) => (
         <TemplateEditor
           key={tpl.id}

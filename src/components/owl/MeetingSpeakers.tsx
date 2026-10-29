@@ -7,15 +7,24 @@ import { Button } from "../ui/Button";
 import Badge from "../ui/Badge";
 import { Input } from "../ui/Input";
 import { SettingContainer } from "../ui/SettingContainer";
+import { useSettings } from "../../hooks/useSettings";
 
 type Line = Meeting["transcript"][number];
 type Names = Meeting["speaker_names"];
 
-/** "You", a speaker's name, "Speaker 2", or "Others" before speaker labels. */
+/** The user's name from onboarding, else "You". */
+const useYou = () => {
+  const { t } = useTranslation();
+  const { getSetting } = useSettings();
+  return getSetting("user_name")?.trim() || t("owl.notetaker.speaker.you");
+};
+
+/** The user, a speaker's name, "Speaker 2", or "Others" before speaker labels. */
 export const useSpeakerLabel = (names: Names) => {
   const { t } = useTranslation();
+  const you = useYou();
   return (line: Pick<Line, "speaker" | "voice">) => {
-    if (line.speaker === "you") return t("owl.notetaker.speaker.you");
+    if (line.speaker === "you") return you;
     if (line.voice == null) return t("owl.notetaker.speaker.others");
     return (
       names[line.voice] ?? t("owl.notetaker.speakerNumbered", { n: line.voice })
@@ -36,6 +45,7 @@ export const useFillSpeakers = (names: Names) => {
 export const SpeakerChips: React.FC<{ meeting: Meeting }> = ({ meeting }) => {
   const { t } = useTranslation();
   const label = useSpeakerLabel(meeting.speaker_names);
+  const you = useYou();
   const [editing, setEditing] = useState<number | null>(null);
   const voices = [
     ...new Set(meeting.transcript.flatMap((l) => (l.voice ? [l.voice] : []))),
@@ -50,7 +60,7 @@ export const SpeakerChips: React.FC<{ meeting: Meeting }> = ({ meeting }) => {
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1">
-      <Badge>{t("owl.notetaker.speaker.you")}</Badge>
+      <Badge>{you}</Badge>
       {voices.map((voice) =>
         editing === voice ? (
           <Input

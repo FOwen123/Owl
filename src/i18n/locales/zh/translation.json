@@ -39,9 +39,6 @@
     "notetaker": "会议笔记"
   },
   "onboarding": {
-    "subtitle": "请选择一个转录模型以开始使用",
-    "existingModelsTitle": "兼容的模型",
-    "downloadModelsTitle": "可供下载",
     "showAllModels": "显示全部 {{total}} 个模型",
     "showFewerModels": "显示较少模型",
     "recommended": "推荐",
@@ -116,8 +113,8 @@
       "selectModel": "选择模型失败"
     },
     "permissions": {
-      "title": "需要权限",
-      "description": "Owl 需要一些权限才能正常工作。",
+      "title": "权限",
+      "description": "Owl 需要这些权限才能听到你的声音并替你打字。",
       "microphone": {
         "title": "麦克风访问",
         "description": "需要听取您的语音进行转录。"
@@ -129,11 +126,67 @@
       "grant": "授予权限",
       "granted": "已授予",
       "waiting": "等待中...",
-      "allGranted": "全部完成！",
       "errors": {
         "checkFailed": "检查权限失败。请重试。",
         "requestFailed": "请求权限失败。请重试。"
-      }
+      },
+      "systemAudio": {
+        "title": "系统音频",
+        "description": "需要听到通话另一方的声音。",
+        "asked": "已请求"
+      },
+      "openSettings": "没看到提示？打开系统设置"
+    },
+    "nav": {
+      "back": "返回",
+      "continue": "继续",
+      "skip": "跳过",
+      "finish": "完成"
+    },
+    "welcome": {
+      "title": "欢迎使用 Owl",
+      "subtitle": "在你的 Mac 上，私密的听写与会议笔记。",
+      "name": "你的名字",
+      "namePlaceholder": "你的名字",
+      "nameHint": "会议笔记会用这个名字称呼你。",
+      "useQuestion": "你想用 Owl 做什么？",
+      "dictation": "听写",
+      "dictationHint": "在任何 App 打字",
+      "meetings": "会议笔记",
+      "meetingsHint": "转录与笔记"
+    },
+    "model": {
+      "title": "选择转录模型",
+      "subtitle": "模型在你的 Mac 上运行，下载时可以继续设置。"
+    },
+    "shortcut": {
+      "title": "你的听写快捷键",
+      "subtitle": "在任何 App 按下它就能开始说话。"
+    },
+    "try": {
+      "title": "试试看",
+      "subtitle": "按住快捷键，读出下面这句话。",
+      "say": "请说",
+      "phrase": "Owl 会把我说的话打出来。",
+      "placeholder": "你说的话会出现在这里",
+      "hold": "按住开始",
+      "letGo": "松开即完成",
+      "works": "听写成功",
+      "again": "再试一次",
+      "preparing": "正在准备模型…",
+      "downloading": "正在下载 {{model}} · {{percent}}%"
+    },
+    "ai": {
+      "title": "AI 整理与会议笔记",
+      "subtitle": "可选。不使用的话，所有数据都留在你的 Mac 上。",
+      "chatgpt": "ChatGPT",
+      "ownKey": "自己的 API 密钥",
+      "chatgptDescription": "使用你的 ChatGPT Plus 或 Pro 方案。"
+    },
+    "meetings": {
+      "title": "会议笔记",
+      "subtitle": "Owl 会录下通话，结束时写好笔记。",
+      "preview": "通话开始时，你会看到"
     }
   },
   "modelSelector": {

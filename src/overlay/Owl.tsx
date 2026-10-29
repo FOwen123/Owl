@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef } from "react";
+import "./Owl.css";
 import body from "./owl/body.png";
 import eyes from "./owl/eyes.png";
 import footLeft from "./owl/foot-left.png";

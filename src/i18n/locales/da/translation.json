@@ -39,9 +39,6 @@
     "notetaker": "Notetaker"
   },
   "onboarding": {
-    "subtitle": "For at komme i gang skal du vælge en transskriptionsmodel",
-    "existingModelsTitle": "Kompatible modeller",
-    "downloadModelsTitle": "Tilgængelig til download",
     "showAllModels": "Vis alle {{total}} modeller",
     "showFewerModels": "Vis færre modeller",
     "recommended": "Anbefalet",
@@ -129,11 +126,67 @@
       "grant": "Giv tilladelse",
       "granted": "Givet",
       "waiting": "Venter...",
-      "allGranted": "Alt er klar!",
       "errors": {
         "checkFailed": "Kunne ikke tjekke tilladelser. Prøv igen.",
         "requestFailed": "Kunne ikke anmode om tilladelse. Prøv igen."
-      }
+      },
+      "systemAudio": {
+        "title": "System Audio",
+        "description": "Required to hear the other side of a call.",
+        "asked": "Asked"
+      },
+      "openSettings": "Not seeing a prompt? Open System Settings"
+    },
+    "nav": {
+      "back": "Back",
+      "continue": "Continue",
+      "skip": "Skip",
+      "finish": "Finish"
+    },
+    "welcome": {
+      "title": "Welcome to Owl",
+      "subtitle": "Private dictation and meeting notes, on your Mac.",
+      "name": "Your name",
+      "namePlaceholder": "Your name",
+      "nameHint": "Meeting notes call you by this name.",
+      "useQuestion": "What will you use Owl for?",
+      "dictation": "Dictation",
+      "dictationHint": "Type in any app",
+      "meetings": "Meeting notes",
+      "meetingsHint": "Transcripts and notes"
+    },
+    "model": {
+      "title": "Choose a transcription model",
+      "subtitle": "It runs on your Mac. Keep setting up while it downloads."
+    },
+    "shortcut": {
+      "title": "Your dictation shortcut",
+      "subtitle": "Press it in any app to start talking."
+    },
+    "try": {
+      "title": "Try it out",
+      "subtitle": "Hold your shortcut and read this out loud.",
+      "say": "Say this",
+      "phrase": "Owl dictates what I say.",
+      "placeholder": "Your words appear here",
+      "hold": "Hold to start",
+      "letGo": "Let go to finish",
+      "works": "Dictation works",
+      "again": "Try again",
+      "preparing": "Getting the model ready…",
+      "downloading": "Downloading {{model}} · {{percent}}%"
+    },
+    "ai": {
+      "title": "AI cleanup and meeting notes",
+      "subtitle": "Optional. Without it, everything stays on your Mac.",
+      "chatgpt": "ChatGPT",
+      "ownKey": "Your own API key",
+      "chatgptDescription": "Uses your ChatGPT Plus or Pro plan."
+    },
+    "meetings": {
+      "title": "Meeting notes",
+      "subtitle": "Owl records the call and writes notes when it ends.",
+      "preview": "When a call starts, you'll see"
     }
   },
   "modelSelector": {

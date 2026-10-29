@@ -249,50 +249,6 @@
   padding-right: 1px;
   justify-self: end;
 }
-/* The menu-bar owl, in parts (Owl.tsx animates them): masks filled with the
-   text color, its eye openings left clear so the pill shows through. */
-.sowl {
-  position: relative;
-  width: 22px;
-  height: 22px;
-  flex: none;
-  color: var(--color-text);
-}
-.sowl-layer,
-.sowl-frame {
-  position: absolute;
-  inset: 0;
-}
-.sowl-layer {
-  background: currentColor;
-  -webkit-mask-size: 100% 100%;
-  mask-size: 100% 100%;
-}
-.sowl-frame {
-  transform-origin: 50% 88%;
-}
-.sowl-eyes {
-  background: none;
-}
-/* A lid per eye, parked just outside it until the owl closes it. */
-.sowl-lid {
-  position: absolute;
-  background: currentColor;
-  transform: translateY(-100%);
-}
-.sowl-lid.smile {
-  transform: translateY(100%);
-}
-/* Zzz, "?", surprise lines and sparkles, drawn around the owl (scoped under
-   .sowl so the cards' icon sizing doesn't shrink it). */
-.sowl .sowl-extras {
-  position: absolute;
-  inset: -30%;
-  width: 160%;
-  height: 160%;
-  overflow: visible;
-  pointer-events: none;
-}
 .stimer {
   font-size: 12px;
   color: var(--s-faint);
@@ -305,59 +261,6 @@
   opacity: 1;
 }
 
-/* Waveform — reactive only after the first microphone callback. While arming,
-   a muted travelling pulse acknowledges the shortcut without pretending that
-   audio levels are already being received. */
-/* Bars are a fixed 16px and scaled vertically (transform is composited, so it
-   stays smooth); RecordingOverlay.tsx eases them every frame. */
-.swave {
-  display: flex;
-  align-items: center;
-  gap: 2.5px;
-  height: 16px;
-  padding: 0 6px;
-  flex: none;
-}
-.swave i {
-  width: 3px;
-  height: 16px;
-  border-radius: 2px;
-  background: var(--s-accent);
-  transform: scaleY(0.3);
-  transition:
-    background-color 180ms ease,
-    opacity 180ms ease;
-}
-.swave.arming i {
-  transform: scaleY(0.3) !important;
-  background: var(--s-muted);
-  opacity: 0.35;
-  animation: swave-arming 900ms ease-in-out infinite;
-}
-.swave.arming i:nth-child(2),
-.swave.arming i:nth-child(8) {
-  animation-delay: 75ms;
-}
-.swave.arming i:nth-child(3),
-.swave.arming i:nth-child(7) {
-  animation-delay: 150ms;
-}
-.swave.arming i:nth-child(4),
-.swave.arming i:nth-child(6) {
-  animation-delay: 225ms;
-}
-.swave.arming i:nth-child(5) {
-  animation-delay: 300ms;
-}
-@keyframes swave-arming {
-  0%,
-  100% {
-    opacity: 0.2;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
 .sx {
   width: 20px;
   height: 20px;

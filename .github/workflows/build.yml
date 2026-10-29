@@ -2,8 +2,9 @@
 # - Run by hand (Actions > Build > Run workflow) or on a pull request: the
 #   .dmg and the Windows installers are attached to the run as artifacts.
 # - Pushing a tag like v0.2.0 also puts them in a draft GitHub release.
-# The Mac app is signed and notarized when the APPLE_* secrets are set;
-# otherwise it gets a throwaway signature. Windows builds are unsigned.
+# On tags and manual runs, the Mac app is signed and notarized when the
+# APPLE_* secrets are set; otherwise, and on pull requests, it gets a
+# throwaway signature. Windows builds are unsigned.
 name: Build
 
 on:
@@ -105,8 +106,9 @@ jobs:
       # settings are passed on only when the secrets exist (one line each).
       # The certificate goes into a keychain here, not through Tauri, so it's
       # there before build_localvqe.sh signs the echo-removal library.
+      # Pull requests stay unsigned: no wait on Apple for builds never shipped.
       - name: Use the Apple signing secrets (macOS)
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && github.event_name != 'pull_request'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}

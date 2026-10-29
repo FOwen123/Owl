@@ -7,7 +7,6 @@ use tauri::AppHandle;
 
 /// The words (lowercased) the spell checker knows. `None` when there is no
 /// spell checker to ask; callers then keep Owl's behaviour.
-// shortcut: macOS only; wire the Windows Spell Checking API when Owl ships there.
 pub fn known_words(app: &AppHandle, words: &[String]) -> Option<HashSet<String>> {
     if words.is_empty() {
         return Some(HashSet::new());
@@ -23,7 +22,12 @@ pub fn known_words(app: &AppHandle, words: &[String]) -> Option<HashSet<String>>
         let _guard = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
         Some(objc2::rc::autoreleasepool(|_| check(words)))
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        let _ = app;
+        check(words)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = app;
         None
@@ -57,6 +61,39 @@ fn check(words: &[String]) -> HashSet<String> {
         })
         .map(|w| w.to_lowercase())
         .collect()
+}
+
+/// Windows' own spell checker, in US English. None when that dictionary
+/// isn't installed.
+#[cfg(target_os = "windows")]
+fn check(words: &[String]) -> Option<HashSet<String>> {
+    use windows::core::HSTRING;
+    use windows::Win32::Globalization::{ISpellCheckerFactory, SpellCheckerFactory};
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
+    };
+    unsafe {
+        // A thread that already set up COM keeps its own mode.
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let factory: ISpellCheckerFactory =
+            CoCreateInstance(&SpellCheckerFactory, None, CLSCTX_INPROC_SERVER).ok()?;
+        let checker = factory.CreateSpellChecker(&HSTRING::from("en-US")).ok()?;
+        Some(
+            words
+                .iter()
+                // Known: the checker finds no error in it.
+                .filter(|w| {
+                    checker
+                        .Check(&HSTRING::from(w.as_str()))
+                        .is_ok_and(|errors| {
+                            let mut error = None;
+                            errors.Next(&mut error).is_ok() && error.is_none()
+                        })
+                })
+                .map(|w| w.to_lowercase())
+                .collect(),
+        )
+    }
 }
 
 #[cfg(all(test, target_os = "macos"))]

@@ -485,7 +485,15 @@ fn frontmost_app() -> Option<i32> {
         .map(|app| app.processIdentifier())
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+fn frontmost_app() -> Option<i32> {
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+    let mut pid = 0;
+    unsafe { GetWindowThreadProcessId(GetForegroundWindow(), Some(&mut pid)) };
+    (pid != 0).then_some(pid as i32)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn frontmost_app() -> Option<i32> {
     None
 }
@@ -503,7 +511,18 @@ fn is_electron(pid: i32) -> bool {
         })
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Whether the window in front is Chromium's (Electron apps, Chrome, Edge),
+/// which also builds its text tree a moment after being asked. It is the
+/// frontmost app's, so `_pid` isn't needed.
+#[cfg(target_os = "windows")]
+fn is_electron(_pid: i32) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetForegroundWindow};
+    let mut class = [0u16; 64];
+    let len = unsafe { GetClassNameW(GetForegroundWindow(), &mut class) };
+    String::from_utf16_lossy(&class[..len.max(0) as usize]) == "Chrome_WidgetWin_1"
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn is_electron(_pid: i32) -> bool {
     false
 }

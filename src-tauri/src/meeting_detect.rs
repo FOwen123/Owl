@@ -3,23 +3,31 @@
 //! call app on the microphone, or a browser on it while a window shows Meet,
 //! Zoom or Teams; dictation apps never count. Reads Core Audio's per-app
 //! list, macOS 14.4+; on older systems nothing is ever asked or stopped.
+//! On Windows, reads the list behind its microphone-in-use icon (`win.rs`).
 
+#[cfg(target_os = "macos")]
 use std::mem::size_of;
+#[cfg(target_os = "macos")]
 use std::ptr::NonNull;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "macos")]
 use objc2_app_kit::NSWorkspace;
+#[cfg(target_os = "macos")]
 use objc2_core_audio::{
     kAudioHardwarePropertyProcessObjectList, kAudioObjectPropertyElementMain,
     kAudioObjectPropertyScopeGlobal, kAudioObjectSystemObject, kAudioProcessPropertyBundleID,
     kAudioProcessPropertyIsRunningInput, AudioObjectGetPropertyData,
     AudioObjectGetPropertyDataSize, AudioObjectID, AudioObjectPropertyAddress,
 };
+#[cfg(target_os = "macos")]
 use objc2_core_foundation::{CFRetained, CFString};
 use tauri::{AppHandle, Manager};
 
+#[cfg(target_os = "macos")]
 use crate::audio_toolkit::audio::system_capture::get_property;
+#[cfg(target_os = "macos")]
 use crate::correction_watch::window_titles;
 use crate::managers::meeting::MeetingManager;
 use crate::meeting_window;
@@ -151,8 +159,14 @@ pub fn resume(app: &AppHandle) {
     }
 }
 
+#[cfg(target_os = "windows")]
+mod win;
+#[cfg(target_os = "windows")]
+use win::{call_tab_open, mic_holders, BROWSERS, CALL_APPS};
+
 /// Apps that only use the microphone for calls, as Wispr Flow lists them.
 /// Lowercase bundle ids; helper processes share the prefix.
+#[cfg(target_os = "macos")]
 const CALL_APPS: &[&str] = &[
     "com.apple.facetime",
     "com.apple.avconferenced",
@@ -167,6 +181,7 @@ const CALL_APPS: &[&str] = &[
 ];
 
 /// Browsers count only while a window shows a call (`call_tab_open`).
+#[cfg(target_os = "macos")]
 const BROWSERS: &[&str] = &[
     "com.google.chrome",
     "org.chromium.chromium",
@@ -198,6 +213,7 @@ fn call_on_mic(in_call: bool) -> bool {
 }
 
 /// Lowercase bundle ids of the apps recording from a microphone.
+#[cfg(target_os = "macos")]
 fn mic_holders() -> Vec<String> {
     let processes = unsafe { process_objects() };
     processes
@@ -209,6 +225,7 @@ fn mic_holders() -> Vec<String> {
         .collect()
 }
 
+#[cfg(target_os = "macos")]
 unsafe fn bundle_id(process: AudioObjectID) -> Option<String> {
     let id = get_property::<*const CFString>(
         process,
@@ -223,6 +240,7 @@ unsafe fn bundle_id(process: AudioObjectID) -> Option<String> {
 }
 
 /// Whether a browser window shows Google Meet, Zoom or Teams.
+#[cfg(target_os = "macos")]
 fn call_tab_open() -> bool {
     NSWorkspace::sharedWorkspace()
         .runningApplications()
@@ -251,6 +269,7 @@ fn is_call_title(title: &str) -> bool {
 }
 
 /// Every app Core Audio knows about; empty when the list can't be read.
+#[cfg(target_os = "macos")]
 unsafe fn process_objects() -> Vec<AudioObjectID> {
     let address = AudioObjectPropertyAddress {
         mSelector: kAudioHardwarePropertyProcessObjectList,

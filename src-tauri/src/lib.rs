@@ -30,7 +30,7 @@ mod local_api;
 mod managers;
 pub mod mcp;
 mod media;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 mod meeting_detect;
 mod meeting_window;
 mod memory;
@@ -439,7 +439,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
     // Owl: ask to take notes when a call starts
     meeting_window::create(app_handle);
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     meeting_detect::start(app_handle.clone());
 }
 

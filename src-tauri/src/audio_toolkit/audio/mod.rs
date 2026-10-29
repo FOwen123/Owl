@@ -4,6 +4,9 @@ mod resampler;
 mod sink;
 #[cfg(target_os = "macos")]
 pub mod system_capture;
+#[cfg(target_os = "windows")]
+#[path = "system_capture_windows.rs"]
+pub mod system_capture;
 mod utils;
 mod visualizer;
 

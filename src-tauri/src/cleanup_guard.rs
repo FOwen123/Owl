@@ -42,7 +42,7 @@ static VERSION_HEADING: Lazy<Regex> = Lazy::new(|| {
 /// 「給我幾種說法」.
 static ASKS_FOR_SEVERAL: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)\b(options|versions|alternatives|variations|ways)\b|[幾几多兩两三四五2-9]\s*[個个種种]?\s*(版本|選項|选项|方案|說法|说法|寫法|写法)",
+        r"(?i)\b(options|versions|alternatives|variations|ways)\b|[幾几多兩两二三四五六七八九十0-9]\s*[個个種种]?\s*(版本|選項|选项|方案|說法|说法|寫法|写法)",
     )
     .expect("valid regex")
 });
@@ -63,6 +63,26 @@ const EDIT_PREAMBLES: &[&str] = &[
     "这是",
 ];
 
+/// Words that say a line introduces the edit rather than being part of it:
+/// "Here's a formal version.", "Sure, here it is."
+const EDIT_INTRO_WORDS: &[&str] = &[
+    "version",
+    "rewrite",
+    "rewritten",
+    "revised",
+    "translation",
+    "translated",
+    "polished",
+    "here it is",
+    "here you go",
+    "版本",
+    "翻譯",
+    "翻译",
+    "改寫",
+    "改写",
+    "修改",
+];
+
 /// Why an Edit by voice reply can't be pasted as it is: it opens like a chat
 /// answer, or offers several versions to choose from when one edit was asked for.
 pub fn edit_problem(
@@ -71,8 +91,9 @@ pub fn edit_problem(
     reply: &str,
 ) -> Option<&'static str> {
     let given = selection.unwrap_or_default().trim().to_lowercase();
-    // Only a first line that introduces what follows, so a translation that
-    // starts "Here is…" or "當然…" is still pasted.
+    // Only a first line that introduces the edit below it: a bare "Sure!", or
+    // one that ends in a colon or names the edit. A translation that starts
+    // "Here is…" or "當然…", or is just "Of course.", is still pasted.
     let first = reply
         .trim()
         .lines()
@@ -80,11 +101,18 @@ pub fn edit_problem(
         .unwrap_or_default()
         .trim()
         .to_lowercase();
-    if first.ends_with([':', '：'])
-        && reply.trim().lines().count() > 1
-        && EDIT_PREAMBLES
-            .iter()
-            .any(|p| first.starts_with(p) && !given.starts_with(p))
+    let more = reply.trim().lines().count() > 1;
+    let introduces = |p: &str| {
+        let rest = first[p.len()..].trim_matches(|c: char| {
+            c.is_whitespace() || c.is_ascii_punctuation() || "！。，".contains(c)
+        });
+        more && (rest.is_empty()
+            || first.ends_with([':', '：'])
+            || EDIT_INTRO_WORDS.iter().any(|w| first.contains(w)))
+    };
+    if EDIT_PREAMBLES
+        .iter()
+        .any(|p| first.starts_with(p) && !given.starts_with(p) && introduces(p))
     {
         return Some("it started with a preamble");
     }

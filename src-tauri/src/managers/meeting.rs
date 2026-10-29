@@ -1325,10 +1325,13 @@ fn record(
     let mut rate_checked = Instant::now();
     while !stop.load(Ordering::Relaxed) {
         std::thread::sleep(Duration::from_millis(50));
+        let mut mic_audio = Vec::new();
         if mic_down.load(Ordering::Relaxed) {
             if let Some(failed) = mic.take() {
                 let reason = failed.stop().map(|s| s.end_reason);
                 log::error!("Meeting: the microphone stopped ({reason:?}); opening it again");
+                // What it heard before failing, kept before its buffer is replaced.
+                mic_audio = mic_track.drain();
                 reopen_at = Instant::now();
                 mic_gap = true;
             }
@@ -1370,15 +1373,15 @@ fn record(
         }
         // Until the microphone's audio flows again, its track records
         // silence, so both tracks stay in step.
-        let mut mic_audio = Vec::new();
         if mic_gap {
             let arrived = mic_track.consumer.slots();
             let due = match &system_track {
                 Some(track) => track.written,
                 None => (began.elapsed().as_secs_f64() * SAMPLE_RATE as f64) as usize,
             };
-            mic_audio = vec![0.0; due.saturating_sub(mic_track.written + arrived)];
-            mic_track.write(&mic_audio);
+            let silence = vec![0.0; due.saturating_sub(mic_track.written + arrived)];
+            mic_track.write(&silence);
+            mic_audio.extend(silence);
             mic_gap = mic.is_none() || arrived == 0;
         }
         mic_audio.extend(mic_track.drain());

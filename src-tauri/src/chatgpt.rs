@@ -478,7 +478,11 @@ pub async fn complete(
         .timeout(Duration::from_secs(120))
         .send()
         .await
-        .map_err(|e| format!("Couldn't reach OpenAI: {e}"))?;
+        // A timeout is said as such: it isn't worth trying again.
+        .map_err(|e| match e.is_timeout() {
+            true => "OpenAI timed out".to_string(),
+            false => format!("Couldn't reach OpenAI: {e}"),
+        })?;
     let status = reply.status();
     let text = reply.text().await.map_err(|e| e.to_string())?;
     if !status.is_success() {

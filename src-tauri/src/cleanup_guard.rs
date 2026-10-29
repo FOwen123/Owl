@@ -38,13 +38,30 @@ static VERSION_HEADING: Lazy<Regex> = Lazy::new(|| {
     .expect("valid regex")
 });
 
-/// An instruction asking for more than one version: "give me three options".
+/// An instruction asking for more than one version: "give me three options",
+/// 「給我幾種說法」.
 static ASKS_FOR_SEVERAL: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?i)\b(options|versions|alternatives|variations|ways)\b|選項|选项|版本|方案|幾種|几种",
+        r"(?i)\b(options|versions|alternatives|variations|ways)\b|[幾几多兩两三四五2-9]\s*[個个種种]?\s*(版本|選項|选项|方案|說法|说法|寫法|写法)",
     )
     .expect("valid regex")
 });
+
+/// How a chat answer opens before the text it offers ("Here's the rewrite:").
+const EDIT_PREAMBLES: &[&str] = &[
+    "here is",
+    "here are",
+    "here's",
+    "sure",
+    "certainly",
+    "of course",
+    "以下是",
+    "好的",
+    "當然",
+    "当然",
+    "這是",
+    "这是",
+];
 
 /// Why an Edit by voice reply can't be pasted as it is: it opens like a chat
 /// answer, or offers several versions to choose from when one edit was asked for.
@@ -53,13 +70,21 @@ pub fn edit_problem(
     selection: Option<&str>,
     reply: &str,
 ) -> Option<&'static str> {
-    let (given, reply_lower) = (
-        selection.unwrap_or_default().trim().to_lowercase(),
-        reply.trim().to_lowercase(),
-    );
-    if PREAMBLES
-        .iter()
-        .any(|p| reply_lower.starts_with(p) && !given.starts_with(p))
+    let given = selection.unwrap_or_default().trim().to_lowercase();
+    // Only a first line that introduces what follows, so a translation that
+    // starts "Here is…" or "當然…" is still pasted.
+    let first = reply
+        .trim()
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_lowercase();
+    if first.ends_with([':', '：'])
+        && reply.trim().lines().count() > 1
+        && EDIT_PREAMBLES
+            .iter()
+            .any(|p| first.starts_with(p) && !given.starts_with(p))
     {
         return Some("it started with a preamble");
     }

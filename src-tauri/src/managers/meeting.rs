@@ -1319,16 +1319,18 @@ fn record(
         }
     };
     let (mut reopen_at, mut reopen_tries) = (Instant::now(), 0);
+    // From a microphone failure until the reopened one delivers audio.
+    let mut mic_gap = false;
     #[cfg(target_os = "macos")]
     let mut rate_checked = Instant::now();
     while !stop.load(Ordering::Relaxed) {
         std::thread::sleep(Duration::from_millis(50));
-        let mut mic_audio = mic_track.drain();
         if mic_down.load(Ordering::Relaxed) {
             if let Some(failed) = mic.take() {
                 let reason = failed.stop().map(|s| s.end_reason);
                 log::error!("Meeting: the microphone stopped ({reason:?}); opening it again");
                 reopen_at = Instant::now();
+                mic_gap = true;
             }
             // The chosen microphone first, then whichever the Mac uses now.
             if reopen_tries < MIC_REOPEN_TRIES && Instant::now() >= reopen_at {
@@ -1366,17 +1368,20 @@ fn record(
                 }
             }
         }
-        // Without a microphone, its track records silence, so both tracks
-        // stay in step.
-        if mic.is_none() {
+        // Until the microphone's audio flows again, its track records
+        // silence, so both tracks stay in step.
+        let mut mic_audio = Vec::new();
+        if mic_gap {
+            let arrived = mic_track.consumer.slots();
             let due = match &system_track {
                 Some(track) => track.written,
                 None => (began.elapsed().as_secs_f64() * SAMPLE_RATE as f64) as usize,
             };
-            let silence = vec![0.0; due.saturating_sub(mic_track.written)];
-            mic_track.write(&silence);
-            mic_audio.extend(silence);
+            mic_audio = vec![0.0; due.saturating_sub(mic_track.written + arrived)];
+            mic_track.write(&mic_audio);
+            mic_gap = mic.is_none() || arrived == 0;
         }
+        mic_audio.extend(mic_track.drain());
         queue(split.push(&mic_audio, &system_audio));
     }
     let stopped = mic.map(|mic| mic.stop()).transpose()?;

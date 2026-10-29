@@ -107,9 +107,11 @@ As drawn on the proposed board, in both themes.
 ## Recording overlay
 
 - Pill on `surface` with a `border`, no shadow in dark mode.
-- Cancel on the left, the menu-bar owl on the right, in `text` with its eyes cut out (`scripts/owl-icons/build-icons.swift` writes its layers).
-- Recording: an `accent` level meter. The owl is sleepy until the mic is live, then blinks and glances around.
-- Transcribing: a `text-muted` label; the owl looks side to side.
+- Cancel on the left, the menu-bar owl on the right, in `text` with its eyes cut out (`scripts/owl-icons/build-icons.swift` cuts it into parts; `src/overlay/Owl.tsx` animates them).
+- Recording: an `accent` level meter. The owl is sleepy until the mic is live, then bobs with your voice and glances around.
+- Transcribing: a `text-muted` label; the owl reads along a line. AI cleanup: it looks up, thinking.
+- The cards (dictionary, no text box, meeting) put the owl in the round badge, in `text`, white once the badge fills. Each state has one mood in small moves; only perked and happy have an entrance, played once.
+- Extras ("?", "Zzz", sparkles) only appear in the cards. The pill clips anything outside the owl.
 - Every motion runs in one loop per screen refresh; with reduced motion the owl stays still.
 - No other colors.
 

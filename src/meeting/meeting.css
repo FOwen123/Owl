@@ -31,8 +31,8 @@ body {
   }
 }
 
-/* The meeting cards: icon, question, button, X. The X sits as far in from
-   the right end as the icon from the left; buttons share a width, so the two
+/* The meeting cards: owl, question, button, X. The X sits as far in from
+   the right end as the owl from the left; buttons share a width, so the two
    cards line up when one follows the other. Wider than the dictionary card
    (CARD_WIDTH in MeetingWindow.tsx), so "Meeting finished?" fits. */
 .scard.ssug.mw-ask {

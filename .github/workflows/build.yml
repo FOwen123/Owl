@@ -103,6 +103,8 @@ jobs:
 
       # Tauri tries to sign with an empty APPLE_CERTIFICATE too, so the
       # settings are passed on only when the secrets exist (one line each).
+      # The certificate goes into a keychain here, not through Tauri, so it's
+      # there before build_localvqe.sh signs the echo-removal library.
       - name: Use the Apple signing secrets (macOS)
         if: runner.os == 'macOS'
         env:
@@ -114,7 +116,16 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           [ -n "$APPLE_CERTIFICATE" ] || exit 0
-          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+          KEYCHAIN="$RUNNER_TEMP/owl-signing.keychain-db"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p owl "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p owl "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k owl "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          for name in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV"
           done
 

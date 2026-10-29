@@ -9,7 +9,15 @@ COMMIT=f53063c9eb2a85f96479867d1dd911dc3bf6319b
 OUT="$(cd "$(dirname "$0")/.." && pwd)/src-tauri/resources/localvqe"
 LIB="$OUT/liblocalvqe.dylib"
 
-[ -f "$LIB" ] && exit 0
+# Tauri signs the app but not its resources, and a signed build won't load
+# or notarize a library without the same Developer ID, so sign it here.
+sign() {
+  [ -n "$APPLE_SIGNING_IDENTITY" ] && [ "$APPLE_SIGNING_IDENTITY" != "-" ] || return 0
+  codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$LIB"
+  echo "LocalVQE: signed $LIB"
+}
+
+[ -f "$LIB" ] && { sign; exit 0; }
 if [ "$(uname)" != "Darwin" ]; then
   echo "LocalVQE: skipped (only built on macOS for now)"
   exit 0
@@ -34,3 +42,4 @@ mkdir -p "$OUT"
 cp "$SRC/build/liblocalvqe.0.1.0.dylib" "$LIB"
 install_name_tool -id @rpath/liblocalvqe.dylib "$LIB"
 echo "LocalVQE: built $LIB"
+sign

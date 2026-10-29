@@ -40,11 +40,13 @@ Some features need a newer macOS:
 
 1. Builds `liblocalvqe.dylib` for echo removal, from
    [LocalVQE](https://github.com/localai-org/LocalVQE) at a pinned commit. This
-   needs git, CMake and a network connection once. After that it's skipped.
+   needs git, CMake and a network connection once. After that it's skipped,
+   except for signing it when you make a [signed build](#signed-builds).
 2. Builds the interface with `tsc` and Vite.
 3. Compiles the Rust app, about 870 crates the first time.
 4. Writes `Owl.app` to `src-tauri/target/release/bundle/macos/` and a `.dmg`
-   to `bundle/dmg/`. Both are signed ad hoc.
+   to `bundle/dmg/`. Both are signed ad hoc unless you make a
+   [signed build](#signed-builds).
 
 The build doesn't download speech models. Owl does that when you pick one.
 
@@ -92,6 +94,29 @@ printf 'Owl Portable Mode' > /path/to/copy/Owl.app/Contents/MacOS/portable
 
 Apple Intelligence is the one part that needs full Xcode. Without Xcode the
 build prints a warning and leaves it out. Every other AI provider still works.
+
+## Signed builds
+
+A `.dmg` that opens on other Macs needs a "Developer ID Application"
+certificate in your keychain and an
+[app-specific password](https://account.apple.com) for notarization.
+
+```bash
+export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+export APPLE_ID="you@example.com" APPLE_TEAM_ID=TEAMID
+read -s APPLE_PASSWORD; export APPLE_PASSWORD
+bun run tauri build
+```
+
+This signs `liblocalvqe.dylib` and the app, sends the app to Apple and staples
+the result. Then notarize and staple the `.dmg` itself:
+
+```bash
+DMG=$(ls src-tauri/target/release/bundle/dmg/*.dmg)
+xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_PASSWORD" --wait
+xcrun stapler staple "$DMG"
+spctl -a -vvv -t open --context context:primary-signature "$DMG"
+```
 
 ## When the build fails
 

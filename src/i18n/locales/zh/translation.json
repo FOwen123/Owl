@@ -534,7 +534,12 @@
           "failed": "无法用 ChatGPT 登录",
           "limitTitle": "Owl 已达到 ChatGPT 使用上限",
           "limitDescription": "在你的套餐额度重置前，AI 整理会暂停。",
-          "usage": "查看用量"
+          "usage": "查看用量",
+          "connect": "连接方式",
+          "connectDescription": "你的 ChatGPT 套餐，或 OpenAI API 密钥。",
+          "signInOption": "ChatGPT 账号",
+          "apiKeyOption": "OpenAI API 密钥",
+          "apiKeyDescription": "在 platform.openai.com 获取。OpenAI 单独计费，与 ChatGPT 套餐无关。"
         },
         "apiKey": {
           "title": "API 密钥",

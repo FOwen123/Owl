@@ -534,7 +534,12 @@
           "failed": "Couldn't sign in with ChatGPT",
           "limitTitle": "Owl reached its ChatGPT limit",
           "limitDescription": "AI cleanup pauses until your plan's allowance resets.",
-          "usage": "View usage"
+          "usage": "View usage",
+          "connect": "Connect with",
+          "connectDescription": "Your ChatGPT plan, or an OpenAI API key.",
+          "signInOption": "ChatGPT account",
+          "apiKeyOption": "OpenAI API key",
+          "apiKeyDescription": "From platform.openai.com. OpenAI bills it separately from your ChatGPT plan."
         },
         "apiKey": {
           "title": "API キー",

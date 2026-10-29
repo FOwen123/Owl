@@ -13,6 +13,7 @@ import {
 import { Button } from "../../ui/Button";
 import { ResetButton } from "../../ui/ResetButton";
 import { Input } from "../../ui/Input";
+import { SegmentedControl } from "../../ui/SegmentedControl";
 
 import { ProviderSelect } from "../PostProcessingSettingsApi/ProviderSelect";
 import { BaseUrlField } from "../PostProcessingSettingsApi/BaseUrlField";
@@ -23,9 +24,20 @@ import { usePostProcessProviderState } from "../PostProcessingSettingsApi/usePos
 import { PostProcessingToggle } from "../PostProcessingToggle";
 import { useSettings } from "../../../hooks/useSettings";
 
-const PostProcessingSettingsApiComponent: React.FC = () => {
+/** `connectSwitch={false}`: the caller already asks account or API key, so
+ * the list offers OpenAI for a key and leaves ChatGPT out. */
+const PostProcessingSettingsApiComponent: React.FC<{
+  connectSwitch?: boolean;
+}> = ({ connectSwitch = true }) => {
   const { t } = useTranslation();
   const state = usePostProcessProviderState();
+  // Owl: one ChatGPT entry, signed in ("chatgpt") or with an OpenAI API key
+  // ("openai"); they stay two providers so each keeps its own model.
+  const isChatGpt =
+    connectSwitch &&
+    (state.selectedProviderId === "chatgpt" ||
+      state.selectedProviderId === "openai");
+  const hidden = connectSwitch ? "openai" : "chatgpt";
 
   return (
     <>
@@ -38,12 +50,43 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
       >
         <div className="flex items-center gap-2">
           <ProviderSelect
-            options={state.providerOptions}
-            value={state.selectedProviderId}
-            onChange={state.handleProviderSelect}
+            options={state.providerOptions.filter((o) => o.value !== hidden)}
+            value={isChatGpt ? "chatgpt" : state.selectedProviderId}
+            onChange={(id) => {
+              // Re-picking ChatGPT keeps the side already chosen.
+              if (!(isChatGpt && id === "chatgpt"))
+                state.handleProviderSelect(id);
+            }}
           />
         </div>
       </SettingContainer>
+
+      {isChatGpt && (
+        <SettingContainer
+          title={t("settings.postProcessing.api.chatgpt.connect")}
+          description={t(
+            "settings.postProcessing.api.chatgpt.connectDescription",
+          )}
+          descriptionMode="tooltip"
+          layout="horizontal"
+          grouped={true}
+        >
+          <SegmentedControl
+            options={[
+              {
+                value: "chatgpt",
+                label: t("settings.postProcessing.api.chatgpt.signInOption"),
+              },
+              {
+                value: "openai",
+                label: t("settings.postProcessing.api.chatgpt.apiKeyOption"),
+              },
+            ]}
+            value={state.selectedProviderId}
+            onChange={state.handleProviderSelect}
+          />
+        </SettingContainer>
+      )}
 
       {state.isAppleProvider ? (
         state.appleIntelligenceUnavailable ? (
@@ -88,7 +131,11 @@ const PostProcessingSettingsApiComponent: React.FC = () => {
           ) : (
             <SettingContainer
               title={t("settings.postProcessing.api.apiKey.title")}
-              description={t("settings.postProcessing.api.apiKey.description")}
+              description={
+                state.selectedProviderId === "openai"
+                  ? t("settings.postProcessing.api.chatgpt.apiKeyDescription")
+                  : t("settings.postProcessing.api.apiKey.description")
+              }
               descriptionMode="tooltip"
               layout="horizontal"
               grouped={true}

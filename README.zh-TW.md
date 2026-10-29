@@ -37,9 +37,11 @@ Owl 會保留最近 5 次語音輸入的音訊，以及你手動儲存的音訊�
 
 ## 狀態
 
-還在早期階段，為一個人的日常使用而做。目前沒有可下載的版本，需要自己建置。我在 macOS 26 上建置和使用它。Windows 和 Linux 的程式碼還在，但沒有測試過。
+還在早期階段，為一個人的日常使用而做。可以下載 Mac 版，也可以自己建置。我在 macOS 26 上建置和使用它。Windows 和 Linux 的程式碼還在，但沒有測試過。
 
 ## 系統需求
+
+下載版需要搭載 Apple Silicon 的 Mac。自己建置則需要：
 
 - [Rust](https://rustup.rs) 1.99 或更新版本
 - [Bun](https://bun.sh) 1.4 或更新版本
@@ -49,7 +51,11 @@ Owl 會保留最近 5 次語音輸入的音訊，以及你手動儲存的音訊�
 
 ## 安裝
 
-### 1. 建置
+### 下載
+
+從[最新版本](https://github.com/FOwen123/Owl/releases/latest)下載 `Owl_<版本>_aarch64.dmg`，打開後把 Owl 拖進「應用程式」，再開啟它。
+
+### 自己建置
 
 ```bash
 git clone https://github.com/FOwen123/Owl.git
@@ -60,18 +66,22 @@ bun run tauri build
 
 第一次建置需要一段時間。如果 CMake 報錯說政策版本太舊，請執行 `CMAKE_POLICY_VERSION_MINIMUM=3.5 bun run tauri build`。
 
-### 2. 安裝並開啟
+接著安裝並開啟：
 
 ```bash
 cp -R src-tauri/target/release/bundle/macos/Owl.app /Applications/
 open /Applications/Owl.app
 ```
 
+### 設定
+
 Owl 會一步步帶你完成設定：你的名字（會議筆記會用它）、你想用 Owl 做什麼、下載一個語音模型、麥克風和輔助使用權限、你的快捷鍵和一次簡短的聽寫測試，最後可以選擇接上 AI 來整理文字和寫筆記。輔助使用權限是用來把文字貼到其他 App 裡。Qwen3-ASR 1.7B 擅長中英夾雜，Parakeet Unified 速度快，但只支援英文。
 
 如果要做會議筆記，設定時還會要求系統錄音（System Audio Recording）權限，這樣 Owl 才能聽到通話的聲音。
 
 ### 更新
+
+Owl 會檢查新版本並自動更新，你也可以在視窗底部手動檢查。如果是自己建置的，請這樣更新：
 
 ```bash
 cd Owl

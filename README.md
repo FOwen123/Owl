@@ -59,11 +59,13 @@ lives in `~/Library/Application Support/com.hao.owl/`.
 
 ## Status
 
-Early, and built for one person's daily use. There are no downloads yet, so
-you build Owl yourself. I build and use it on macOS 26. The Windows and Linux
+Early, and built for one person's daily use. Download the Mac app or build it
+yourself. I build and use it on macOS 26. The Windows and Linux
 code is there but untested.
 
 ## Requirements
+
+The download runs on a Mac with Apple Silicon. To build Owl yourself you need:
 
 - [Rust](https://rustup.rs) 1.99 or newer
 - [Bun](https://bun.sh) 1.4 or newer
@@ -75,7 +77,13 @@ list what you need.
 
 ## Install
 
-### 1. Build
+### Download
+
+Download `Owl_<version>_aarch64.dmg` from the
+[latest release](https://github.com/FOwen123/Owl/releases/latest), open the
+disk image, drag Owl into Applications and open Owl.
+
+### Build from source
 
 ```bash
 git clone https://github.com/FOwen123/Owl.git
@@ -87,12 +95,14 @@ bun run tauri build
 The first build takes a while. If CMake fails with a message about an old
 policy version, run `CMAKE_POLICY_VERSION_MINIMUM=3.5 bun run tauri build`.
 
-### 2. Install and open
+Then install and open it:
 
 ```bash
 cp -R src-tauri/target/release/bundle/macos/Owl.app /Applications/
 open /Applications/Owl.app
 ```
+
+### Setup
 
 Owl walks you through setup: your name (meeting notes use it), what you'll
 use it for, a speech model to download, Microphone and Accessibility access,
@@ -104,6 +114,9 @@ For meeting notes, setup also asks for System Audio Recording, so Owl can hear
 the call.
 
 ### Update
+
+Owl checks for new versions and updates itself. You can also check from the
+bottom of its window. If you build Owl yourself, update it with:
 
 ```bash
 cd Owl

@@ -7,7 +7,7 @@ there are no earphones.
   [LocalAI-io/LocalVQE](https://huggingface.co/LocalAI-io/LocalVQE) (revision
   `29ca38495cba9d6393a92a4dd890f28dd81f758d`, SHA-256
   `b6e43138588a83bfe903ab5e143b4020b91c1e1629f5a575ac5855ff0003c731`).
-- `liblocalvqe.dylib`: built from
+- `liblocalvqe.dylib` (`localvqe.dll` on Windows): built from
   [localai-org/LocalVQE](https://github.com/localai-org/LocalVQE) by
   `scripts/build_localvqe.sh`; not committed.
 

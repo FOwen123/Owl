@@ -8,6 +8,7 @@ import { useOsType } from "../../hooks/useOsType";
 import { useModelStore } from "../../stores/modelStore";
 import { formatKeyCombination } from "../../lib/utils/keyboard";
 import { pendingModel } from "./ModelStep";
+import { Waveform } from "@/overlay/Waveform";
 
 const isWordChar = (c: string) => /[\p{L}\p{N}]/u.test(c);
 
@@ -39,7 +40,9 @@ export const TryStep: React.FC<{ onDone: (done: boolean) => void }> = ({
   const { models, downloadProgress } = useModelStore();
   const [text, setText] = useState("");
   const [live, setLive] = useState("");
-  const [levels, setLevels] = useState<number[]>([]);
+  // Latest mic levels for the waveform; a ref, so ~24 events a second don't
+  // re-render the step.
+  const levels = useRef<number[]>([]);
   const [listening, setListening] = useState(false);
   const lastLevel = useRef(0);
   const box = useRef<HTMLTextAreaElement>(null);
@@ -60,7 +63,7 @@ export const TryStep: React.FC<{ onDone: (done: boolean) => void }> = ({
   useEffect(() => {
     const unlisten = listen<number[]>("mic-level", (event) => {
       lastLevel.current = Date.now();
-      setLevels(event.payload.slice(0, 9));
+      levels.current = event.payload;
     });
     const timer = setInterval(
       () => setListening(Date.now() - lastLevel.current < 400),
@@ -141,19 +144,8 @@ export const TryStep: React.FC<{ onDone: (done: boolean) => void }> = ({
       </span>
       {listening ? (
         <>
-          <span className="flex items-center gap-[3px] h-[22px]" aria-hidden>
-            {levels.map((level, i) => (
-              <i
-                key={i}
-                className="w-[3px] rounded-full bg-accent transition-[height] duration-100"
-                style={{ height: `${4 + Math.min(level, 1) * 18}px` }}
-              />
-            ))}
-          </span>
-          <span className="font-medium text-accent">
-            {t("onboarding.try.listening")}
-          </span>
-          <span className="text-text-muted">· {t("onboarding.try.letGo")}</span>
+          <Waveform levels={levels} ready />
+          <span className="text-text-muted">{t("onboarding.try.letGo")}</span>
         </>
       ) : (
         <span className="text-text-muted">{t("onboarding.try.hold")}</span>

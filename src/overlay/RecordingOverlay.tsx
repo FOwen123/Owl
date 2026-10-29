@@ -15,6 +15,7 @@ import i18n, { syncLanguageFromSettings } from "@/i18n";
 import type { ModelStateEvent } from "@/lib/types/events";
 import { getLanguageDirection } from "@/lib/utils/rtl";
 import { Owl, type OwlMood } from "./Owl";
+import { Waveform } from "./Waveform";
 
 type OverlayState =
   | "recording"
@@ -44,12 +45,6 @@ interface NoTextBox {
   text: string;
   seconds: number;
 }
-
-// Number of reactive bars in the waveform (the simple, smoothed style shared by
-// every overlay form). Mic levels arrive as 16 FFT buckets; we take the first N.
-const WAVE_BARS = 9;
-// Taller in the middle, like a voice, so even uneven levels read as one shape.
-const WAVE_ENVELOPE = [0.5, 0.68, 0.84, 0.96, 1, 0.96, 0.84, 0.68, 0.5];
 
 // Only call out a model load in the Live preview once it has run this long.
 // Warm loads finish in well under this (~0.2s on Apple Silicon, ~1.5s on a
@@ -101,9 +96,6 @@ const RecordingOverlay: React.FC = () => {
   // Latest mic levels, read by the animation loop below. Kept out of React state
   // so ~24 level events a second don't re-render the overlay.
   const levelsRef = useRef<number[]>(Array(16).fill(0));
-  // What the animation loop needs to know, refreshed on every render.
-  const motionRef = useRef({ ready: false });
-  const barsRef = useRef<(HTMLElement | null)[]>([]);
   // How loud you are (0–1), for the owl to bob along.
   const voiceRef = useRef(0);
   // Live-text scroll-back: the text region "sticks" to the newest line while the
@@ -237,44 +229,6 @@ const RecordingOverlay: React.FC = () => {
     setupEventListeners();
   }, []);
 
-  // One loop, once per screen refresh, eases the waveform toward the latest mic
-  // levels and tells the owl how loud you are. Writing styles directly (no
-  // re-render, no CSS transition restarted by every level event) is what keeps
-  // it smooth.
-  useEffect(() => {
-    if (!isVisible || state === "suggestion" || state === "notice") return;
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const shown = Array(WAVE_BARS).fill(0);
-    let last = performance.now();
-    // Moves `from` toward `to`, `rate` per second, frame-rate independent.
-    const ease = (from: number, to: number, rate: number, dt: number) =>
-      from + (to - from) * (1 - Math.exp(-rate * dt));
-
-    let raf = requestAnimationFrame(function tick(now) {
-      const dt = Math.min(now - last, 100) / 1000;
-      last = now;
-      const { ready } = motionRef.current;
-
-      // Waveform: rise fast, fall slowly, so bars flow instead of flickering,
-      // plus a slow ripple so a pause never looks frozen.
-      let loudest = 0;
-      for (let i = 0; i < WAVE_BARS; i++) {
-        const target = ready ? levelsRef.current[i] || 0 : 0;
-        shown[i] = ease(shown[i], target, target > shown[i] ? 18 : 5, dt);
-        loudest = Math.max(loudest, shown[i]);
-        const ripple = still ? 1 : 1 + 0.12 * Math.sin(now / 220 - i * 0.6);
-        const level =
-          (0.3 + Math.pow(shown[i], 0.7) * 0.6 * WAVE_ENVELOPE[i]) * ripple;
-        const bar = barsRef.current[i];
-        if (bar) bar.style.transform = `scaleY(${Math.min(1, level)})`;
-      }
-      voiceRef.current = loudest;
-
-      raf = requestAnimationFrame(tick);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [isVisible, state]);
-
   // Elapsed capture timer starts only once microphone samples are flowing.
   useEffect(() => {
     if (state !== "streaming" || !isVisible || !captureReady) return;
@@ -304,8 +258,6 @@ const RecordingOverlay: React.FC = () => {
     setOverflowing(false);
   }, [session]);
 
-  motionRef.current = { ready: captureReady };
-
   if (!isVisible) return null;
 
   // Re-pin when the user is within ~a line of the bottom; unpin otherwise.
@@ -324,16 +276,11 @@ const RecordingOverlay: React.FC = () => {
 
   // ---- Shared building blocks (one visual language for every overlay form) ----
   const waveform = (
-    <div className={`swave ${captureReady ? "ready" : "arming"}`}>
-      {Array.from({ length: WAVE_BARS }, (_, i) => (
-        <i
-          key={i}
-          ref={(el) => {
-            barsRef.current[i] = el;
-          }}
-        />
-      ))}
-    </div>
+    <Waveform
+      levels={levelsRef}
+      ready={captureReady}
+      onLoudest={(level) => (voiceRef.current = level)}
+    />
   );
 
   const cancelBtn = (

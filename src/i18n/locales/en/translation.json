@@ -132,8 +132,7 @@
       },
       "systemAudio": {
         "title": "System Audio",
-        "description": "Required to hear the other side of a call.",
-        "asked": "Asked"
+        "description": "Required to hear the other side of a call."
       },
       "openSettings": "Not seeing a prompt? Open System Settings"
     },

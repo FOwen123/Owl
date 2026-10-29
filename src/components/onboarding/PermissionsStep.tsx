@@ -62,7 +62,8 @@ export const PermissionsStep: React.FC<{
   const [os, setOs] = useState<Platform | null>(null);
   const [mic, setMic] = useState<Status>("checking");
   const [ax, setAx] = useState<Status>("checking");
-  const [systemAudio, setSystemAudio] = useState<"needed" | "asked">("needed");
+  const [systemAudio, setSystemAudio] = useState<Status>("needed");
+  const [audioAsked, setAudioAsked] = useState(false);
   const polling = useRef<ReturnType<typeof setInterval> | null>(null);
   const errors = useRef(0);
 
@@ -167,9 +168,13 @@ export const PermissionsStep: React.FC<{
 
   const askSystemAudio = async () => {
     if (preview) return;
+    setSystemAudio("waiting");
     const result = await commands.requestSystemAudioPermission();
     if (result.status === "error") toast.error(result.error);
-    setSystemAudio("asked");
+    setSystemAudio(
+      result.status === "ok" && result.data ? "granted" : "needed",
+    );
+    setAudioAsked(true);
   };
 
   // The first permission still needed gets the primary button.
@@ -182,10 +187,11 @@ export const PermissionsStep: React.FC<{
   const control = (status: Status, onGrant: () => void, isNext: boolean) => {
     if (status === "granted")
       return (
-        <span className="flex items-center gap-1.5 text-sm font-medium text-success-foreground">
-          <Check className="w-4 h-4" />
-          {t("onboarding.permissions.granted")}
-        </span>
+        <Check
+          role="img"
+          aria-label={t("onboarding.permissions.granted")}
+          className="w-5 h-5 text-success-foreground"
+        />
       );
     if (status === "waiting" || status === "checking")
       return (
@@ -208,7 +214,10 @@ export const PermissionsStep: React.FC<{
   };
 
   const missingPane =
-    next ?? (meetings && systemAudio === "asked" ? "systemAudio" : null);
+    next ??
+    (meetings && audioAsked && systemAudio !== "granted"
+      ? "systemAudio"
+      : null);
 
   return (
     <div className="w-full max-w-[520px] flex flex-col items-center gap-4">
@@ -252,20 +261,7 @@ export const PermissionsStep: React.FC<{
               title={t("onboarding.permissions.systemAudio.title")}
               description={t("onboarding.permissions.systemAudio.description")}
             >
-              {systemAudio === "asked" ? (
-                <span className="flex items-center gap-1.5 text-sm text-text-muted">
-                  <Check className="w-4 h-4" />
-                  {t("onboarding.permissions.systemAudio.asked")}
-                </span>
-              ) : (
-                <Button
-                  size="sm"
-                  variant={next === null ? "primary" : "secondary"}
-                  onClick={askSystemAudio}
-                >
-                  {t("onboarding.permissions.grant")}
-                </Button>
-              )}
+              {control(systemAudio, askSystemAudio, next === null)}
             </PermissionRow>
           )}
         </SettingsGroup>

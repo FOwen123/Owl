@@ -175,21 +175,29 @@ pub fn change_user_name_setting(app: AppHandle, name: String) -> Result<(), Stri
     Ok(())
 }
 
-/// Owl: asks macOS for System Audio Recording during onboarding. Starting a
-/// tap shows the prompt the first time; whether it was allowed can't be read
-/// back (a refused tap just hears silence), so this only asks.
+/// Owl: asks macOS for System Audio Recording during onboarding, and whether
+/// it was allowed. Starting a tap shows the prompt the first time; this then
+/// waits up to 12 s for the user's answer, as Muesli does.
 #[tauri::command]
 #[specta::specta]
-pub async fn request_system_audio_permission() -> Result<(), String> {
+pub async fn request_system_audio_permission() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
-    tauri::async_runtime::spawn_blocking(|| {
-        let (_source, _tap) = crate::audio_toolkit::audio::system_capture::start()?;
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        Ok::<(), String>(())
+    return tauri::async_runtime::spawn_blocking(|| {
+        use crate::audio_toolkit::audio::system_capture;
+        let _capture =
+            system_capture::start().map_err(|e| log::warn!("System audio permission request: {e}"));
+        for _ in 0..40 {
+            if system_capture::permission_granted() {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+        system_capture::permission_granted()
     })
     .await
-    .map_err(|e| e.to_string())??;
-    Ok(())
+    .map_err(|e| e.to_string());
+    #[cfg(not(target_os = "macos"))]
+    Ok(true)
 }
 
 #[tauri::command]

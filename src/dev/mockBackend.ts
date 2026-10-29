@@ -316,6 +316,8 @@ export function installMockBackend() {
           (settings.replacements as Pair[]).push(suggestion);
         return null;
       }
+      if (cmd === "request_system_audio_permission")
+        return new Promise((done) => setTimeout(() => done(true), 800));
       if (cmd.startsWith("plugin:macos-permissions|check")) return !firstRun;
       if (cmd.startsWith("plugin:macos-permissions|")) return null;
       return null;

@@ -1109,11 +1109,11 @@ async changeUserNameSetting(name: string) : Promise<Result<null, string>> {
 }
 },
 /**
- * Owl: asks macOS for System Audio Recording during onboarding. Starting a
- * tap shows the prompt the first time; whether it was allowed can't be read
- * back (a refused tap just hears silence), so this only asks.
+ * Owl: asks macOS for System Audio Recording during onboarding, and whether
+ * it was allowed. Starting a tap shows the prompt the first time; this then
+ * waits up to 12 s for the user's answer, as Muesli does.
  */
-async requestSystemAudioPermission() : Promise<Result<null, string>> {
+async requestSystemAudioPermission() : Promise<Result<boolean, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("request_system_audio_permission") };
 } catch (e) {

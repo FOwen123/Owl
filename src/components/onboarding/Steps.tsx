@@ -143,7 +143,18 @@ export const AiStep: React.FC<{ onReady: (ready: boolean) => void }> = ({
     checkSignIn();
   }, []);
 
-  const ready = mode === "chatgpt" ? signedIn : !!state.apiKey.trim();
+  // Signing in leaves the model empty, and cleanup skips without one: take
+  // the account's first. With a key, the user picks it in the rows below.
+  const { model, handleModelSelect } = state;
+  useEffect(() => {
+    if (mode !== "chatgpt" || !signedIn || model) return;
+    commands.fetchPostProcessModels("chatgpt").then((r) => {
+      if (r.status === "ok" && r.data[0]) handleModelSelect(r.data[0]);
+    });
+  }, [mode, signedIn, model, handleModelSelect]);
+
+  const ready =
+    (mode === "chatgpt" ? signedIn : !!state.apiKey.trim()) && !!model.trim();
   useEffect(() => {
     onReady(ready);
     if (ready) updateSetting("post_process_enabled", true);

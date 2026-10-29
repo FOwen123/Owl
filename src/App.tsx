@@ -288,9 +288,18 @@ function App() {
         settingsResult.data.onboarding_completed === true;
       const currentPlatform = platform();
 
+      // A setup resumed past Permissions skips the step that starts typing
+      // and the shortcut, which Shortcut and Try it need.
+      const saved = savedProgress();
+      if (saved && !["welcome", "model", "permissions"].includes(saved.step))
+        Promise.all([
+          commands.initializeEnigo(),
+          commands.initializeShortcuts(),
+        ]).catch((e) => console.warn("Failed to initialize:", e));
+
       // Picking a model marks onboarding done, so a setup quit midway
       // resumes from what it saved.
-      if (hasCompletedOnboarding && savedProgress()) {
+      if (hasCompletedOnboarding && saved) {
         setOnboardingStep("onboarding");
       } else if (hasCompletedOnboarding) {
         // Returning user - check if they need to grant permissions first

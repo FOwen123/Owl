@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { ChevronDown } from "lucide-react";
@@ -22,11 +22,20 @@ export const usePendingModelSelection = () => {
     verifyingModels,
     extractingModels,
     selectModel,
+    downloadModel,
   } = useModelStore();
+  const resumed = useRef(false);
 
   useEffect(() => {
     const id = pendingModel();
     const model = models.find((m) => m.id === id);
+    // Once per launch, when the catalog arrives: a download cut off by
+    // quitting Owl starts again.
+    if (!resumed.current && models.length) {
+      resumed.current = true;
+      if (model && !model.is_downloaded && !(model.id in downloadingModels))
+        downloadModel(model.id);
+    }
     if (
       !id ||
       !model?.is_downloaded ||
@@ -45,6 +54,7 @@ export const usePendingModelSelection = () => {
     verifyingModels,
     extractingModels,
     selectModel,
+    downloadModel,
     t,
   ]);
 };
@@ -66,6 +76,7 @@ export const ModelStep: React.FC<{
     downloadProgress,
     downloadStats,
     cancelDownload,
+    selectModel,
   } = useModelStore();
   const [showAll, setShowAll] = useState(false);
 
@@ -87,9 +98,16 @@ export const ModelStep: React.FC<{
 
   const choose = async (id: string) => {
     if (preview) return;
-    localStorage.setItem(PENDING, id);
     onChoose(id);
-    if (models.find((m) => m.id === id)?.is_downloaded) return;
+    if (models.find((m) => m.id === id)?.is_downloaded) {
+      localStorage.removeItem(PENDING);
+      if (!(await selectModel(id))) {
+        toast.error(t("onboarding.errors.selectModel"));
+        onChoose(null);
+      }
+      return;
+    }
+    localStorage.setItem(PENDING, id);
     // Error toasts come from modelStore's model-download-failed listener.
     if (!(await downloadModel(id))) {
       localStorage.removeItem(PENDING);

@@ -89,6 +89,12 @@ export const TryStep: React.FC<{ onDone: (done: boolean) => void }> = ({
     if (listening) setLive("");
   }, [listening]);
 
+  // The box is disabled until the model is ready, so focus it then: that's
+  // where the dictation lands.
+  useEffect(() => {
+    if (ready) box.current?.focus();
+  }, [ready]);
+
   const done = !listening && text.trim().length > 0;
   useEffect(() => onDone(done), [done, onDone]);
 
@@ -170,7 +176,6 @@ export const TryStep: React.FC<{ onDone: (done: boolean) => void }> = ({
       </div>
       <textarea
         ref={box}
-        autoFocus
         value={text}
         onChange={(e) => setText(e.target.value)}
         disabled={!ready}

@@ -189,7 +189,7 @@ export const AiStep: React.FC<{ onReady: (ready: boolean) => void }> = ({
               />
             </SettingContainer>
           ) : (
-            <PostProcessingSettingsApi />
+            <PostProcessingSettingsApi connectSwitch={false} />
           )}
         </SettingsGroup>
       </div>

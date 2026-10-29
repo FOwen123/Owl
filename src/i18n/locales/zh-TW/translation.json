@@ -534,7 +534,12 @@
           "failed": "無法用 ChatGPT 登入",
           "limitTitle": "Owl 已達 ChatGPT 使用上限",
           "limitDescription": "在你的方案額度重置前，AI 整理會暫停。",
-          "usage": "查看用量"
+          "usage": "查看用量",
+          "connect": "連接方式",
+          "connectDescription": "你的 ChatGPT 方案，或 OpenAI API 金鑰。",
+          "signInOption": "ChatGPT 帳號",
+          "apiKeyOption": "OpenAI API 金鑰",
+          "apiKeyDescription": "在 platform.openai.com 取得。OpenAI 另外計費，與 ChatGPT 方案無關。"
         },
         "apiKey": {
           "title": "API 金鑰",

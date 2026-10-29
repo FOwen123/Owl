@@ -175,10 +175,41 @@ func layer(_ include: (Int) -> Bool) -> NSBitmapImageRep {
     return rep
 }
 
-// --- Overlay owl: the menu-bar mascot in three masks, so it can blink and look around.
+// --- Overlay owl: the menu-bar mascot cut into parts, so it can blink, look
+// around, twitch its tufts and flap its wings (src/overlay/Owl.tsx).
 let parts = path("src/overlay/owl")
 try! FileManager.default.createDirectory(atPath: parts, withIntermediateDirectories: true)
-save(canvas(128) { r in layer { ink[$0] && !pupil[$0] }.over(r) }, "\(parts)/body.png")
+let size = 256
+// Source pixel -> percent of the cropped square, for pivots and eye boxes.
+func pct(_ x: Int, _ y: Int) -> [Double] {
+    [Double(x - (cx - side / 2)) / Double(side) * 100, Double(y - (cy - side / 2)) / Double(side) * 100]
+}
+func at(_ i: Int) -> (x: Int, y: Int) { (i % w, i / w) }
+// Ear tufts: what's above a slanted line across each tuft's root. The tuft
+// layer reaches 14 px past the line so it still covers the joint when it turns.
+func aboveLeftTuft(_ i: Int, _ pad: Int = 0) -> Bool {
+    let (x, y) = at(i); return x < 470 && Double(y) < 246 - Double(x - 350) * 0.15 + Double(pad)
+}
+func aboveRightTuft(_ i: Int, _ pad: Int = 0) -> Bool {
+    let (x, y) = at(i); return x > 655 && Double(y) < 275 + Double(x - 655) * 0.517 + Double(pad)
+}
+// Feet: everything under the body's bottom edge.
+func foot(_ i: Int) -> Bool { at(i).y >= 814 }
+save(canvas(size) { r in layer { ink[$0] && !pupil[$0] && !aboveLeftTuft($0) && !aboveRightTuft($0) && !foot($0) }.over(r) }, "\(parts)/body.png")
+save(canvas(size) { r in layer { ink[$0] && !pupil[$0] && aboveLeftTuft($0, 14) }.over(r) }, "\(parts)/tuft-left.png")
+save(canvas(size) { r in layer { ink[$0] && !pupil[$0] && aboveRightTuft($0, 14) }.over(r) }, "\(parts)/tuft-right.png")
+// Wings: the shaggy sides, a crescent outside the round of the body. They stay
+// drawn on the body too, so a wing that lifts away unfolds from the side
+// instead of leaving a hole.
+func wing(_ i: Int) -> Bool {
+    let (x, y) = at(i)
+    let dx = Double(x - 515) / 235, dy = Double(y - 575) / 250
+    return ink[i] && dx * dx + dy * dy > 1 && y > 440 && y < 760
+}
+save(canvas(size) { r in layer { wing($0) && at($0).x < 515 }.over(r) }, "\(parts)/wing-left.png")
+save(canvas(size) { r in layer { wing($0) && at($0).x >= 515 }.over(r) }, "\(parts)/wing-right.png")
+save(canvas(size) { r in layer { ink[$0] && foot($0) && at($0).x < 510 }.over(r) }, "\(parts)/foot-left.png")
+save(canvas(size) { r in layer { ink[$0] && foot($0) && at($0).x >= 510 }.over(r) }, "\(parts)/foot-right.png")
 // The eye mask reaches a little past the eye edge, so a closed lid overlaps
 // the body instead of leaving a faint seam.
 var eyeMask = eyeHole
@@ -188,8 +219,33 @@ for _ in 0..<12 {
         eyeMask[i] = true
     }
 }
-save(canvas(128) { r in layer { eyeMask[$0] }.over(r) }, "\(parts)/eyes.png")
-save(canvas(128) { r in layer { pupil[$0] }.over(r) }, "\(parts)/pupils.png")
+save(canvas(size) { r in layer { eyeMask[$0] }.over(r) }, "\(parts)/eyes.png")
+// One pupil per eye, so each can grow or shrink about its own center.
+let byX = eyes.sorted { $0.minX < $1.minX }
+let leftWhite = byX[0], rightWhite = byX[1]
+func inBox(_ i: Int, _ e: Region) -> Bool { let (x, y) = at(i); return x >= e.minX && x <= e.maxX && y >= e.minY && y <= e.maxY }
+save(canvas(size) { r in layer { pupil[$0] && inBox($0, leftWhite) }.over(r) }, "\(parts)/pupil-left.png")
+save(canvas(size) { r in layer { pupil[$0] && inBox($0, rightWhite) }.over(r) }, "\(parts)/pupil-right.png")
+func center(_ include: (Int) -> Bool) -> [Double] {
+    var sx = 0, sy = 0, n = 0
+    for i in 0..<(w * h) where include(i) { sx += i % w; sy += i / w; n += 1 }
+    return pct(sx / n, sy / n)
+}
+// Where each part turns, and each eye's box (left, top, right, bottom), in
+// percent of the owl, for Owl.tsx.
+let rig: [String: [Double]] = [
+    "tuftLeft": pct(405, 240), "tuftRight": pct(705, 315),
+    "wingLeft": pct(290, 470), "wingRight": pct(740, 450),
+    "pupilLeft": center { pupil[$0] && inBox($0, leftWhite) },
+    "pupilRight": center { pupil[$0] && inBox($0, rightWhite) },
+    "eyeLeft": pct(leftWhite.minX, leftWhite.minY) + pct(leftWhite.maxX, leftWhite.maxY),
+    "eyeRight": pct(rightWhite.minX, rightWhite.minY) + pct(rightWhite.maxX, rightWhite.maxY),
+]
+let json = "{\n" + rig.keys.sorted().map { key in
+    "  \"\(key)\": [" + rig[key]!.map { String(format: "%.1f", $0) }.joined(separator: ", ") + "]"
+}.joined(separator: ",\n") + "\n}\n"
+try! json.write(toFile: "\(parts)/rig.json", atomically: true, encoding: .utf8)
+print("wrote", "\(parts)/rig.json")
 
 // --- In-app mark ---------------------------------------------------------------
 save(canvas(512) { r in owl(ink: .black, paper: .white).over(r) }, path("src/assets/owl-mark.png"))

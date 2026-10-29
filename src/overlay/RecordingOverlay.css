@@ -249,7 +249,7 @@
   padding-right: 1px;
   justify-self: end;
 }
-/* The menu-bar owl (RecordingOverlay.tsx animates it): masks filled with the
+/* The menu-bar owl, in parts (Owl.tsx animates them): masks filled with the
    text color, its eye openings left clear so the pill shows through. */
 .sowl {
   position: relative;
@@ -258,19 +258,40 @@
   flex: none;
   color: var(--color-text);
 }
-.sowl-layer {
+.sowl-layer,
+.sowl-frame {
   position: absolute;
   inset: 0;
+}
+.sowl-layer {
   background: currentColor;
   -webkit-mask-size: 100% 100%;
   mask-size: 100% 100%;
 }
+.sowl-frame {
+  transform-origin: 50% 88%;
+}
 .sowl-eyes {
   background: none;
 }
+/* A lid per eye, parked just outside it until the owl closes it. */
 .sowl-lid {
-  transform: scaleY(0);
-  transform-origin: top;
+  position: absolute;
+  background: currentColor;
+  transform: translateY(-100%);
+}
+.sowl-lid.smile {
+  transform: translateY(100%);
+}
+/* Zzz, "?", surprise lines and sparkles, drawn around the owl (scoped under
+   .sowl so the cards' icon sizing doesn't shrink it). */
+.sowl .sowl-extras {
+  position: absolute;
+  inset: -30%;
+  width: 160%;
+  height: 160%;
+  overflow: visible;
+  pointer-events: none;
 }
 .stimer {
   font-size: 12px;
@@ -530,6 +551,10 @@
   color: var(--color-accent-foreground);
   background: var(--color-accent-fill);
   animation: ssug-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* The owl keeps the text color, except on the filled badge. */
+.ssug.added .ssug-book .sowl {
+  color: var(--color-accent-foreground);
 }
 .ssug.added .ssug-from,
 .ssug.added .ssug-arrow {

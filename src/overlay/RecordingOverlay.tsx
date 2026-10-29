@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { BookPlus, Check, Copy, TextCursorInput } from "lucide-react";
+import { Copy } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -14,9 +14,7 @@ import type {
 import i18n, { syncLanguageFromSettings } from "@/i18n";
 import type { ModelStateEvent } from "@/lib/types/events";
 import { getLanguageDirection } from "@/lib/utils/rtl";
-import owlBody from "./owl/body.png";
-import owlEyes from "./owl/eyes.png";
-import owlPupils from "./owl/pupils.png";
+import { Owl, type OwlMood } from "./Owl";
 
 type OverlayState =
   | "recording"
@@ -52,14 +50,6 @@ interface NoTextBox {
 const WAVE_BARS = 9;
 // Taller in the middle, like a voice, so even uneven levels read as one shape.
 const WAVE_ENVELOPE = [0.5, 0.68, 0.84, 0.96, 1, 0.96, 0.84, 0.68, 0.5];
-
-// Owl mascot layers (scripts/owl-icons/build-icons.swift), drawn as masks so
-// the owl takes the text color, like the menu-bar icon.
-const mask = (url: string): React.CSSProperties => ({
-  WebkitMaskImage: `url(${url})`,
-  maskImage: `url(${url})`,
-});
-const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 // Only call out a model load in the Live preview once it has run this long.
 // Warm loads finish in well under this (~0.2s on Apple Silicon, ~1.5s on a
@@ -112,11 +102,10 @@ const RecordingOverlay: React.FC = () => {
   // so ~24 level events a second don't re-render the overlay.
   const levelsRef = useRef<number[]>(Array(16).fill(0));
   // What the animation loop needs to know, refreshed on every render.
-  const motionRef = useRef({ ready: false, working: false });
+  const motionRef = useRef({ ready: false });
   const barsRef = useRef<(HTMLElement | null)[]>([]);
-  const owlRef = useRef<HTMLSpanElement>(null);
-  const pupilsRef = useRef<HTMLSpanElement>(null);
-  const lidRef = useRef<HTMLSpanElement>(null);
+  // How loud you are (0–1), for the owl to bob along.
+  const voiceRef = useRef(0);
   // Live-text scroll-back: the text region "sticks" to the newest line while the
   // user is at the bottom; if they scroll up to read history, auto-follow pauses
   // until they scroll back down.
@@ -249,20 +238,14 @@ const RecordingOverlay: React.FC = () => {
   }, []);
 
   // One loop, once per screen refresh, eases the waveform toward the latest mic
-  // levels and animates the owl. Writing styles directly (no re-render, no CSS
-  // transition restarted by every level event) is what keeps it smooth.
+  // levels and tells the owl how loud you are. Writing styles directly (no
+  // re-render, no CSS transition restarted by every level event) is what keeps
+  // it smooth.
   useEffect(() => {
     if (!isVisible || state === "suggestion" || state === "notice") return;
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const shown = Array(WAVE_BARS).fill(0);
     let last = performance.now();
-    let voice = 0;
-    let lid = 0;
-    let blinkAt = last + rand(1500, 4000);
-    let glanceAt = last + rand(2500, 5000);
-    let glanceEnd = 0;
-    let look = { x: 0, y: 0 };
-    const eye = { x: 0, y: 0 };
     // Moves `from` toward `to`, `rate` per second, frame-rate independent.
     const ease = (from: number, to: number, rate: number, dt: number) =>
       from + (to - from) * (1 - Math.exp(-rate * dt));
@@ -270,7 +253,7 @@ const RecordingOverlay: React.FC = () => {
     let raf = requestAnimationFrame(function tick(now) {
       const dt = Math.min(now - last, 100) / 1000;
       last = now;
-      const { ready, working } = motionRef.current;
+      const { ready } = motionRef.current;
 
       // Waveform: rise fast, fall slowly, so bars flow instead of flickering,
       // plus a slow ripple so a pause never looks frozen.
@@ -285,35 +268,7 @@ const RecordingOverlay: React.FC = () => {
         const bar = barsRef.current[i];
         if (bar) bar.style.transform = `scaleY(${Math.min(1, level)})`;
       }
-
-      // Owl: sleepy until the mic is live, blinks now and then, glances around
-      // while you're quiet, looks side to side while transcribing.
-      voice = ease(voice, loudest, 10, dt);
-      let lidTarget = ready || working ? 0 : 0.5;
-      if (!still && now >= blinkAt) {
-        const t = (now - blinkAt) / 200;
-        if (t < 1) lidTarget = Math.max(lidTarget, 1 - Math.abs(2 * t - 1));
-        else blinkAt = now + (Math.random() < 0.2 ? 150 : rand(2500, 6000));
-      }
-      lid = ease(lid, lidTarget, 40, dt);
-      if (working) {
-        look = { x: still ? 0 : 0.06 * Math.sin(now / 450), y: 0 };
-      } else if (!still && voice < 0.15 && now >= glanceAt) {
-        look = { x: rand(-0.06, 0.06), y: rand(-0.03, 0.03) };
-        glanceEnd = now + rand(600, 1400);
-        glanceAt = now + rand(3000, 7000);
-      } else if (now >= glanceEnd || voice >= 0.15) {
-        look = { x: 0, y: 0 };
-      }
-      eye.x = ease(eye.x, look.x, 12, dt);
-      eye.y = ease(eye.y, look.y, 12, dt);
-
-      const breath = still ? 1 : 1 + 0.025 * Math.sin(now / 600);
-      if (owlRef.current)
-        owlRef.current.style.transform = `translateY(${-voice * 1.5}px) scale(${breath})`;
-      if (pupilsRef.current)
-        pupilsRef.current.style.transform = `translate(${eye.x * 100}%, ${eye.y * 100}%)`;
-      if (lidRef.current) lidRef.current.style.transform = `scaleY(${lid})`;
+      voiceRef.current = loudest;
 
       raf = requestAnimationFrame(tick);
     });
@@ -349,13 +304,7 @@ const RecordingOverlay: React.FC = () => {
     setOverflowing(false);
   }, [session]);
 
-  motionRef.current = {
-    ready: captureReady,
-    working:
-      state === "transcribing" ||
-      state === "processing" ||
-      (state === "streaming" && phase === "working"),
-  };
+  motionRef.current = { ready: captureReady };
 
   if (!isVisible) return null;
 
@@ -387,21 +336,6 @@ const RecordingOverlay: React.FC = () => {
     </div>
   );
 
-  // The menu-bar owl: body, then pupils and lids clipped to the eye openings.
-  const owl = (
-    <span className="sowl" ref={owlRef} aria-hidden="true">
-      <span className="sowl-layer" style={mask(owlBody)} />
-      <span className="sowl-layer sowl-eyes" style={mask(owlEyes)}>
-        <span
-          className="sowl-layer sowl-ink"
-          ref={pupilsRef}
-          style={mask(owlPupils)}
-        />
-        <span className="sowl-layer sowl-ink sowl-lid" ref={lidRef} />
-      </span>
-    </span>
-  );
-
   const cancelBtn = (
     <button
       className="sx"
@@ -427,18 +361,20 @@ const RecordingOverlay: React.FC = () => {
       {waveform}
       <div className="sbase-r">
         {showTimer && <span className="stimer">{fmtTime(elapsed)}</span>}
-        {owl}
+        <Owl mood={captureReady ? "listening" : "sleepy"} voice={voiceRef} />
       </div>
     </div>
   );
 
   // cancel (left) | label (center) | owl (right) — same 3-zone grid as the
   // listening row, so the cancel button and owl stay put and the label is centered.
-  const workingRow = (label: string, showCancel: boolean) => (
+  const workingRow = (label: string, showCancel: boolean, mood: OwlMood) => (
     <div className="sbase">
       <div className="sbase-l">{showCancel && cancelBtn}</div>
       <span className="swork-label">{label}</span>
-      <div className="sbase-r">{owl}</div>
+      <div className="sbase-r">
+        <Owl mood={mood} />
+      </div>
     </div>
   );
 
@@ -461,7 +397,7 @@ const RecordingOverlay: React.FC = () => {
           className={`scard ssug ${suggestionAdded ? "added" : ""}`}
         >
           <span className="ssug-book" aria-hidden="true">
-            {suggestionAdded ? <Check /> : <BookPlus />}
+            <Owl mood={suggestionAdded ? "happy" : "studying"} />
           </span>
           <div className="ssug-text">
             <span className="ssug-label">
@@ -528,7 +464,7 @@ const RecordingOverlay: React.FC = () => {
           className={`scard ssug snotice ${copied ? "added" : ""}`}
         >
           <span className="ssug-book" aria-hidden="true">
-            {copied ? <Check /> : <TextCursorInput />}
+            <Owl mood={copied ? "happy" : "puzzled"} />
           </span>
           <div className="ssug-text">
             <span className="ssug-label">{t("overlay.selectTextBox")}</span>
@@ -600,12 +536,9 @@ const RecordingOverlay: React.FC = () => {
             </div>
           </div>
           {working
-            ? workingRow(
-                workKind === "polishing"
-                  ? t("overlay.processing")
-                  : transcribingLabel,
-                true,
-              )
+            ? workKind === "polishing"
+              ? workingRow(t("overlay.processing"), true, "thinking")
+              : workingRow(transcribingLabel, true, "reading")
             : listeningRow(open, true)}
         </div>
       </div>
@@ -627,7 +560,13 @@ const RecordingOverlay: React.FC = () => {
       <div
         className={`scard compact ${working && isVisible ? "cworking" : ""}`}
       >
-        {working ? workingRow(workLabel, true) : listeningRow(false, true)}
+        {working
+          ? workingRow(
+              workLabel,
+              true,
+              state === "processing" ? "thinking" : "reading",
+            )
+          : listeningRow(false, true)}
       </div>
     </div>
   );

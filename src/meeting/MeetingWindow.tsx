@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { NotebookPen, Square } from "lucide-react";
+import { Square } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { commands, type Meeting, type Result } from "@/bindings";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +10,7 @@ import { clock } from "@/components/owl/NotetakerPage";
 import { useSpeakerLabel } from "@/components/owl/MeetingSpeakers";
 import { useMeetings } from "@/components/owl/useMeetings";
 import { ring } from "@/overlay/RecordingOverlay";
+import { Owl, type OwlMood } from "@/overlay/Owl";
 import { syncLanguageFromSettings } from "@/i18n";
 import { getLanguageDirection } from "@/lib/utils/rtl";
 
@@ -76,6 +77,7 @@ const Prompt: React.FC = () => {
       onClose={hide}
       seconds={ASK_SECONDS}
       onDone={hide}
+      mood="perked"
     />
   );
 };
@@ -91,11 +93,12 @@ const Ended: React.FC = () => {
       close={t("owl.meetingWindow.finishNow")}
       onClose={commands.stopMeeting}
       seconds={ENDED_SECONDS}
+      mood="drowsy"
     />
   );
 };
 
-/** Icon, question, a button and X, the edge counting down `seconds` like
+/** Owl, question, a button and X, the edge counting down `seconds` like
  * the dictionary card's. */
 const Card: React.FC<{
   text: string;
@@ -105,7 +108,8 @@ const Card: React.FC<{
   onClose: () => unknown;
   seconds: number;
   onDone?: () => void;
-}> = ({ text, action, onAction, close, onClose, seconds, onDone }) => {
+  mood: OwlMood;
+}> = ({ text, action, onAction, close, onClose, seconds, onDone, mood }) => {
   const { i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
   const act = async () => {
@@ -118,7 +122,8 @@ const Card: React.FC<{
     <div dir={getLanguageDirection(i18n.language)} className="ov-stage">
       <div className="scard ssug mw-ask">
         <span className="ssug-book" aria-hidden="true">
-          <NotebookPen />
+          {/* Wide awake once you act, so Resume wakes a drowsy owl. */}
+          <Owl mood={busy ? "perked" : mood} seconds={seconds} />
         </span>
         <span className="mw-ask-text">{text}</span>
         <Button size="sm" disabled={busy} onClick={act} className="mw-ask-btn">
@@ -183,6 +188,7 @@ const Live: React.FC<{ meeting: Meeting }> = ({ meeting }) => {
         data-tauri-drag-region
         className="flex items-center gap-3 px-4 py-3 border-b border-border"
       >
+        <Owl mood="noting" beat={lines} />
         <span className="mw-bars" aria-hidden>
           <i />
           <i />

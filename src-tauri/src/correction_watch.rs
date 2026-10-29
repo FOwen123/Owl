@@ -4,50 +4,58 @@
 //! countdown: it is added unless the user presses X.
 //!
 //! Reads the text box through the macOS Accessibility API, which Owl already
-//! needs for pasting. Never reads password fields, stops when the user
-//! switches apps, and keeps nothing but the suggestions it finds. Apps that
-//! don't expose their text (some terminals and Electron apps) are skipped.
+//! needs for pasting, or Windows UI Automation (`correction_watch/win.rs`).
+//! Never reads password fields, stops when the user switches apps, and keeps
+//! nothing but the suggestions it finds. Apps that don't expose their text
+//! (some terminals and Electron apps) are skipped.
 //! The paste also asks it for the character before the cursor.
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::AppHandle;
 
+#[cfg(target_os = "macos")]
+use mac as os;
+#[cfg(target_os = "windows")]
+mod win;
+#[cfg(target_os = "windows")]
+use win as os;
+
 /// Bumped by every paste, so an older watcher stops before it mistakes
 /// Owl's next paste for the user's edit.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 static PASTES: AtomicU64 = AtomicU64::new(0);
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 /// `learning_id`: the dictation's row in the learning log, which gets the
 /// user's edit as its answer key.
 pub fn start(app: AppHandle, pasted: String, learning_id: Option<i64>) {
     let paste = PASTES.fetch_add(1, Ordering::SeqCst) + 1;
     let wanted = crate::settings::get_settings(&app).learn_from_edits || learning_id.is_some();
     if wanted && !pasted.trim().is_empty() {
-        std::thread::spawn(move || mac::watch(app, pasted, paste, learning_id));
+        std::thread::spawn(move || watcher::watch(app, pasted, paste, learning_id));
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn start(_app: AppHandle, _pasted: String, _learning_id: Option<i64>) {}
 
 /// Stops the watcher of the last dictation, so text Owl itself changes next
 /// (Edit by voice) isn't learned as the user's fix.
 pub fn stop() {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     PASTES.fetch_add(1, Ordering::SeqCst);
 }
 
 /// The character just before the cursor in the focused text box, for the
 /// space before a dictation. None for password fields and apps that hide
 /// their text.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn char_before_cursor() -> Option<char> {
-    mac::char_before_cursor()
+    os::char_before_cursor()
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn char_before_cursor() -> Option<char> {
     None
 }
@@ -55,12 +63,12 @@ pub fn char_before_cursor() -> Option<char> {
 /// Where Edit by voice works: the focused text box (as a hash), the
 /// selected range and the selected text ("" when nothing is selected). None
 /// for password fields and apps that hide their text.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {
-    mac::selection_spot()
+    os::selection_spot()
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {
     None
 }
@@ -68,12 +76,12 @@ pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {
 /// Whether the focus is plainly not a text box: a web page itself, a link,
 /// a button, a file list. False when Owl can't tell (apps that hide their
 /// text), so those still get the paste.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn no_text_box() -> bool {
-    mac::no_text_box()
+    os::no_text_box()
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn no_text_box() -> bool {
     false
 }
@@ -95,15 +103,13 @@ pub fn window_titles(pid: i32) -> Vec<String> {
     mac::window_titles(pid)
 }
 
-#[cfg(target_os = "macos")]
-mod mac {
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod watcher {
+    use super::os::{focused_text, same};
     use crate::correction::{edited_span, suggest};
     use crate::overlay;
     use crate::settings::{self, Replacement};
     use log::debug;
-    use objc2_application_services::{AXError, AXUIElement, AXValue, AXValueType};
-    use objc2_core_foundation::{CFArray, CFBoolean, CFRange, CFRetained, CFString, CFType};
-    use std::ptr::NonNull;
     use std::sync::atomic::Ordering;
     use std::thread::sleep;
     use std::time::{Duration, Instant};
@@ -147,8 +153,7 @@ mod mac {
                 continue; // focus is briefly elsewhere, e.g. a menu
             };
             // Another app, document or field: its text was never pasted.
-            let (a, b): (&CFType, &CFType) = (&field, &now_field);
-            if a != b {
+            if !same(&field, &now_field) {
                 return;
             }
             if text != last {
@@ -249,6 +254,13 @@ mod mac {
             serde_json::json!({ "setting": "edit_suggestions" }),
         );
     }
+}
+
+#[cfg(target_os = "macos")]
+mod mac {
+    use objc2_application_services::{AXError, AXUIElement, AXValue, AXValueType};
+    use objc2_core_foundation::{CFArray, CFBoolean, CFRange, CFRetained, CFString, CFType};
+    use std::ptr::NonNull;
 
     /// The focused element, unless it's a password field.
     fn focused_field() -> Option<CFRetained<AXUIElement>> {
@@ -268,10 +280,16 @@ mod mac {
 
     /// The focused text box and its text, unless it's a password field or
     /// doesn't expose its text.
-    fn focused_text() -> Option<(CFRetained<AXUIElement>, String)> {
+    pub fn focused_text() -> Option<(CFRetained<AXUIElement>, String)> {
         let focused = focused_field()?;
         let text = unsafe { string_attribute(&focused, "AXValue")? };
         Some((focused, text))
+    }
+
+    /// Whether two reads came from the same text box.
+    pub fn same(a: &AXUIElement, b: &AXUIElement) -> bool {
+        let (a, b): (&CFType, &CFType) = (a, b);
+        a == b
     }
 
     pub fn selection_spot() -> Option<(u64, (isize, isize), String)> {

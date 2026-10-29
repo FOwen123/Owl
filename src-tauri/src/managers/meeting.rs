@@ -1256,10 +1256,10 @@ impl Track {
     }
 }
 
-/// Records until `stop`: the microphone to `mic.wav` and, on macOS, the
-/// system audio to `system.wav`, sending each finished stretch of speech to
-/// `segments` (the microphone after echo removal). A microphone that stops
-/// mid-meeting (unplugged, AirPods switching modes) is opened again, with
+/// Records until `stop`: the microphone to `mic.wav` and, on macOS and
+/// Windows, the system audio to `system.wav`, sending each finished stretch of
+/// speech to `segments` (the microphone after echo removal). A microphone that
+/// stops mid-meeting (unplugged, AirPods switching modes) is opened again, with
 /// silence recorded meanwhile; `mic_failed` is returned when it never came
 /// back, so the meeting says so instead of ending in silence.
 fn record(
@@ -1278,9 +1278,11 @@ fn record(
     let mut mic_track = Track::new(SAMPLE_RATE as u32, mic_consumer, &folder.join("mic.wav"))?;
     let mut system_track = None;
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     let mut system_lost = None;
-    #[cfg(target_os = "macos")]
+    // Windows only holds it open; its loopback keeps one rate.
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[cfg_attr(target_os = "windows", allow(unused_variables))]
     let tap = match crate::audio_toolkit::audio::system_capture::start() {
         Ok((source, tap)) => {
             system_track = Some(Track::new(
@@ -1404,7 +1406,7 @@ fn record(
     }
     // Samples the ring buffers had to drop while this loop fell behind.
     let lost = mic_lost.load(Ordering::Relaxed);
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     let lost = lost + system_lost.map_or(0, |l| l.load(Ordering::Relaxed));
     if lost > 0 {
         log::warn!("Meeting: the recording loop fell behind; {lost} samples were lost");

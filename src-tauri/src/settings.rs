@@ -1474,11 +1474,12 @@ fn apply_settings_migrations(
     updated
 }
 
-/// Owl: update checks are always forced off. Owl has no release feed yet, and
-/// the updater must never fetch Owl's releases (they would replace Owl).
-/// Restore the `OWL_DISABLE_UPDATER` check once Owl publishes its own feed.
+/// Update checks are forced off while `OWL_DISABLE_UPDATER` is set (e.g. by a
+/// package manager that ships its own updates).
 pub fn update_checks_forced_disabled() -> bool {
-    true
+    use std::sync::OnceLock;
+    static IS_UPDATER_DISABLED: OnceLock<bool> = OnceLock::new();
+    *IS_UPDATER_DISABLED.get_or_init(|| crate::utils::env_flag_enabled("OWL_DISABLE_UPDATER"))
 }
 
 /// Effective updater state: the user's stored preference, overridden to `false`

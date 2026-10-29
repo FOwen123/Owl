@@ -839,16 +839,11 @@ pub fn emit_levels(app_handle: &AppHandle, levels: &[f32]) {
     }
     LAST_MIC_LEVEL_EMIT.store(now, Ordering::Relaxed);
 
-    // Target only the overlay window. In Tauri 2 both `AppHandle::emit`
-    // and `WebviewWindow::emit` broadcast to all webviews; Tauri's
-    // listener filter then skips webviews with no registered listener
-    // for the event, so the settings webview never received `mic-level`.
-    // But the previous dual-call pattern still produced two `eval_script`
-    // calls to the overlay per audio callback (one from each .emit()).
-    // `emit_to` with the overlay's window label produces a single
-    // eval_script call per callback, cutting the per-callback WebKit
-    // dispatch work in half.
-    let _ = app_handle.emit_to("recording_overlay", "mic-level", levels);
+    // One emit, to every window. Tauri skips webviews with no `mic-level`
+    // listener, so this reaches the overlay, plus the main window only while
+    // onboarding's "Try it" listens. (Two emits per callback, as before,
+    // doubled the overlay's eval_script work.)
+    let _ = app_handle.emit("mic-level", levels);
 }
 
 #[cfg(test)]

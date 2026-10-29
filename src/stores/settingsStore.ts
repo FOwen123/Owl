@@ -161,6 +161,7 @@ const settingUpdaters: {
     commands.changeCleanupExamplesSetting(value as boolean),
   meeting_detection: (value) =>
     commands.changeMeetingDetectionSetting(value as boolean),
+  user_name: (value) => commands.changeUserNameSetting(value as string),
   word_correction_threshold: (value) =>
     commands.changeWordCorrectionThresholdSetting(value as number),
   paste_delay_ms: (value) =>

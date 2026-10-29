@@ -168,6 +168,32 @@ pub fn change_meeting_detection_setting(app: AppHandle, enabled: bool) -> Result
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_user_name_setting(app: AppHandle, name: String) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.user_name = name.trim().to_string();
+    write_settings(&app, settings);
+    Ok(())
+}
+
+/// Owl: asks macOS for System Audio Recording during onboarding. Starting a
+/// tap shows the prompt the first time; whether it was allowed can't be read
+/// back (a refused tap just hears silence), so this only asks.
+#[tauri::command]
+#[specta::specta]
+pub async fn request_system_audio_permission() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    tauri::async_runtime::spawn_blocking(|| {
+        let (_source, _tap) = crate::audio_toolkit::audio::system_capture::start()?;
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        Ok::<(), String>(())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn rename_speaker(
     meetings: State<Arc<MeetingManager>>,
     id: i64,

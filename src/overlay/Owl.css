@@ -1,0 +1,44 @@
+/* The menu-bar owl, in parts (Owl.tsx animates them): masks filled with the
+   text color, its eye openings left clear so the pill shows through. */
+.sowl {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  color: var(--color-text);
+}
+.sowl-layer,
+.sowl-frame {
+  position: absolute;
+  inset: 0;
+}
+.sowl-layer {
+  background: currentColor;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+.sowl-frame {
+  transform-origin: 50% 88%;
+}
+.sowl-eyes {
+  background: none;
+}
+/* A lid per eye, parked just outside it until the owl closes it. */
+.sowl-lid {
+  position: absolute;
+  background: currentColor;
+  transform: translateY(-100%);
+}
+.sowl-lid.smile {
+  transform: translateY(100%);
+}
+/* Zzz, "?", surprise lines and sparkles, drawn around the owl (scoped under
+   .sowl so the cards' icon sizing doesn't shrink it). */
+.sowl .sowl-extras {
+  position: absolute;
+  inset: -30%;
+  width: 160%;
+  height: 160%;
+  overflow: visible;
+  pointer-events: none;
+}

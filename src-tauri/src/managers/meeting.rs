@@ -32,7 +32,7 @@ const MIC_REOPEN_TRIES: u32 = 5;
 const MIC_REOPEN_WAIT: Duration = Duration::from_secs(2);
 
 /// Every template starts with who's who and the language rule.
-const PROMPT_HEAD: &str = "You write meeting notes from a transcript. \"Me\" is the person taking the notes; call them \"you\". {OTHERS}
+const PROMPT_HEAD: &str = "You write meeting notes from a transcript. {ME} {OTHERS}
 
 Write in the language most of the transcript's lines are in, keeping product names and English terms as they were said.
 
@@ -277,8 +277,16 @@ fn summary_prompt(
     } else {
         OTHERS_UNLABELLED
     };
-    let mut prompt =
-        PROMPT_HEAD.replace("{OTHERS}", others) + template_format(settings, template) + PROMPT_TAIL;
+    // With the name from onboarding, the notes say "Owen" instead of "you".
+    let me = match settings.user_name.trim() {
+        "" => "\"Me\" is the person taking the notes; call them \"you\".".to_string(),
+        name => {
+            format!("\"Me\" is the person taking the notes, {name}; call them {name}, not \"you\".")
+        }
+    };
+    let mut prompt = PROMPT_HEAD.replace("{ME}", &me).replace("{OTHERS}", others)
+        + template_format(settings, template)
+        + PROMPT_TAIL;
     // Only for a Chinese meeting: the line alone can tip a model into
     // writing an English meeting's notes in Chinese.
     match settings.chinese_script {
@@ -2014,6 +2022,10 @@ mod tests {
         ));
         let english = summary_prompt(&settings, "general", false, "[0:00] Me: we meet tomorrow");
         assert!(!english.contains("Traditional"));
+        assert!(english.contains("call them \"you\"."));
+        settings.user_name = "Owen".into();
+        let named = summary_prompt(&settings, "general", false, "[0:00] Me: we meet tomorrow");
+        assert!(named.contains("taking the notes, Owen; call them Owen, not \"you\"."));
     }
 
     #[test]

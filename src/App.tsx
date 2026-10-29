@@ -19,7 +19,10 @@ import "./App.css";
 import AccessibilityPermissions from "./components/AccessibilityPermissions";
 import SecureInputWarning from "./components/SecureInputWarning";
 import Footer from "./components/footer";
-import Onboarding, { AccessibilityOnboarding } from "./components/onboarding";
+import Onboarding, {
+  savedProgress,
+  usePendingModelSelection,
+} from "./components/onboarding";
 import {
   DebugSettings,
   type OnboardingPreviewStep,
@@ -32,10 +35,8 @@ import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
 import { getLanguageDirection, initializeRTL } from "@/lib/utils/rtl";
 
-type OnboardingStep = "accessibility" | "model" | "done";
-
-// Stable identity so preview effects do not re-run due to callback changes.
-const NOOP = () => {};
+// "permissions": a returning user who has to grant a permission again.
+type OnboardingStep = "onboarding" | "permissions" | "done";
 
 const renderSettingsContent = (
   section: SidebarSection,
@@ -57,9 +58,6 @@ function App() {
   );
   const [onboardingPreview, setOnboardingPreview] =
     useState<OnboardingPreviewStep | null>(null);
-  // Track if this is a returning user who just needs to grant permissions
-  // (vs a new user who needs full onboarding including model selection)
-  const [isReturningUser, setIsReturningUser] = useState(false);
   const [currentSection, setCurrentSection] =
     useState<SidebarSection>("general");
   const { settings, updateSetting } = useSettings();
@@ -74,8 +72,10 @@ function App() {
   const settingsScrollRef = useRef<HTMLDivElement>(null);
   const isShowingOnboarding =
     onboardingPreview !== null ||
-    onboardingStep === "accessibility" ||
-    onboardingStep === "model";
+    onboardingStep === "onboarding" ||
+    onboardingStep === "permissions";
+  // The model picked in onboarding is selected when its download finishes.
+  usePendingModelSelection();
 
   // Classic scrollbars consume layout space. Reserve a matching gutter on the
   // opposite edge while onboarding is visible so its content stays centered in
@@ -288,10 +288,12 @@ function App() {
         settingsResult.data.onboarding_completed === true;
       const currentPlatform = platform();
 
-      if (hasCompletedOnboarding) {
+      // Picking a model marks onboarding done, so a setup quit midway
+      // resumes from what it saved.
+      if (hasCompletedOnboarding && savedProgress()) {
+        setOnboardingStep("onboarding");
+      } else if (hasCompletedOnboarding) {
         // Returning user - check if they need to grant permissions first
-        setIsReturningUser(true);
-
         if (currentPlatform === "macos") {
           try {
             const [hasAccessibility, hasMicrophone] = await Promise.all([
@@ -300,7 +302,7 @@ function App() {
             ]);
             if (!hasAccessibility || !hasMicrophone) {
               await revealMainWindowForPermissions();
-              setOnboardingStep("accessibility");
+              setOnboardingStep("permissions");
               return;
             }
           } catch (e) {
@@ -318,7 +320,7 @@ function App() {
               microphoneStatus.overall_access === "denied"
             ) {
               await revealMainWindowForPermissions();
-              setOnboardingStep("accessibility");
+              setOnboardingStep("permissions");
               return;
             }
           } catch (e) {
@@ -329,25 +331,12 @@ function App() {
 
         setOnboardingStep("done");
       } else {
-        // New user - start full onboarding
-        setIsReturningUser(false);
-        setOnboardingStep("accessibility");
+        setOnboardingStep("onboarding");
       }
     } catch (error) {
       console.error("Failed to check onboarding status:", error);
-      setOnboardingStep("accessibility");
+      setOnboardingStep("onboarding");
     }
-  };
-
-  const handleAccessibilityComplete = () => {
-    // Returning users already have models, skip to main app
-    // New users need to select a model
-    setOnboardingStep(isReturningUser ? "done" : "model");
-  };
-
-  const handleModelSelected = () => {
-    // Transition to main app - user has started a download
-    setOnboardingStep("done");
   };
 
   // Rendered once around every step below (including onboarding) so
@@ -387,11 +376,13 @@ function App() {
     // as it does during first-run onboarding.
     content = (
       <>
-        {onboardingPreview === "accessibility" ? (
-          <AccessibilityOnboarding onComplete={NOOP} preview />
-        ) : (
-          <Onboarding onModelSelected={NOOP} preview />
-        )}
+        <Onboarding
+          preview
+          start={
+            onboardingPreview === "accessibility" ? "permissions" : "model"
+          }
+          onDone={() => setOnboardingPreview(null)}
+        />
         <button
           type="button"
           onClick={() => setOnboardingPreview(null)}
@@ -401,12 +392,13 @@ function App() {
         </button>
       </>
     );
-  } else if (onboardingStep === "accessibility") {
+  } else if (onboardingStep !== "done") {
     content = (
-      <AccessibilityOnboarding onComplete={handleAccessibilityComplete} />
+      <Onboarding
+        only={onboardingStep === "permissions" ? "permissions" : undefined}
+        onDone={() => setOnboardingStep("done")}
+      />
     );
-  } else if (onboardingStep === "model") {
-    content = <Onboarding onModelSelected={handleModelSelected} />;
   } else {
     content = (
       <div

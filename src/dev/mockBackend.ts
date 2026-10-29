@@ -1,6 +1,7 @@
 // Dev-only fake backend so the UI can be designed and checked in a browser:
 // `bun run dev`, then open http://localhost:1420/?mock. Never runs in a real
-// build (guarded by import.meta.env.DEV and the ?mock query).
+// build (guarded by import.meta.env.DEV and the ?mock query). Add `&onboarding`
+// to see first run: onboarding not done, no permissions granted yet.
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
 
@@ -12,8 +13,10 @@ const binding = (id: string, name: string, keys: string) => ({
   current_binding: keys,
 });
 
+const firstRun = location.search.includes("onboarding");
+
 const settings: Record<string, unknown> = {
-  onboarding_completed: true,
+  onboarding_completed: !firstRun,
   selected_model: "turbo",
   selected_language: "zh",
   chinese_script: "traditional",
@@ -73,6 +76,14 @@ const settings: Record<string, unknown> = {
       models_endpoint: "/models",
       supports_structured_output: false,
     },
+    ...["OpenAI", "Anthropic", "OpenRouter"].map((label) => ({
+      id: label.toLowerCase(),
+      label,
+      base_url: "https://example.com/v1",
+      allow_base_url_edit: false,
+      models_endpoint: "/models",
+      supports_structured_output: false,
+    })),
   ],
   post_process_provider_id: "chatgpt",
   post_process_models: { chatgpt: "gpt-6.1-sol" },
@@ -280,6 +291,12 @@ export function installMockBackend() {
         setTimeout(() => emit("meetings-updated"));
         return 1;
       }
+      if (cmd === "set_post_process_provider") {
+        settings.post_process_provider_id = (
+          payload as { providerId: string }
+        ).providerId;
+        return null;
+      }
       if (cmd === "change_cleanup_level_setting") {
         settings.cleanup_level = (payload as { level: string }).level;
         return null;
@@ -299,7 +316,7 @@ export function installMockBackend() {
           (settings.replacements as Pair[]).push(suggestion);
         return null;
       }
-      if (cmd.startsWith("plugin:macos-permissions|check")) return true;
+      if (cmd.startsWith("plugin:macos-permissions|check")) return !firstRun;
       if (cmd.startsWith("plugin:macos-permissions|")) return null;
       return null;
     },

@@ -94,13 +94,14 @@ cp -R src-tauri/target/release/bundle/macos/Owl.app /Applications/
 open /Applications/Owl.app
 ```
 
-Owl asks for Microphone and Accessibility access. Accessibility is how it
-pastes into other apps. Then pick a speech model to download. Qwen3-ASR 1.7B
-is good with Mandarin and English mixed. Parakeet Unified is fast for English
-only.
+Owl walks you through setup: your name (meeting notes use it), what you'll
+use it for, a speech model to download, Microphone and Accessibility access,
+your shortcut and a quick dictation test, then an optional AI for cleanup and
+notes. Accessibility is how Owl pastes into other apps. Qwen3-ASR 1.7B is good
+with Mandarin and English mixed. Parakeet Unified is fast for English only.
 
-Your first meeting also asks for System Audio Recording, so Owl can hear the
-call.
+For meeting notes, setup also asks for System Audio Recording, so Owl can hear
+the call.
 
 ### Update
 

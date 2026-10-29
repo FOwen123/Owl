@@ -67,9 +67,9 @@ cp -R src-tauri/target/release/bundle/macos/Owl.app /Applications/
 open /Applications/Owl.app
 ```
 
-Owl 會要求麥克風和輔助使用權限。輔助使用權限是用來把文字貼到其他 App 裡。接著選擇一個語音模型下載。Qwen3-ASR 1.7B 擅長中英夾雜，Parakeet Unified 速度快，但只支援英文。
+Owl 會一步步帶你完成設定：你的名字（會議筆記會用它）、你想用 Owl 做什麼、下載一個語音模型、麥克風和輔助使用權限、你的快捷鍵和一次簡短的聽寫測試，最後可以選擇接上 AI 來整理文字和寫筆記。輔助使用權限是用來把文字貼到其他 App 裡。Qwen3-ASR 1.7B 擅長中英夾雜，Parakeet Unified 速度快，但只支援英文。
 
-第一次開會時，Owl 還會要求系統錄音（System Audio Recording）權限，這樣才聽得到通話的聲音。
+如果要做會議筆記，設定時還會要求系統錄音（System Audio Recording）權限，這樣 Owl 才能聽到通話的聲音。
 
 ### 更新
 
